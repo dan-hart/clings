@@ -1,0 +1,50 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.vim/
+*.sublime-project
+*.sublime-workspace
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Coverage reports
+tarpaulin-report.html
+coverage/
+*.profraw
+*.profdata
+
+# Build artifacts
+*.dSYM/
+
+# Environment
+.env
+.env.local
+
+# Local development
+.direnv/
+.envrc
+
+# Testing artifacts
+/tests/fixtures/temp/
+
+# Security - prevent accidental commit of sensitive files
+*secret*
+*credential*
+*.key
+*.pem
+*.p8
+*.p12
+*private*
+*sensitive*
+*.env*

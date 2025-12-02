@@ -1,0 +1,34 @@
+# Rustfmt configuration for clings
+# See https://rust-lang.github.io/rustfmt/
+
+edition = "2021"
+max_width = 100
+tab_spaces = 4
+newline_style = "Unix"
+use_small_heuristics = "Default"
+
+# Import organization
+imports_granularity = "Module"
+group_imports = "StdExternalCrate"
+reorder_imports = true
+reorder_modules = true
+
+# Formatting preferences
+format_code_in_doc_comments = true
+format_strings = false
+wrap_comments = true
+comment_width = 100
+normalize_comments = true
+normalize_doc_attributes = true
+
+# Function signatures
+fn_params_layout = "Tall"
+fn_single_line = false
+
+# Match arms
+match_arm_blocks = true
+match_block_trailing_comma = true
+
+# Struct/enum formatting
+struct_lit_single_line = true
+enum_discrim_align_threshold = 20

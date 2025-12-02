@@ -1,0 +1,23 @@
+# Clippy configuration for clings
+# See https://doc.rust-lang.org/clippy/configuration.html
+
+# Cognitive complexity threshold for functions
+cognitive-complexity-threshold = 25
+
+# Maximum number of lines in a function body
+too-many-lines-threshold = 100
+
+# Type complexity threshold
+type-complexity-threshold = 250
+
+# Maximum number of arguments a function can have
+too-many-arguments-threshold = 7
+
+# MSRV (Minimum Supported Rust Version)
+msrv = "1.70.0"
+
+# Allow certain patterns that are common in CLI tools
+allow-print-in-tests = true
+
+# Documentation requirements
+missing-docs-in-crate-items = true
