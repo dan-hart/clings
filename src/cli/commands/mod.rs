@@ -3,95 +3,23 @@
 //! This module contains the implementation of all CLI commands.
 
 mod add;
-mod automation;
 mod bulk;
-mod focus;
-mod pick;
+mod list;
 mod review;
 mod shell;
 mod stats;
-mod sync;
-mod template;
 
 pub use add::quick_add;
-pub use automation::automation;
-pub use bulk::{
-    bulk_cancel, bulk_clear_due, bulk_complete, bulk_move, bulk_set_due, bulk_tag, filter,
-};
-pub use focus::focus;
-pub use pick::pick;
+pub use bulk::{bulk_cancel, bulk_complete, bulk_move, bulk_tag, search_with_filter};
+pub use list::list;
 pub use review::review;
-pub use shell::{git, pipe, shell};
+pub use shell::shell;
 pub use stats::stats;
-pub use sync::sync;
-pub use template::template;
 
-use crate::cli::args::{
-    AddProjectArgs, AddTodoArgs, OutputFormat, ProjectCommands, TodoCommands,
-};
+use crate::cli::args::{AddProjectArgs, OutputFormat, ProjectCommands, TodoCommands};
 use crate::error::ClingsError;
-use crate::output::{format_areas, format_projects, format_tags, format_todo, format_todos, to_json};
+use crate::output::{format_projects, format_todo, format_todos, to_json};
 use crate::things::{ListView, ThingsClient};
-
-/// Execute inbox command
-///
-/// # Errors
-///
-/// Returns an error if the Things 3 API call fails or output formatting fails.
-pub fn inbox(client: &ThingsClient, format: OutputFormat) -> Result<String, ClingsError> {
-    let todos = client.get_list(ListView::Inbox)?;
-    format_todos(&todos, "Inbox", format)
-}
-
-/// Execute today command
-///
-/// # Errors
-///
-/// Returns an error if the Things 3 API call fails or output formatting fails.
-pub fn today(client: &ThingsClient, format: OutputFormat) -> Result<String, ClingsError> {
-    let todos = client.get_list(ListView::Today)?;
-    format_todos(&todos, "Today", format)
-}
-
-/// Execute upcoming command
-///
-/// # Errors
-///
-/// Returns an error if the Things 3 API call fails or output formatting fails.
-pub fn upcoming(client: &ThingsClient, format: OutputFormat) -> Result<String, ClingsError> {
-    let todos = client.get_list(ListView::Upcoming)?;
-    format_todos(&todos, "Upcoming", format)
-}
-
-/// Execute anytime command
-///
-/// # Errors
-///
-/// Returns an error if the Things 3 API call fails or output formatting fails.
-pub fn anytime(client: &ThingsClient, format: OutputFormat) -> Result<String, ClingsError> {
-    let todos = client.get_list(ListView::Anytime)?;
-    format_todos(&todos, "Anytime", format)
-}
-
-/// Execute someday command
-///
-/// # Errors
-///
-/// Returns an error if the Things 3 API call fails or output formatting fails.
-pub fn someday(client: &ThingsClient, format: OutputFormat) -> Result<String, ClingsError> {
-    let todos = client.get_list(ListView::Someday)?;
-    format_todos(&todos, "Someday", format)
-}
-
-/// Execute logbook command
-///
-/// # Errors
-///
-/// Returns an error if the Things 3 API call fails or output formatting fails.
-pub fn logbook(client: &ThingsClient, format: OutputFormat) -> Result<String, ClingsError> {
-    let todos = client.get_list(ListView::Logbook)?;
-    format_todos(&todos, "Logbook", format)
-}
 
 /// Execute todo subcommands
 ///
@@ -104,15 +32,10 @@ pub fn todo(
     format: OutputFormat,
 ) -> Result<String, ClingsError> {
     match cmd {
-        TodoCommands::List => {
-            let todos = client.get_list(ListView::Anytime)?;
-            format_todos(&todos, "All Todos", format)
-        }
         TodoCommands::Show { id } => {
             let todo = client.get_todo(&id)?;
             format_todo(&todo, format)
         }
-        TodoCommands::Add(args) => add_todo(client, args, format),
         TodoCommands::Complete { id } => {
             client.complete_todo(&id)?;
             Ok(format!("Completed todo: {id}"))
@@ -127,30 +50,6 @@ pub fn todo(
                 "Canceled todo: {id} (Things API doesn't support true deletion)"
             ))
         }
-    }
-}
-
-fn add_todo(
-    client: &ThingsClient,
-    args: AddTodoArgs,
-    format: OutputFormat,
-) -> Result<String, ClingsError> {
-    let due_date = args.due.as_ref().map(|d| crate::cli::args::parse_date(d));
-    let response = client.add_todo(
-        &args.title,
-        args.notes.as_deref(),
-        due_date.as_deref(),
-        args.tags.as_deref(),
-        args.list.as_deref(),
-        args.checklist.as_deref(),
-    )?;
-
-    match format {
-        OutputFormat::Json => to_json(&response),
-        OutputFormat::Pretty => Ok(format!(
-            "Created todo: {} (ID: {})",
-            response.name, response.id
-        )),
     }
 }
 
@@ -224,38 +123,72 @@ fn add_project(
     }
 }
 
-/// Execute areas command
-///
-/// # Errors
-///
-/// Returns an error if the Things 3 API call fails or output formatting fails.
-pub fn areas(client: &ThingsClient, format: OutputFormat) -> Result<String, ClingsError> {
-    let areas = client.get_areas()?;
-    format_areas(&areas, format)
-}
-
-/// Execute tags command
-///
-/// # Errors
-///
-/// Returns an error if the Things 3 API call fails or output formatting fails.
-pub fn tags(client: &ThingsClient, format: OutputFormat) -> Result<String, ClingsError> {
-    let tags = client.get_tags()?;
-    format_tags(&tags, format)
-}
-
-/// Execute search command
+/// Execute search command with optional filters
 ///
 /// # Errors
 ///
 /// Returns an error if the Things 3 API call fails or output formatting fails.
 pub fn search(
     client: &ThingsClient,
-    query: &str,
+    query: Option<&str>,
+    tag: Option<&str>,
+    project: Option<&str>,
+    due: Option<&str>,
+    filter: Option<&str>,
     format: OutputFormat,
 ) -> Result<String, ClingsError> {
-    let todos = client.search(query)?;
-    format_todos(&todos, &format!("Search: \"{query}\""), format)
+    // If advanced filter is provided, use filter mode
+    if let Some(filter_expr) = filter {
+        return search_with_filter(client, filter_expr, format);
+    }
+
+    // For now, just use simple text search
+    // TODO: Add flag-based filtering when ThingsClient supports it
+    let todos = if let Some(q) = query {
+        client.search(q)?
+    } else {
+        // If no query but filters exist, get all and filter
+        client.get_list(ListView::Anytime)?
+    };
+
+    // Apply simple filters (tag, project, due) - this is a basic implementation
+    let filtered: Vec<_> = todos
+        .into_iter()
+        .filter(|t| {
+            if let Some(tag_filter) = tag {
+                if !t.tags.iter().any(|tt| tt.eq_ignore_ascii_case(tag_filter)) {
+                    return false;
+                }
+            }
+            if let Some(project_filter) = project {
+                if let Some(ref proj) = t.project {
+                    if !proj.eq_ignore_ascii_case(project_filter) {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+            if let Some(due_filter) = due {
+                let due_date = crate::cli::args::parse_date(due_filter);
+                if let Some(ref todo_due) = t.due_date {
+                    // Compare the date string format
+                    if todo_due.format("%Y-%m-%d").to_string() != due_date {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+            true
+        })
+        .collect();
+
+    let title = match query {
+        Some(q) => format!("Search: \"{q}\""),
+        None => "Search Results".to_string(),
+    };
+    format_todos(&filtered, &title, format)
 }
 
 /// Execute open command

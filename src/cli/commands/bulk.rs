@@ -122,14 +122,15 @@ fn check_bulk_safety(
     Ok(filtered)
 }
 
-/// Execute the filter command.
+/// Execute search with advanced filter expression.
 ///
-/// Lists todos matching the given filter expression.
+/// Lists todos matching the given SQL-like filter expression.
+/// This is used when `--filter` flag is passed to the search command.
 ///
 /// # Errors
 ///
 /// Returns an error if the filter is invalid or the Things 3 API call fails.
-pub fn filter(
+pub fn search_with_filter(
     client: &ThingsClient,
     filter_query: &str,
     format: OutputFormat,
@@ -384,119 +385,6 @@ pub fn bulk_move(
 
     let action = BulkAction::MoveToProject(project.to_string());
     let operation = BulkOperation::new(filter_query, action, dry_run)?;
-    let summary = execute_bulk_operation(client, &todos_to_process, &operation)?;
-    format_bulk_summary(&summary, format)
-}
-
-/// Execute a bulk set-due operation.
-///
-/// Sets the due date for all matching todos.
-///
-/// # Safety
-///
-/// - Requires confirmation for operations affecting more than 5 items
-/// - Respects the `--limit` flag to prevent accidental mass operations
-/// - Use `--dry-run` to preview changes before applying
-///
-/// # Examples
-///
-/// ```bash
-/// # Preview what would be updated
-/// clings bulk set-due --where "project = 'Sprint'" --date tomorrow --dry-run
-///
-/// # Set due date
-/// clings bulk set-due --where "project = 'Sprint'" --date "2024-12-31"
-/// ```
-///
-/// # Errors
-///
-/// Returns an error if filter invalid, date invalid, user cancels, or API fails.
-pub fn bulk_set_due(
-    client: &ThingsClient,
-    filter_query: Option<&str>,
-    due_date: &str,
-    dry_run: bool,
-    skip_confirmation: bool,
-    limit: usize,
-    format: OutputFormat,
-) -> Result<String, ClingsError> {
-    let filter_query = filter_query.ok_or_else(|| {
-        ClingsError::BulkOperation(
-            "Filter required for bulk set-due.\n\n\
-             Usage: clings bulk set-due --where \"filter expression\" --date \"date\"\n\n\
-             Date formats: YYYY-MM-DD, today, tomorrow, next monday, in 3 days"
-                .to_string(),
-        )
-    })?;
-
-    let all_todos = client.get_all_todos()?;
-    let expr = parse_filter(filter_query)?;
-    let matching: Vec<_> = filter_items(&all_todos, &expr).into_iter().cloned().collect();
-
-    let safety_options = BulkSafetyOptions {
-        skip_confirmation,
-        limit,
-        dry_run,
-    };
-    let todos_to_process = check_bulk_safety(&matching, "SET-DUE", &safety_options)?;
-
-    let action = BulkAction::SetDue(due_date.to_string());
-    let operation = BulkOperation::new(filter_query, action, dry_run)?;
-    let summary = execute_bulk_operation(client, &todos_to_process, &operation)?;
-    format_bulk_summary(&summary, format)
-}
-
-/// Execute a bulk clear-due operation.
-///
-/// Removes the due date from all matching todos.
-///
-/// # Safety
-///
-/// - Requires confirmation for operations affecting more than 5 items
-/// - Respects the `--limit` flag to prevent accidental mass operations
-/// - Use `--dry-run` to preview changes before applying
-///
-/// # Examples
-///
-/// ```bash
-/// # Preview what would be cleared
-/// clings bulk clear-due --where "due < today AND status = open" --dry-run
-///
-/// # Clear due dates
-/// clings bulk clear-due --where "due < today AND status = open"
-/// ```
-///
-/// # Errors
-///
-/// Returns an error if filter invalid, user cancels, or API fails.
-pub fn bulk_clear_due(
-    client: &ThingsClient,
-    filter_query: Option<&str>,
-    dry_run: bool,
-    skip_confirmation: bool,
-    limit: usize,
-    format: OutputFormat,
-) -> Result<String, ClingsError> {
-    let filter_query = filter_query.ok_or_else(|| {
-        ClingsError::BulkOperation(
-            "Filter required for bulk clear-due.\n\n\
-             Usage: clings bulk clear-due --where \"filter expression\""
-                .to_string(),
-        )
-    })?;
-
-    let all_todos = client.get_all_todos()?;
-    let expr = parse_filter(filter_query)?;
-    let matching: Vec<_> = filter_items(&all_todos, &expr).into_iter().cloned().collect();
-
-    let safety_options = BulkSafetyOptions {
-        skip_confirmation,
-        limit,
-        dry_run,
-    };
-    let todos_to_process = check_bulk_safety(&matching, "CLEAR-DUE", &safety_options)?;
-
-    let operation = BulkOperation::new(filter_query, BulkAction::ClearDue, dry_run)?;
     let summary = execute_bulk_operation(client, &todos_to_process, &operation)?;
     format_bulk_summary(&summary, format)
 }

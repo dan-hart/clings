@@ -52,6 +52,9 @@ pub enum ClingsError {
 
     #[error("Feature not supported: {0}")]
     NotSupported(String),
+
+    #[error("Invalid argument: {0}")]
+    InvalidArgument(String),
 }
 
 impl ClingsError {

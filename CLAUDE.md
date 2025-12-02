@@ -289,18 +289,23 @@ Options:
   -V, --version            Show version
 
 Commands:
-  inbox       Show inbox todos
-  today       Show today's todos
-  upcoming    Show upcoming todos
-  anytime     Show anytime todos
-  someday     Show someday todos
-  logbook     Show completed todos
-  todo        Manage todos (list, add, show, complete, cancel, delete)
-  project     Manage projects (list, add, show)
-  areas       List all areas
-  tags        List all tags
-  search      Search todos by query
+  list        List todos from a view (today, inbox, upcoming, etc.)
+  today       Show today's todos (alias for 'list today')
+  inbox       Show inbox todos (alias for 'list inbox')
+  upcoming    Show upcoming todos (alias for 'list upcoming')
+  anytime     Show anytime todos (alias for 'list anytime')
+  someday     Show someday todos (alias for 'list someday')
+  logbook     Show completed todos (alias for 'list logbook')
+  add         Quick add with natural language
+  todo        Manage todos (show, complete, cancel, delete)
+  project     Manage projects (list, show, add)
+  search      Search todos by text or filters
   open        Open Things to a specific view or item
+  bulk        Bulk operations on multiple todos
+  stats       View productivity statistics
+  review      Interactive weekly review workflow
+  shell       Shell integration (completions)
+  tui         Launch the terminal UI
 ```
 
 ### Design Principles
@@ -394,3 +399,4 @@ On tag push:
 ## License
 
 This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+- never add claude as a co author on commits
