@@ -243,39 +243,6 @@ The README.md must include:
 - Contributing guidelines
 - License information
 
-## Things 3 Feature Parity Roadmap
-
-### Phase 1 - Core (Complete)
-- [x] List views (Inbox, Today, Upcoming, Anytime, Someday, Logbook)
-- [x] Todo CRUD (create, read, complete, cancel)
-- [x] Project CRUD (create, read, list)
-- [x] Areas (read, list)
-- [x] Tags (read, list)
-- [x] Search todos
-- [x] Open items in Things app
-
-### Phase 2 - Enhanced
-- [ ] Todo update (modify title, notes, dates, tags)
-- [ ] Checklist items (full CRUD within todos)
-- [ ] Recurring todos support
-- [ ] Separate deadline vs when date handling
-- [ ] Headings within projects
-- [ ] Move items between lists/projects/areas
-
-### Phase 3 - Advanced
-- [ ] Quick entry integration (URL scheme)
-- [ ] Batch operations (complete multiple, tag multiple)
-- [ ] Advanced filtering (by date range, tags, status)
-- [ ] Sorting options
-- [ ] Statistics and reporting
-
-### Phase 4 - TUI
-- [ ] Ratatui-based terminal user interface
-- [ ] Keyboard navigation (vim-style bindings)
-- [ ] Inline editing
-- [ ] Real-time sync with Things 3
-- [ ] Customizable themes
-
 ## CLI Design Guidelines
 
 ### Command Structure
