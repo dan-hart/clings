@@ -1,6 +1,4 @@
-# clings
-
-> A fast, feature-rich command-line interface for Things 3 on macOS
+# clings - A fast, feature-rich command-line interface for Things 3 on macOS
 
 > **Disclaimer:** This project is not affiliated with, endorsed by, or sponsored by [Cultured Code](https://culturedcode.com/). Things 3 is a registered trademark of Cultured Code GmbH & Co. KG. clings is an independent, open-source project that provides a command-line interface wrapper for the Things 3 application.
 
