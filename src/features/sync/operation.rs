@@ -149,6 +149,7 @@ pub struct AddTodoPayload {
     pub deadline: Option<String>,
     pub tags: Option<Vec<String>>,
     pub project: Option<String>,
+    pub area: Option<String>,
     pub checklist: Option<Vec<String>>,
 }
 
@@ -375,6 +376,7 @@ mod tests {
             deadline: None,
             tags: None,
             project: None,
+            area: None,
             checklist: None,
         });
         assert_eq!(add.operation_type, OperationType::AddTodo);
@@ -398,5 +400,72 @@ mod tests {
 
         op.attempts = 10;
         assert_eq!(op.retry_delay_seconds(), 300); // Capped at 5 minutes
+    }
+
+    #[test]
+    fn test_add_todo_payload_with_area() {
+        let payload = AddTodoPayload {
+            title: "Test task".to_string(),
+            notes: None,
+            when: Some("2024-12-15".to_string()),
+            deadline: Some("2024-12-20".to_string()),
+            tags: None,
+            project: None,
+            area: Some("Work".to_string()),
+            checklist: None,
+        };
+
+        assert_eq!(payload.title, "Test task");
+        assert_eq!(payload.area, Some("Work".to_string()));
+        assert_eq!(payload.when, Some("2024-12-15".to_string()));
+        assert_eq!(payload.deadline, Some("2024-12-20".to_string()));
+    }
+
+    #[test]
+    fn test_add_todo_payload_serialization() {
+        let payload = AddTodoPayload {
+            title: "Task".to_string(),
+            notes: Some("Notes".to_string()),
+            when: Some("2024-12-15".to_string()),
+            deadline: Some("2024-12-20".to_string()),
+            tags: Some(vec!["work".to_string()]),
+            project: Some("Project".to_string()),
+            area: Some("Work".to_string()),
+            checklist: Some(vec!["Step 1".to_string()]),
+        };
+
+        let json = serde_json::to_string(&payload).expect("should serialize");
+        assert!(json.contains("\"title\":\"Task\""));
+        assert!(json.contains("\"area\":\"Work\""));
+        assert!(json.contains("\"when\":\"2024-12-15\""));
+        assert!(json.contains("\"deadline\":\"2024-12-20\""));
+    }
+
+    #[test]
+    fn test_add_todo_payload_deserialization() {
+        let json = r#"{
+            "title": "Test task",
+            "area": "Personal",
+            "when": "2024-12-15",
+            "deadline": "2024-12-20"
+        }"#;
+
+        let payload: AddTodoPayload = serde_json::from_str(json).expect("should deserialize");
+        assert_eq!(payload.title, "Test task");
+        assert_eq!(payload.area, Some("Personal".to_string()));
+        assert_eq!(payload.when, Some("2024-12-15".to_string()));
+        assert_eq!(payload.deadline, Some("2024-12-20".to_string()));
+        assert!(payload.project.is_none());
+    }
+
+    #[test]
+    fn test_add_todo_payload_deserialization_minimal() {
+        let json = r#"{"title": "Simple task"}"#;
+
+        let payload: AddTodoPayload = serde_json::from_str(json).expect("should deserialize");
+        assert_eq!(payload.title, "Simple task");
+        assert!(payload.area.is_none());
+        assert!(payload.when.is_none());
+        assert!(payload.deadline.is_none());
     }
 }

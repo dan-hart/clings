@@ -175,25 +175,51 @@ impl ThingsClient {
     }
 
     /// Add a new todo
+    ///
+    /// # Arguments
+    ///
+    /// * `title` - The todo title
+    /// * `notes` - Optional notes
+    /// * `when_date` - Optional scheduling date (appears in Today/Upcoming)
+    /// * `deadline` - Optional deadline/due date
+    /// * `tags` - Optional tags
+    /// * `list` - Optional project/list name to move todo into
+    /// * `area` - Optional area name (ignored if list is specified)
+    /// * `checklist` - Optional checklist items
+    #[allow(clippy::too_many_arguments)]
     pub fn add_todo(
         &self,
         title: &str,
         notes: Option<&str>,
-        due_date: Option<&str>,
+        when_date: Option<&str>,
+        deadline: Option<&str>,
         tags: Option<&[String]>,
         list: Option<&str>,
+        area: Option<&str>,
         checklist: Option<&[String]>,
     ) -> Result<CreateResponse, ClingsError> {
         let notes_js = notes
             .map(|n| format!("props.notes = {};", Self::js_string(n)))
             .unwrap_or_default();
 
-        let due_js = due_date
+        // Deadline sets the due date property
+        let deadline_js = deadline
             .map(|d| format!("props.dueDate = new Date('{}');", d))
             .unwrap_or_default();
 
         let tags_js = tags
             .map(|t| format!("props.tagNames = {};", Self::js_string(&t.join(", "))))
+            .unwrap_or_default();
+
+        // Schedule command sets when the todo appears in Today/Upcoming
+        let schedule_js = when_date
+            .map(|d| {
+                format!(
+                    r#"
+    Things.schedule(todo, {{ for: new Date('{}') }});"#,
+                    d
+                )
+            })
             .unwrap_or_default();
 
         let list_js = list
@@ -208,6 +234,23 @@ impl ThingsClient {
                 )
             })
             .unwrap_or_default();
+
+        // Area assignment - only if no list/project specified (project takes precedence)
+        let area_js = if list.is_none() {
+            area.map(|a| {
+                format!(
+                    r#"
+    const targetArea = Things.areas.byName({});
+    if (targetArea.exists()) {{
+        todo.area = targetArea;
+    }}"#,
+                    Self::js_string(a)
+                )
+            })
+            .unwrap_or_default()
+        } else {
+            String::new()
+        };
 
         let checklist_js = checklist
             .map(|items| {
@@ -233,13 +276,17 @@ impl ThingsClient {
     const todo = Things.make({{ new: 'toDo', withProperties: props }});
     {}
     {}
+    {}
+    {}
     return JSON.stringify({{ id: todo.id(), name: todo.name() }});
 }})()"#,
             Self::js_string(title),
             notes_js,
-            due_js,
+            deadline_js,
             tags_js,
+            schedule_js,
             list_js,
+            area_js,
             checklist_js
         );
 
@@ -1611,6 +1658,275 @@ mod tests {
         let result = client.clear_todos_due_batch(&ids).unwrap();
         assert_eq!(result.succeeded, 0);
         assert_eq!(result.failed, 0);
+    }
+
+    // ==================== add_todo JXA Script Generation Tests ====================
+
+    /// Helper to generate the JXA script that add_todo would create
+    /// This allows us to test the script generation without executing it
+    fn generate_add_todo_script(
+        title: &str,
+        notes: Option<&str>,
+        when_date: Option<&str>,
+        deadline: Option<&str>,
+        tags: Option<&[String]>,
+        list: Option<&str>,
+        area: Option<&str>,
+        checklist: Option<&[String]>,
+    ) -> String {
+        let notes_js = notes
+            .map(|n| format!("props.notes = {};", ThingsClient::js_string(n)))
+            .unwrap_or_default();
+
+        let deadline_js = deadline
+            .map(|d| format!("props.dueDate = new Date('{}');", d))
+            .unwrap_or_default();
+
+        let tags_js = tags
+            .map(|t| format!("props.tagNames = {};", ThingsClient::js_string(&t.join(", "))))
+            .unwrap_or_default();
+
+        let schedule_js = when_date
+            .map(|d| {
+                format!(
+                    r#"
+    Things.schedule(todo, {{ for: new Date('{}') }});"#,
+                    d
+                )
+            })
+            .unwrap_or_default();
+
+        let list_js = list
+            .map(|l| {
+                format!(
+                    r#"
+    const targetList = Things.lists.byName({});
+    if (targetList.exists()) {{
+        Things.move(todo, {{ to: targetList }});
+    }}"#,
+                    ThingsClient::js_string(l)
+                )
+            })
+            .unwrap_or_default();
+
+        let area_js = if list.is_none() {
+            area.map(|a| {
+                format!(
+                    r#"
+    const targetArea = Things.areas.byName({});
+    if (targetArea.exists()) {{
+        todo.area = targetArea;
+    }}"#,
+                    ThingsClient::js_string(a)
+                )
+            })
+            .unwrap_or_default()
+        } else {
+            String::new()
+        };
+
+        let checklist_js = checklist
+            .map(|items| {
+                let items_str: Vec<String> = items.iter().map(|i| ThingsClient::js_string(i)).collect();
+                format!(
+                    r#"
+    const checklistItems = [{}];
+    for (const item of checklistItems) {{
+        Things.make({{ new: 'toDo', withProperties: {{ name: item }}, at: todo }});
+    }}"#,
+                    items_str.join(", ")
+                )
+            })
+            .unwrap_or_default();
+
+        format!(
+            r#"(() => {{
+    const Things = Application('Things3');
+    const props = {{ name: {} }};
+    {}
+    {}
+    {}
+    const todo = Things.make({{ new: 'toDo', withProperties: props }});
+    {}
+    {}
+    {}
+    {}
+    return JSON.stringify({{ id: todo.id(), name: todo.name() }});
+}})()"#,
+            ThingsClient::js_string(title),
+            notes_js,
+            deadline_js,
+            tags_js,
+            schedule_js,
+            list_js,
+            area_js,
+            checklist_js
+        )
+    }
+
+    #[test]
+    fn test_add_todo_script_basic() {
+        let script = generate_add_todo_script(
+            "Buy milk",
+            None, None, None, None, None, None, None,
+        );
+        assert!(script.contains("const props = { name: 'Buy milk' }"));
+        assert!(script.contains("Things.make({ new: 'toDo', withProperties: props })"));
+    }
+
+    #[test]
+    fn test_add_todo_script_with_notes() {
+        let script = generate_add_todo_script(
+            "Task",
+            Some("My notes"),
+            None, None, None, None, None, None,
+        );
+        assert!(script.contains("props.notes = 'My notes'"));
+    }
+
+    #[test]
+    fn test_add_todo_script_with_when_date_uses_schedule() {
+        let script = generate_add_todo_script(
+            "Task",
+            None,
+            Some("2024-12-15"),
+            None, None, None, None, None,
+        );
+        // Should use schedule command for "when" date
+        assert!(script.contains("Things.schedule(todo, { for: new Date('2024-12-15') })"));
+        // Should NOT set dueDate for when
+        assert!(!script.contains("props.dueDate = new Date('2024-12-15')"));
+    }
+
+    #[test]
+    fn test_add_todo_script_with_deadline_uses_due_date() {
+        let script = generate_add_todo_script(
+            "Task",
+            None,
+            None,
+            Some("2024-12-20"),
+            None, None, None, None,
+        );
+        // Should set dueDate for deadline
+        assert!(script.contains("props.dueDate = new Date('2024-12-20')"));
+        // Should NOT use schedule for deadline
+        assert!(!script.contains("Things.schedule"));
+    }
+
+    #[test]
+    fn test_add_todo_script_with_both_when_and_deadline() {
+        let script = generate_add_todo_script(
+            "Task",
+            None,
+            Some("2024-12-15"),  // when
+            Some("2024-12-20"),  // deadline
+            None, None, None, None,
+        );
+        // Should have both: schedule for when, dueDate for deadline
+        assert!(script.contains("Things.schedule(todo, { for: new Date('2024-12-15') })"));
+        assert!(script.contains("props.dueDate = new Date('2024-12-20')"));
+    }
+
+    #[test]
+    fn test_add_todo_script_with_tags() {
+        let tags = vec!["work".to_string(), "urgent".to_string()];
+        let script = generate_add_todo_script(
+            "Task",
+            None, None, None,
+            Some(&tags),
+            None, None, None,
+        );
+        assert!(script.contains("props.tagNames = 'work, urgent'"));
+    }
+
+    #[test]
+    fn test_add_todo_script_with_project() {
+        let script = generate_add_todo_script(
+            "Task",
+            None, None, None, None,
+            Some("My Project"),
+            None, None,
+        );
+        assert!(script.contains("Things.lists.byName('My Project')"));
+        assert!(script.contains("Things.move(todo, { to: targetList })"));
+    }
+
+    #[test]
+    fn test_add_todo_script_with_area() {
+        let script = generate_add_todo_script(
+            "Task",
+            None, None, None, None,
+            None,
+            Some("Work"),
+            None,
+        );
+        assert!(script.contains("Things.areas.byName('Work')"));
+        assert!(script.contains("todo.area = targetArea"));
+    }
+
+    #[test]
+    fn test_add_todo_script_area_ignored_when_project_specified() {
+        let script = generate_add_todo_script(
+            "Task",
+            None, None, None, None,
+            Some("My Project"),  // project takes precedence
+            Some("Work"),        // area should be ignored
+            None,
+        );
+        // Project should be set
+        assert!(script.contains("Things.lists.byName('My Project')"));
+        // Area should NOT be set when project is specified
+        assert!(!script.contains("Things.areas.byName"));
+        assert!(!script.contains("todo.area"));
+    }
+
+    #[test]
+    fn test_add_todo_script_with_checklist() {
+        let checklist = vec!["Item 1".to_string(), "Item 2".to_string()];
+        let script = generate_add_todo_script(
+            "Task",
+            None, None, None, None, None, None,
+            Some(&checklist),
+        );
+        assert!(script.contains("const checklistItems = ['Item 1', 'Item 2']"));
+        assert!(script.contains("Things.make({ new: 'toDo', withProperties: { name: item }, at: todo })"));
+    }
+
+    #[test]
+    fn test_add_todo_script_with_all_parameters() {
+        let tags = vec!["work".to_string()];
+        let checklist = vec!["Step 1".to_string()];
+        let script = generate_add_todo_script(
+            "Complete task",
+            Some("Important notes"),
+            Some("2024-12-15"),
+            Some("2024-12-20"),
+            Some(&tags),
+            Some("Project X"),
+            Some("Work"),  // Will be ignored due to project
+            Some(&checklist),
+        );
+
+        assert!(script.contains("const props = { name: 'Complete task' }"));
+        assert!(script.contains("props.notes = 'Important notes'"));
+        assert!(script.contains("props.dueDate = new Date('2024-12-20')"));
+        assert!(script.contains("props.tagNames = 'work'"));
+        assert!(script.contains("Things.schedule(todo, { for: new Date('2024-12-15') })"));
+        assert!(script.contains("Things.lists.byName('Project X')"));
+        // Area should be ignored because project is specified
+        assert!(!script.contains("Things.areas.byName"));
+        assert!(script.contains("const checklistItems = ['Step 1']"));
+    }
+
+    #[test]
+    fn test_add_todo_script_escapes_special_characters() {
+        let script = generate_add_todo_script(
+            "Task with 'quotes' and\nnewline",
+            Some("Notes with\ttabs"),
+            None, None, None, None, None, None,
+        );
+        assert!(script.contains("'Task with \\'quotes\\' and\\nnewline'"));
+        assert!(script.contains("'Notes with\\ttabs'"));
     }
 
     // ==================== ListView Tests ====================

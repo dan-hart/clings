@@ -224,17 +224,20 @@ impl<'a> AutomationEngine<'a> {
             title,
             notes,
             project,
+            area,
             tags,
             when,
-            deadline: _,
+            deadline,
         } = params
         {
             match self.client.add_todo(
                 title,
                 notes.as_deref(),
                 when.as_deref(),
+                deadline.as_deref(),
                 tags.as_deref(),
                 project.as_deref(),
+                area.as_deref(),
                 None, // checklist
             ) {
                 Ok(response) => ActionResult::success_with_id(&response.id),

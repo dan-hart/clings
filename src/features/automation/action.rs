@@ -31,6 +31,7 @@ impl Action {
                 title: title.into(),
                 notes: None,
                 project: None,
+                area: None,
                 tags: None,
                 when: None,
                 deadline: None,
@@ -113,6 +114,7 @@ impl Action {
                 title,
                 notes,
                 project,
+                area,
                 tags,
                 when,
                 deadline,
@@ -120,6 +122,7 @@ impl Action {
                 title: context.substitute(title),
                 notes: notes.as_ref().map(|n| context.substitute(n)),
                 project: project.as_ref().map(|p| context.substitute(p)),
+                area: area.as_ref().map(|a| context.substitute(a)),
                 tags: tags.clone(),
                 when: when.as_ref().map(|w| context.substitute(w)),
                 deadline: deadline.as_ref().map(|d| context.substitute(d)),
@@ -226,6 +229,7 @@ pub enum ActionParams {
         title: String,
         notes: Option<String>,
         project: Option<String>,
+        area: Option<String>,
         tags: Option<Vec<String>>,
         when: Option<String>,
         deadline: Option<String>,
@@ -355,5 +359,102 @@ mod tests {
         let failure = ActionResult::failure("Something went wrong");
         assert!(!failure.success);
         assert_eq!(failure.error, Some("Something went wrong".to_string()));
+    }
+
+    #[test]
+    fn test_add_todo_action_has_area_field() {
+        let action = Action::add_todo("Test task");
+
+        if let ActionParams::AddTodo { area, .. } = &action.params {
+            assert!(area.is_none(), "area should default to None");
+        } else {
+            panic!("Wrong params type");
+        }
+    }
+
+    #[test]
+    fn test_add_todo_params_with_area() {
+        let params = ActionParams::AddTodo {
+            title: "Task in area".to_string(),
+            notes: None,
+            project: None,
+            area: Some("Work".to_string()),
+            tags: None,
+            when: None,
+            deadline: None,
+        };
+
+        if let ActionParams::AddTodo { title, area, .. } = &params {
+            assert_eq!(title, "Task in area");
+            assert_eq!(area, &Some("Work".to_string()));
+        } else {
+            panic!("Wrong params type");
+        }
+    }
+
+    #[test]
+    fn test_substitution_includes_area() {
+        let params = ActionParams::AddTodo {
+            title: "Task".to_string(),
+            notes: None,
+            project: None,
+            area: Some("{area_name}".to_string()),
+            tags: None,
+            when: None,
+            deadline: None,
+        };
+
+        let action = Action::new(ActionType::AddTodo, params);
+        let ctx = RuleContext::now();
+
+        let substituted = action.with_substitution(&ctx);
+
+        // Area should be preserved after substitution (even if not substituted)
+        if let ActionParams::AddTodo { area, .. } = &substituted.params {
+            assert!(area.is_some());
+        } else {
+            panic!("Wrong params type");
+        }
+    }
+
+    #[test]
+    fn test_action_params_serialization_with_area() {
+        let params = ActionParams::AddTodo {
+            title: "Test".to_string(),
+            notes: None,
+            project: Some("My Project".to_string()),
+            area: Some("Work".to_string()),
+            tags: Some(vec!["urgent".to_string()]),
+            when: Some("2024-12-15".to_string()),
+            deadline: Some("2024-12-20".to_string()),
+        };
+
+        let json = serde_json::to_string(&params).expect("should serialize");
+        assert!(json.contains("\"area\":\"Work\""));
+        assert!(json.contains("\"project\":\"My Project\""));
+        assert!(json.contains("\"when\":\"2024-12-15\""));
+        assert!(json.contains("\"deadline\":\"2024-12-20\""));
+    }
+
+    #[test]
+    fn test_action_params_deserialization_with_area() {
+        let json = r#"{
+            "type": "add_todo",
+            "title": "Task",
+            "area": "Personal",
+            "when": "2024-12-15",
+            "deadline": "2024-12-20"
+        }"#;
+
+        let params: ActionParams = serde_json::from_str(json).expect("should deserialize");
+
+        if let ActionParams::AddTodo { title, area, when, deadline, .. } = params {
+            assert_eq!(title, "Task");
+            assert_eq!(area, Some("Personal".to_string()));
+            assert_eq!(when, Some("2024-12-15".to_string()));
+            assert_eq!(deadline, Some("2024-12-20".to_string()));
+        } else {
+            panic!("Wrong params type");
+        }
     }
 }

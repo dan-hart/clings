@@ -484,6 +484,7 @@ mod tests {
             deadline: None,
             tags: None,
             project: None,
+            area: None,
             checklist: None,
         });
         queue.enqueue(&mut add).unwrap();
