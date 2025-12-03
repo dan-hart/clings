@@ -159,6 +159,12 @@ clings shell completions zsh --install
 
 ## Installation
 
+### Homebrew (Recommended)
+
+```bash
+brew install dan-hart/tap/clings
+```
+
 ### From Source
 
 ```bash

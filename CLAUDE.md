@@ -352,7 +352,38 @@ On tag push:
 1. Build release binaries (macOS ARM64, macOS x86_64)
 2. Generate shell completions
 3. Create GitHub release with artifacts
-4. Update Homebrew formula (if applicable)
+4. Update Homebrew formula (see below)
+
+### Updating Homebrew Formula
+
+When releasing a new version, the Homebrew formula must be updated:
+
+1. **Get the SHA256 checksum** for the new release tarball:
+   ```bash
+   curl -sL https://github.com/dan-hart/clings/archive/refs/tags/v<VERSION>.tar.gz | shasum -a 256
+   ```
+
+2. **Update the formula** in the homebrew-tap repository:
+   - Repository: https://github.com/dan-hart/homebrew-tap
+   - File: `Formula/clings.rb`
+   - Update the `url` to point to the new version tag
+   - Update the `sha256` with the new checksum
+
+3. **Commit and push** the formula changes:
+   ```bash
+   cd /path/to/homebrew-tap
+   git add Formula/clings.rb
+   git commit -m "Update clings to v<VERSION>"
+   git push
+   ```
+
+4. **Verify** the update works:
+   ```bash
+   brew update
+   brew upgrade clings
+   # or for fresh install:
+   brew install dan-hart/tap/clings
+   ```
 
 ## Contributing
 
