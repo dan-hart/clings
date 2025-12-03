@@ -55,12 +55,14 @@ pub fn quick_add(
         &task.title,
         task.notes.as_deref(),
         task.when_date_iso().as_deref(),
+        task.deadline_date_iso().as_deref(),
         if task.tags.is_empty() {
             None
         } else {
             Some(task.tags.as_slice())
         },
         task.project.as_deref(),
+        task.area.as_deref(),
         if task.checklist.is_empty() {
             None
         } else {

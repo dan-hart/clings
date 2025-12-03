@@ -241,8 +241,10 @@ impl<'a> SyncExecutor<'a> {
             &data.title,
             data.notes.as_deref(),
             data.when.as_deref(),
+            data.deadline.as_deref(),
             data.tags.as_deref(),
             data.project.as_deref(),
+            data.area.as_deref(),
             data.checklist.as_deref(),
         )?;
 
