@@ -397,4 +397,14 @@ When releasing a new version, the Homebrew formula must be updated:
 ## License
 
 This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
-- never add claude as a co author on commits
+
+## Claude Directives
+
+- Never add Claude as a co-author on commits
+- **Always update the Homebrew tap when releasing a new version:**
+  1. Bump version in `Cargo.toml`
+  2. Commit, tag (e.g., `v0.1.5`), and push to all remotes
+  3. Get SHA256: `curl -sL https://github.com/dan-hart/clings/archive/refs/tags/v<VERSION>.tar.gz | shasum -a 256`
+  4. Update `~/Developer/homebrew-tap/Formula/clings.rb` with new version and SHA256
+  5. Commit and push homebrew-tap
+  6. Run `brew update && brew upgrade clings` to verify
