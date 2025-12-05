@@ -21,7 +21,11 @@ pub struct Condition {
 impl Condition {
     /// Create a new condition.
     #[must_use]
-    pub fn new(field: ConditionField, operator: ConditionOperator, value: ConditionValue) -> Self {
+    pub const fn new(
+        field: ConditionField,
+        operator: ConditionOperator,
+        value: ConditionValue,
+    ) -> Self {
         Self {
             field,
             operator,
@@ -55,7 +59,7 @@ impl Condition {
         Self::new(
             ConditionField::DayOfWeek,
             ConditionOperator::Equals,
-            ConditionValue::Integer(day.num_days_from_monday() as i64),
+            ConditionValue::Integer(i64::from(day.num_days_from_monday())),
         )
     }
 
@@ -65,7 +69,7 @@ impl Condition {
         Self::new(
             ConditionField::Hour,
             ConditionOperator::Between,
-            ConditionValue::Range(start as i64, end as i64),
+            ConditionValue::Range(i64::from(start), i64::from(end)),
         )
     }
 
@@ -102,21 +106,17 @@ impl ConditionField {
     #[must_use]
     pub fn get_value(&self, context: &RuleContext) -> ConditionValue {
         match self {
-            Self::TodoName => {
-                ConditionValue::String(context.todo_name.clone().unwrap_or_default())
-            }
-            Self::Project => {
-                ConditionValue::String(context.project.clone().unwrap_or_default())
-            }
+            Self::TodoName => ConditionValue::String(context.todo_name.clone().unwrap_or_default()),
+            Self::Project => ConditionValue::String(context.project.clone().unwrap_or_default()),
             Self::Area => ConditionValue::String(String::new()), // TODO: Add area to context
             Self::Tags => ConditionValue::List(context.tags.clone()),
             Self::DayOfWeek => {
-                ConditionValue::Integer(context.now.weekday().num_days_from_monday() as i64)
-            }
-            Self::Hour => ConditionValue::Integer(context.now.hour() as i64),
+                ConditionValue::Integer(i64::from(context.now.weekday().num_days_from_monday()))
+            },
+            Self::Hour => ConditionValue::Integer(i64::from(context.now.hour())),
             Self::Variable(name) => {
                 ConditionValue::String(context.get_variable(name).cloned().unwrap_or_default())
-            }
+            },
         }
     }
 }
@@ -163,9 +163,11 @@ impl ConditionOperator {
                 (ConditionValue::List(list), ConditionValue::String(item)) => list.contains(item),
                 _ => false,
             },
-            Self::NotContains => !self.evaluate_contains(field_value, compare_value),
+            Self::NotContains => !Self::evaluate_contains(field_value, compare_value),
             Self::StartsWith => match (field_value, compare_value) {
-                (ConditionValue::String(s), ConditionValue::String(prefix)) => s.starts_with(prefix),
+                (ConditionValue::String(s), ConditionValue::String(prefix)) => {
+                    s.starts_with(prefix)
+                },
                 _ => false,
             },
             Self::EndsWith => match (field_value, compare_value) {
@@ -183,7 +185,7 @@ impl ConditionOperator {
             Self::Between => match (field_value, compare_value) {
                 (ConditionValue::Integer(v), ConditionValue::Range(min, max)) => {
                     *v >= *min && *v <= *max
-                }
+                },
                 _ => false,
             },
             Self::IsEmpty => match field_value {
@@ -197,13 +199,13 @@ impl ConditionOperator {
                     regex::Regex::new(pattern)
                         .map(|re| re.is_match(s))
                         .unwrap_or(false)
-                }
+                },
                 _ => false,
             },
         }
     }
 
-    fn evaluate_contains(&self, field_value: &ConditionValue, compare_value: &ConditionValue) -> bool {
+    fn evaluate_contains(field_value: &ConditionValue, compare_value: &ConditionValue) -> bool {
         match (field_value, compare_value) {
             (ConditionValue::String(s), ConditionValue::String(needle)) => s.contains(needle),
             (ConditionValue::List(list), ConditionValue::String(item)) => list.contains(item),
@@ -305,8 +307,7 @@ mod tests {
 
     #[test]
     fn test_string_operations() {
-        let ctx = RuleContext::now()
-            .with_todo("ABC".to_string(), "Buy groceries".to_string());
+        let ctx = RuleContext::now().with_todo("ABC".to_string(), "Buy groceries".to_string());
 
         let starts = Condition::new(
             ConditionField::TodoName,

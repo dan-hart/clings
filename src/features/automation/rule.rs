@@ -74,7 +74,7 @@ impl Rule {
 
     /// Set priority.
     #[must_use]
-    pub fn with_priority(mut self, priority: i32) -> Self {
+    pub const fn with_priority(mut self, priority: i32) -> Self {
         self.priority = priority;
         self
     }
@@ -110,7 +110,7 @@ pub struct Trigger {
 impl Trigger {
     /// Create a scheduled trigger.
     #[must_use]
-    pub fn scheduled(schedule: Schedule) -> Self {
+    pub const fn scheduled(schedule: Schedule) -> Self {
         Self {
             trigger_type: TriggerType::Scheduled,
             config: TriggerConfig::Schedule(schedule),
@@ -119,7 +119,7 @@ impl Trigger {
 
     /// Create an event trigger.
     #[must_use]
-    pub fn on_event(event: EventType) -> Self {
+    pub const fn on_event(event: EventType) -> Self {
         Self {
             trigger_type: TriggerType::Event,
             config: TriggerConfig::Event(event),
@@ -128,7 +128,7 @@ impl Trigger {
 
     /// Create a manual trigger.
     #[must_use]
-    pub fn manual() -> Self {
+    pub const fn manual() -> Self {
         Self {
             trigger_type: TriggerType::Manual,
             config: TriggerConfig::None,
@@ -137,7 +137,7 @@ impl Trigger {
 
     /// Create a startup trigger.
     #[must_use]
-    pub fn on_startup() -> Self {
+    pub const fn on_startup() -> Self {
         Self {
             trigger_type: TriggerType::Startup,
             config: TriggerConfig::None,
@@ -151,8 +151,11 @@ impl Trigger {
             TriggerConfig::Schedule(schedule) => schedule.should_fire(context.now, last_run),
             TriggerConfig::Event(event) => context.event.as_ref() == Some(event),
             TriggerConfig::None => {
-                matches!(self.trigger_type, TriggerType::Manual | TriggerType::Startup)
-            }
+                matches!(
+                    self.trigger_type,
+                    TriggerType::Manual | TriggerType::Startup
+                )
+            },
         }
     }
 }
@@ -174,7 +177,7 @@ pub enum TriggerType {
 impl TriggerType {
     /// Get display name.
     #[must_use]
-    pub fn display_name(&self) -> &'static str {
+    pub const fn display_name(&self) -> &'static str {
         match self {
             Self::Scheduled => "Scheduled",
             Self::Event => "Event",
@@ -212,7 +215,7 @@ pub struct Schedule {
 impl Schedule {
     /// Create a daily schedule.
     #[must_use]
-    pub fn daily(time: NaiveTime) -> Self {
+    pub const fn daily(time: NaiveTime) -> Self {
         Self {
             schedule_type: ScheduleType::Daily,
             time: Some(time),
@@ -223,7 +226,7 @@ impl Schedule {
 
     /// Create a weekly schedule.
     #[must_use]
-    pub fn weekly(days: Vec<Weekday>, time: NaiveTime) -> Self {
+    pub const fn weekly(days: Vec<Weekday>, time: NaiveTime) -> Self {
         Self {
             schedule_type: ScheduleType::Weekly,
             time: Some(time),
@@ -234,7 +237,7 @@ impl Schedule {
 
     /// Create an interval schedule.
     #[must_use]
-    pub fn every_minutes(minutes: i64) -> Self {
+    pub const fn every_minutes(minutes: i64) -> Self {
         Self {
             schedule_type: ScheduleType::Interval,
             time: None,
@@ -251,9 +254,10 @@ impl Schedule {
                 // Check if we've passed the scheduled time today and haven't run yet
                 if let Some(scheduled_time) = self.time {
                     let now_time = now.time();
-                    let today_start = now.date_naive().and_hms_opt(0, 0, 0).map(|t| {
-                        DateTime::<Utc>::from_naive_utc_and_offset(t, Utc)
-                    });
+                    let today_start = now
+                        .date_naive()
+                        .and_hms_opt(0, 0, 0)
+                        .map(|t| DateTime::<Utc>::from_naive_utc_and_offset(t, Utc));
 
                     if let Some(last) = last_run {
                         if let Some(start) = today_start {
@@ -268,7 +272,7 @@ impl Schedule {
                 } else {
                     false
                 }
-            }
+            },
             ScheduleType::Weekly => {
                 if let (Some(scheduled_time), Some(days)) = (&self.time, &self.days) {
                     let weekday = now.weekday();
@@ -277,9 +281,10 @@ impl Schedule {
                     }
 
                     let now_time = now.time();
-                    let today_start = now.date_naive().and_hms_opt(0, 0, 0).map(|t| {
-                        DateTime::<Utc>::from_naive_utc_and_offset(t, Utc)
-                    });
+                    let today_start = now
+                        .date_naive()
+                        .and_hms_opt(0, 0, 0)
+                        .map(|t| DateTime::<Utc>::from_naive_utc_and_offset(t, Utc));
 
                     if let Some(last) = last_run {
                         if let Some(start) = today_start {
@@ -293,20 +298,13 @@ impl Schedule {
                 } else {
                     false
                 }
-            }
-            ScheduleType::Interval => {
-                if let Some(interval) = self.interval_minutes {
-                    match last_run {
-                        Some(last) => {
-                            let elapsed = now.signed_duration_since(*last);
-                            elapsed.num_minutes() >= interval
-                        }
-                        None => true, // Never run, should fire
-                    }
-                } else {
-                    false
-                }
-            }
+            },
+            ScheduleType::Interval => self.interval_minutes.is_some_and(|interval| {
+                last_run.map_or(true, |last| {
+                    let elapsed = now.signed_duration_since(*last);
+                    elapsed.num_minutes() >= interval
+                })
+            }),
         }
     }
 }
@@ -348,7 +346,7 @@ pub enum EventType {
 impl EventType {
     /// Get display name.
     #[must_use]
-    pub fn display_name(&self) -> &'static str {
+    pub const fn display_name(&self) -> &'static str {
         match self {
             Self::TodoCreated => "Todo Created",
             Self::TodoCompleted => "Todo Completed",
@@ -453,7 +451,10 @@ impl RuleContext {
             result = result.replace("{todo_id}", id);
         }
         if let Some(project) = &self.project {
-            result = result.replace("{project}", project);
+            #[allow(clippy::literal_string_with_formatting_args)]
+            {
+                result = result.replace("{project}", project.as_str());
+            }
         }
 
         // Custom variables

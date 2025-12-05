@@ -1,9 +1,11 @@
-//! SQLite database connection and operations.
+//! `SQLite` database connection and operations.
 //!
 //! The database is stored at `~/.clings/clings.db` and contains tables for:
 //! - Statistics tracking
 //! - Focus session history
 //! - Sync operation queue
+//!
+//! Note: `clings.db` is the `SQLite` database file.
 
 use rusqlite::Connection;
 
@@ -40,15 +42,14 @@ impl Database {
     /// Returns an error if the database cannot be opened or migrations fail.
     pub fn open_at(path: &std::path::Path) -> Result<Self, ClingsError> {
         let conn = Connection::open(path).map_err(|e| {
-            ClingsError::Database(format!("Failed to open database {:?}: {}", path, e))
+            ClingsError::Database(format!("Failed to open database {}: {e}", path.display()))
         })?;
 
         // Enable foreign keys
-        conn.execute_batch("PRAGMA foreign_keys = ON;").map_err(|e| {
-            ClingsError::Database(format!("Failed to enable foreign keys: {}", e))
-        })?;
+        conn.execute_batch("PRAGMA foreign_keys = ON;")
+            .map_err(|e| ClingsError::Database(format!("Failed to enable foreign keys: {e}")))?;
 
-        let mut db = Self { conn };
+        let db = Self { conn };
         db.migrate()?;
 
         Ok(db)
@@ -61,21 +62,20 @@ impl Database {
     /// Returns an error if the database cannot be opened or migrations fail.
     pub fn open_in_memory() -> Result<Self, ClingsError> {
         let conn = Connection::open_in_memory().map_err(|e| {
-            ClingsError::Database(format!("Failed to open in-memory database: {}", e))
+            ClingsError::Database(format!("Failed to open in-memory database: {e}"))
         })?;
 
-        conn.execute_batch("PRAGMA foreign_keys = ON;").map_err(|e| {
-            ClingsError::Database(format!("Failed to enable foreign keys: {}", e))
-        })?;
+        conn.execute_batch("PRAGMA foreign_keys = ON;")
+            .map_err(|e| ClingsError::Database(format!("Failed to enable foreign keys: {e}")))?;
 
-        let mut db = Self { conn };
+        let db = Self { conn };
         db.migrate()?;
 
         Ok(db)
     }
 
     /// Run database migrations.
-    fn migrate(&mut self) -> Result<(), ClingsError> {
+    fn migrate(&self) -> Result<(), ClingsError> {
         migrations::run(&self.conn)
     }
 
@@ -92,7 +92,7 @@ impl Database {
     ///
     /// This is primarily for use by feature modules that need direct access.
     #[must_use]
-    pub fn connection(&self) -> &Connection {
+    pub const fn connection(&self) -> &Connection {
         &self.conn
     }
 
@@ -101,10 +101,14 @@ impl Database {
     /// # Errors
     ///
     /// Returns an error if the query fails.
-    pub fn execute(&self, sql: &str, params: &[&dyn rusqlite::ToSql]) -> Result<usize, ClingsError> {
-        self.conn.execute(sql, params).map_err(|e| {
-            ClingsError::Database(format!("Query failed: {}", e))
-        })
+    pub fn execute(
+        &self,
+        sql: &str,
+        params: &[&dyn rusqlite::ToSql],
+    ) -> Result<usize, ClingsError> {
+        self.conn
+            .execute(sql, params)
+            .map_err(|e| ClingsError::Database(format!("Query failed: {e}")))
     }
 }
 

@@ -2,6 +2,7 @@
 //!
 //! Provides terminal-based prompts for guiding users through the review process.
 
+use std::fmt::Write as FmtWrite;
 use std::io::{self, Write};
 
 use colored::Colorize;
@@ -36,11 +37,21 @@ pub struct ReviewPrompt;
 
 impl ReviewPrompt {
     /// Display a welcome message for the review.
+    #[allow(clippy::unused_self)]
     pub fn welcome() {
         println!();
-        println!("{}", "╔══════════════════════════════════════════════════════════════╗".cyan());
-        println!("{}", "║                    Weekly Review                              ║".cyan());
-        println!("{}", "╚══════════════════════════════════════════════════════════════╝".cyan());
+        println!(
+            "{}",
+            "╔══════════════════════════════════════════════════════════════╗".cyan()
+        );
+        println!(
+            "{}",
+            "║                    Weekly Review                              ║".cyan()
+        );
+        println!(
+            "{}",
+            "╚══════════════════════════════════════════════════════════════╝".cyan()
+        );
         println!();
         println!("Let's review your system and make sure everything is up to date.");
         println!();
@@ -81,28 +92,26 @@ impl ReviewPrompt {
                  • Does it take less than 2 minutes? Do it now\n\
                  • Should it be delegated? Move to waiting\n\
                  • Otherwise, schedule it or add to a project"
-            }
+            },
             "Review Someday/Maybe" => {
                 "Look through your someday items:\n\
                  • Has anything become more urgent? Schedule it\n\
                  • Is anything no longer relevant? Delete it\n\
                  • Keep items that might be useful later"
-            }
+            },
             "Check Active Projects" => {
                 "For each active project, verify:\n\
                  • Does it have a clear next action?\n\
                  • Is the project still relevant?\n\
                  • Are there any stuck items?"
-            }
+            },
             "Review Upcoming Deadlines" => {
                 "Check items with upcoming deadlines:\n\
                  • Are you on track to meet them?\n\
                  • Do any need to be rescheduled?\n\
                  • Are there dependencies to resolve?"
-            }
-            "Generate Summary" => {
-                "Review complete! Let's see how you did."
-            }
+            },
+            "Generate Summary" => "Review complete! Let's see how you did.",
             _ => "Follow the prompts below.",
         };
 
@@ -112,6 +121,7 @@ impl ReviewPrompt {
     }
 
     /// Prompt for processing an inbox item.
+    #[must_use]
     pub fn inbox_item(todo: &Todo, index: usize, total: usize) -> ReviewPromptResult {
         Self::display_todo(todo);
         println!(
@@ -137,6 +147,7 @@ impl ReviewPrompt {
     }
 
     /// Prompt for reviewing a someday item.
+    #[must_use]
     pub fn someday_item(todo: &Todo, index: usize, total: usize) -> ReviewPromptResult {
         Self::display_todo(todo);
         println!(
@@ -161,6 +172,7 @@ impl ReviewPrompt {
     }
 
     /// Prompt for checking a project.
+    #[must_use]
     pub fn project_item(project: &Project, index: usize, total: usize) -> ReviewPromptResult {
         Self::display_project(project);
         println!(
@@ -184,6 +196,7 @@ impl ReviewPrompt {
     }
 
     /// Prompt for reviewing an upcoming deadline.
+    #[must_use]
     pub fn deadline_item(todo: &Todo, index: usize, total: usize) -> ReviewPromptResult {
         Self::display_todo_with_deadline(todo);
         println!(
@@ -217,7 +230,7 @@ impl ReviewPrompt {
         }
 
         if !todo.tags.is_empty() {
-            let tags: Vec<String> = todo.tags.iter().map(|t| format!("#{}", t)).collect();
+            let tags: Vec<String> = todo.tags.iter().map(|t| format!("#{t}")).collect();
             println!("    {} {}", "Tags:".dimmed(), tags.join(" ").magenta());
         }
 
@@ -241,13 +254,13 @@ impl ReviewPrompt {
 
             let due_str = due.format("%Y-%m-%d").to_string();
             let urgency = if days_until < 0 {
-                format!("{} (OVERDUE!)", due_str).red().bold()
+                format!("{due_str} (OVERDUE!)").red().bold()
             } else if days_until == 0 {
-                format!("{} (TODAY!)", due_str).yellow().bold()
+                format!("{due_str} (TODAY!)").yellow().bold()
             } else if days_until <= 3 {
-                format!("{} ({} days)", due_str, days_until).yellow()
+                format!("{due_str} ({days_until} days)").yellow()
             } else {
-                format!("{} ({} days)", due_str, days_until).normal()
+                format!("{due_str} ({days_until} days)").normal()
             };
 
             println!("    {} {}", "Due:".dimmed(), urgency);
@@ -264,7 +277,7 @@ impl ReviewPrompt {
         }
 
         if !project.tags.is_empty() {
-            let tags: Vec<String> = project.tags.iter().map(|t| format!("#{}", t)).collect();
+            let tags: Vec<String> = project.tags.iter().map(|t| format!("#{t}")).collect();
             println!("    {} {}", "Tags:".dimmed(), tags.join(" ").magenta());
         }
 
@@ -277,11 +290,7 @@ impl ReviewPrompt {
             println!("    {} {}", "Notes:".dimmed(), truncated.dimmed());
         }
 
-        println!(
-            "    {} {}",
-            "Status:".dimmed(),
-            project.status.to_string()
-        );
+        println!("    {} {}", "Status:".dimmed(), project.status);
     }
 
     /// Show available options.
@@ -329,11 +338,13 @@ impl ReviewPrompt {
                     'c' => return ReviewPromptResult::Complete,
                     's' => return ReviewPromptResult::MoveToSomeday,
                     'd' => {
-                        if let Some(date) = Self::read_line("Enter date (YYYY-MM-DD or 'today', 'tomorrow', etc.)") {
+                        if let Some(date) =
+                            Self::read_line("Enter date (YYYY-MM-DD or 'today', 'tomorrow', etc.)")
+                        {
                             return ReviewPromptResult::Schedule(date);
                         }
                         println!("  {}", "Date required, try again.".yellow());
-                    }
+                    },
                     'k' => return ReviewPromptResult::Skip,
                     'b' => return ReviewPromptResult::Back,
                     'p' => return ReviewPromptResult::Pause,
@@ -352,11 +363,13 @@ impl ReviewPrompt {
                     'n' => return ReviewPromptResult::Next,
                     'c' => return ReviewPromptResult::Complete,
                     'd' => {
-                        if let Some(date) = Self::read_line("Enter date (YYYY-MM-DD or 'today', 'tomorrow', etc.)") {
+                        if let Some(date) =
+                            Self::read_line("Enter date (YYYY-MM-DD or 'today', 'tomorrow', etc.)")
+                        {
                             return ReviewPromptResult::Schedule(date);
                         }
                         println!("  {}", "Date required, try again.".yellow());
-                    }
+                    },
                     'k' => return ReviewPromptResult::Skip,
                     'b' => return ReviewPromptResult::Back,
                     'p' => return ReviewPromptResult::Pause,
@@ -372,8 +385,7 @@ impl ReviewPrompt {
         loop {
             if let Some(c) = Self::read_char() {
                 match c.to_ascii_lowercase() {
-                    'n' => return ReviewPromptResult::Next,
-                    'o' => return ReviewPromptResult::Next, // Will be handled to open
+                    'n' | 'o' => return ReviewPromptResult::Next, // 'o' opens, but returns Next
                     'k' => return ReviewPromptResult::Skip,
                     'b' => return ReviewPromptResult::Back,
                     'p' => return ReviewPromptResult::Pause,
@@ -392,11 +404,13 @@ impl ReviewPrompt {
                     'n' => return ReviewPromptResult::Next,
                     'c' => return ReviewPromptResult::Complete,
                     'd' => {
-                        if let Some(date) = Self::read_line("Enter new date (YYYY-MM-DD or 'today', 'tomorrow', etc.)") {
+                        if let Some(date) = Self::read_line(
+                            "Enter new date (YYYY-MM-DD or 'today', 'tomorrow', etc.)",
+                        ) {
                             return ReviewPromptResult::Schedule(date);
                         }
                         println!("  {}", "Date required, try again.".yellow());
-                    }
+                    },
                     'k' => return ReviewPromptResult::Skip,
                     'b' => return ReviewPromptResult::Back,
                     'p' => return ReviewPromptResult::Pause,
@@ -408,6 +422,7 @@ impl ReviewPrompt {
     }
 
     /// Confirm quitting the review.
+    #[must_use]
     pub fn confirm_quit() -> bool {
         println!();
         println!(
@@ -418,27 +433,21 @@ impl ReviewPrompt {
         print!("  [y/n] ");
         io::stdout().flush().ok();
 
-        if let Some(c) = Self::read_char() {
-            return c.to_ascii_lowercase() == 'y';
-        }
-        false
+        Self::read_char().is_some_and(|c| c.eq_ignore_ascii_case(&'y'))
     }
 
     /// Confirm pausing the review.
+    #[must_use]
     pub fn confirm_pause() -> bool {
         println!();
         println!(
-            "  {} {}",
+            "  {} Save progress and exit? You can resume later with 'clings review --resume'.",
             "💾".cyan(),
-            "Save progress and exit? You can resume later with 'clings review --resume'."
         );
         print!("  [y/n] ");
         io::stdout().flush().ok();
 
-        if let Some(c) = Self::read_char() {
-            return c.to_ascii_lowercase() == 'y';
-        }
-        false
+        Self::read_char().is_some_and(|c| c.eq_ignore_ascii_case(&'y'))
     }
 
     /// Display the review summary.
@@ -451,26 +460,45 @@ impl ReviewPrompt {
         projects_reviewed: usize,
         deadlines_reviewed: usize,
     ) {
-        println!();
-        println!("{}", "╔══════════════════════════════════════════════════════════════╗".green());
-        println!("{}", "║                    Review Complete!                           ║".green());
-        println!("{}", "╚══════════════════════════════════════════════════════════════╝".green());
-        println!();
-        println!("  {} {}", "Duration:".bold(), duration);
-        println!();
-        println!("  {}", "Summary:".bold());
-        println!("    {} items processed", total_processed);
-        println!("    {} {} completed", completed, "✓".green());
-        println!("    {} moved to someday", moved_to_someday);
-        println!("    {} scheduled", scheduled);
-        println!("    {} projects reviewed", projects_reviewed);
-        println!("    {} deadlines reviewed", deadlines_reviewed);
-        println!();
-        println!(
+        let mut output = String::new();
+        writeln!(output).ok();
+        writeln!(
+            output,
+            "{}",
+            "╔══════════════════════════════════════════════════════════════╗".green()
+        )
+        .ok();
+        writeln!(
+            output,
+            "{}",
+            "║                    Review Complete!                           ║".green()
+        )
+        .ok();
+        writeln!(
+            output,
+            "{}",
+            "╚══════════════════════════════════════════════════════════════╝".green()
+        )
+        .ok();
+        writeln!(output).ok();
+        writeln!(output, "  {} {}", "Duration:".bold(), duration).ok();
+        writeln!(output).ok();
+        writeln!(output, "  {}", "Summary:".bold()).ok();
+        writeln!(output, "    {total_processed} items processed").ok();
+        writeln!(output, "    {completed} {} completed", "✓".green()).ok();
+        writeln!(output, "    {moved_to_someday} moved to someday").ok();
+        writeln!(output, "    {scheduled} scheduled").ok();
+        writeln!(output, "    {projects_reviewed} projects reviewed").ok();
+        writeln!(output, "    {deadlines_reviewed} deadlines reviewed").ok();
+        writeln!(output).ok();
+        writeln!(
+            output,
             "  {}",
             "Great job! Your system is now up to date.".green().bold()
-        );
-        println!();
+        )
+        .ok();
+        writeln!(output).ok();
+        print!("{output}");
     }
 
     /// Display a message when resuming a review.
@@ -493,15 +521,12 @@ impl ReviewPrompt {
     /// Display a message when no items to review.
     pub fn no_items(category: &str) {
         println!();
-        println!(
-            "  {} No {} to review.",
-            "✓".green(),
-            category
-        );
+        println!("  {} No {} to review.", "✓".green(), category);
         println!();
     }
 
     /// Prompt to continue to next step.
+    #[must_use]
     pub fn continue_prompt() -> bool {
         println!();
         print!(
@@ -512,12 +537,7 @@ impl ReviewPrompt {
         );
         io::stdout().flush().ok();
 
-        if let Some(c) = Self::read_char() {
-            if c.to_ascii_lowercase() == 'p' {
-                return false;
-            }
-        }
-        true
+        !Self::read_char().is_some_and(|c| c.eq_ignore_ascii_case(&'p'))
     }
 }
 

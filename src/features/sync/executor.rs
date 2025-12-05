@@ -5,8 +5,7 @@
 use colored::Colorize;
 
 use super::operation::{
-    AddProjectPayload, AddTodoPayload, DueDatePayload, MovePayload, Operation,
-    OperationType, TagPayload, TodoIdPayload,
+    AddProjectPayload, AddTodoPayload, Operation, OperationType, TagPayload, TodoIdPayload,
 };
 use super::queue::SyncQueue;
 use crate::error::ClingsError;
@@ -64,7 +63,7 @@ pub struct SyncResult {
 impl SyncResult {
     /// Create an empty result.
     #[must_use]
-    pub fn empty() -> Self {
+    pub const fn empty() -> Self {
         Self {
             succeeded: 0,
             failed: 0,
@@ -87,13 +86,13 @@ impl SyncResult {
 
     /// Check if all operations succeeded.
     #[must_use]
-    pub fn all_succeeded(&self) -> bool {
+    pub const fn all_succeeded(&self) -> bool {
         self.failed == 0
     }
 
     /// Get total operations processed.
     #[must_use]
-    pub fn total(&self) -> usize {
+    pub const fn total(&self) -> usize {
         self.succeeded + self.failed + self.skipped
     }
 }
@@ -118,7 +117,11 @@ impl<'a> SyncExecutor<'a> {
 
     /// Create an executor with custom config.
     #[must_use]
-    pub fn with_config(client: &'a ThingsClient, queue: &'a SyncQueue, config: ExecutorConfig) -> Self {
+    pub const fn with_config(
+        client: &'a ThingsClient,
+        queue: &'a SyncQueue,
+        config: ExecutorConfig,
+    ) -> Self {
         Self {
             client,
             queue,
@@ -190,7 +193,7 @@ impl<'a> SyncExecutor<'a> {
                     error: None,
                     skipped: false,
                 })
-            }
+            },
             Err(e) => {
                 let error_msg = e.to_string();
                 self.queue.record_attempt(op_id, Some(&error_msg))?;
@@ -207,7 +210,7 @@ impl<'a> SyncExecutor<'a> {
                     error: Some(error_msg),
                     skipped: false,
                 })
-            }
+            },
         }
     }
 
@@ -218,18 +221,18 @@ impl<'a> SyncExecutor<'a> {
             OperationType::CompleteTodo => self.execute_complete_todo(&operation.payload),
             OperationType::CancelTodo => self.execute_cancel_todo(&operation.payload),
             OperationType::DeleteTodo => self.execute_delete_todo(&operation.payload),
-            OperationType::UpdateTodo => self.execute_update_todo(&operation.payload),
+            OperationType::UpdateTodo => Self::execute_update_todo(&operation.payload),
             OperationType::AddProject => self.execute_add_project(&operation.payload),
-            OperationType::UpdateProject => {
-                Err(ClingsError::NotSupported("Update project not implemented".to_string()))
-            }
+            OperationType::UpdateProject => Err(ClingsError::NotSupported(
+                "Update project not implemented".to_string(),
+            )),
             OperationType::AddTags => self.execute_add_tags(&operation.payload),
-            OperationType::RemoveTags => {
-                Err(ClingsError::NotSupported("Remove tags not implemented".to_string()))
-            }
-            OperationType::MoveTodo => self.execute_move_todo(&operation.payload),
-            OperationType::SetDueDate => self.execute_set_due_date(&operation.payload),
-            OperationType::ClearDueDate => self.execute_clear_due_date(&operation.payload),
+            OperationType::RemoveTags => Err(ClingsError::NotSupported(
+                "Remove tags not implemented".to_string(),
+            )),
+            OperationType::MoveTodo => Self::execute_move_todo(&operation.payload),
+            OperationType::SetDueDate => Self::execute_set_due_date(&operation.payload),
+            OperationType::ClearDueDate => Self::execute_clear_due_date(&operation.payload),
         }
     }
 
@@ -275,12 +278,11 @@ impl<'a> SyncExecutor<'a> {
         Ok(())
     }
 
-    fn execute_update_todo(&self, payload: &str) -> Result<(), ClingsError> {
-        let _data: serde_json::Value = serde_json::from_str(payload)
-            .map_err(|e| ClingsError::Config(format!("Invalid update payload: {e}")))?;
-
+    fn execute_update_todo(_payload: &str) -> Result<(), ClingsError> {
         // Update via URL scheme
-        Err(ClingsError::NotSupported("Update todo not yet implemented via sync".to_string()))
+        Err(ClingsError::NotSupported(
+            "Update todo not yet implemented via sync".to_string(),
+        ))
     }
 
     fn execute_add_project(&self, payload: &str) -> Result<(), ClingsError> {
@@ -306,38 +308,35 @@ impl<'a> SyncExecutor<'a> {
         // This is a simplified version - real implementation would merge tags
         let _todo = self.client.get_todo(&data.id)?;
         // Would need to update via Things URL scheme
-        Err(ClingsError::NotSupported("Add tags not yet implemented via sync".to_string()))
+        Err(ClingsError::NotSupported(
+            "Add tags not yet implemented via sync".to_string(),
+        ))
     }
 
-    fn execute_move_todo(&self, payload: &str) -> Result<(), ClingsError> {
-        let data: MovePayload = serde_json::from_str(payload)
-            .map_err(|e| ClingsError::Config(format!("Invalid move payload: {e}")))?;
-
+    fn execute_move_todo(_payload: &str) -> Result<(), ClingsError> {
         // Move via Things URL scheme
         // Would need: things:///update?id={id}&list={to_project}
-        let _ = data; // Suppress unused warning
-        Err(ClingsError::NotSupported("Move todo not yet implemented via sync".to_string()))
+        Err(ClingsError::NotSupported(
+            "Move todo not yet implemented via sync".to_string(),
+        ))
     }
 
-    fn execute_set_due_date(&self, payload: &str) -> Result<(), ClingsError> {
-        let data: DueDatePayload = serde_json::from_str(payload)
-            .map_err(|e| ClingsError::Config(format!("Invalid due date payload: {e}")))?;
-
+    fn execute_set_due_date(_payload: &str) -> Result<(), ClingsError> {
         // Set due date via Things URL scheme
-        let _ = data;
-        Err(ClingsError::NotSupported("Set due date not yet implemented via sync".to_string()))
+        Err(ClingsError::NotSupported(
+            "Set due date not yet implemented via sync".to_string(),
+        ))
     }
 
-    fn execute_clear_due_date(&self, payload: &str) -> Result<(), ClingsError> {
-        let data: DueDatePayload = serde_json::from_str(payload)
-            .map_err(|e| ClingsError::Config(format!("Invalid due date payload: {e}")))?;
-
-        let _ = data;
-        Err(ClingsError::NotSupported("Clear due date not yet implemented via sync".to_string()))
+    fn execute_clear_due_date(_payload: &str) -> Result<(), ClingsError> {
+        Err(ClingsError::NotSupported(
+            "Clear due date not yet implemented via sync".to_string(),
+        ))
     }
 }
 
 /// Format sync result for display.
+#[must_use]
 pub fn format_sync_result(result: &SyncResult) -> String {
     let mut lines = Vec::new();
 

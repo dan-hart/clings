@@ -1,14 +1,17 @@
+use std::fmt::Write;
+
 use colored::Colorize;
 
 use crate::things::{Area, Project, Status, Tag, Todo};
 
 /// Format a list of todos as a pretty table
+#[must_use]
 pub fn format_todos_pretty(todos: &[Todo], title: &str) -> String {
     if todos.is_empty() {
-        return format!("{} (0 items)\n  No items", title);
+        return format!("{title} (0 items)\n  No items");
     }
 
-    let mut output = format!("{} ({} items)\n", title, todos.len());
+    let mut output = format!("{title} ({} items)\n", todos.len());
     output.push_str(&"─".repeat(60));
     output.push('\n');
 
@@ -28,12 +31,12 @@ pub fn format_todos_pretty(todos: &[Todo], title: &str) -> String {
 
         // Add project if present
         if let Some(project) = &todo.project {
-            line.push_str(&format!("  {}", project.dimmed()));
+            let _ = write!(line, "  {}", project.dimmed());
         }
 
         // Add due date if present
         if let Some(due) = &todo.due_date {
-            line.push_str(&format!("  {}", due.to_string().yellow()));
+            let _ = write!(line, "  {}", due.to_string().yellow());
         }
 
         // Add tags if present
@@ -41,10 +44,10 @@ pub fn format_todos_pretty(todos: &[Todo], title: &str) -> String {
             let tags_str = todo
                 .tags
                 .iter()
-                .map(|t| format!("#{}", t))
+                .map(|t| format!("#{t}"))
                 .collect::<Vec<_>>()
                 .join(" ");
-            line.push_str(&format!("  {}", tags_str.cyan()));
+            let _ = write!(line, "  {}", tags_str.cyan());
         }
 
         output.push_str(&line);
@@ -55,6 +58,7 @@ pub fn format_todos_pretty(todos: &[Todo], title: &str) -> String {
 }
 
 /// Format a single todo as pretty output
+#[must_use]
 pub fn format_todo_pretty(todo: &Todo) -> String {
     let status_icon = match todo.status {
         Status::Open => "[ ]".white(),
@@ -63,53 +67,51 @@ pub fn format_todo_pretty(todo: &Todo) -> String {
     };
 
     let mut output = format!("{} {}\n", status_icon, todo.name.bold());
-    output.push_str(&format!("  {}: {}\n", "ID".dimmed(), todo.id));
-    output.push_str(&format!("  {}: {}\n", "Status".dimmed(), todo.status));
+    let _ = writeln!(output, "  {}: {}", "ID".dimmed(), todo.id);
+    let _ = writeln!(output, "  {}: {}", "Status".dimmed(), todo.status);
 
     if !todo.notes.is_empty() {
-        output.push_str(&format!("  {}: {}\n", "Notes".dimmed(), todo.notes));
+        let _ = writeln!(output, "  {}: {}", "Notes".dimmed(), todo.notes);
     }
 
     if let Some(project) = &todo.project {
-        output.push_str(&format!("  {}: {}\n", "Project".dimmed(), project));
+        let _ = writeln!(output, "  {}: {}", "Project".dimmed(), project);
     }
 
     if let Some(area) = &todo.area {
-        output.push_str(&format!("  {}: {}\n", "Area".dimmed(), area));
+        let _ = writeln!(output, "  {}: {}", "Area".dimmed(), area);
     }
 
     if let Some(due) = &todo.due_date {
-        output.push_str(&format!("  {}: {}\n", "Due".dimmed(), due));
+        let _ = writeln!(output, "  {}: {}", "Due".dimmed(), due);
     }
 
     if !todo.tags.is_empty() {
-        output.push_str(&format!(
-            "  {}: {}\n",
-            "Tags".dimmed(),
-            todo.tags.join(", ")
-        ));
+        let _ = writeln!(output, "  {}: {}", "Tags".dimmed(), todo.tags.join(", "));
     }
 
     if !todo.checklist_items.is_empty() {
-        output.push_str(&format!("  {}:\n", "Checklist".dimmed()));
+        let _ = writeln!(output, "  {}:", "Checklist".dimmed());
         for item in &todo.checklist_items {
             let icon = if item.completed { "[x]" } else { "[ ]" };
-            output.push_str(&format!("    {} {}\n", icon, item.name));
+            let _ = writeln!(output, "    {} {}", icon, item.name);
         }
     }
 
     if let Some(created) = &todo.creation_date {
-        output.push_str(&format!(
-            "  {}: {}\n",
+        let _ = writeln!(
+            output,
+            "  {}: {}",
             "Created".dimmed(),
             created.format("%Y-%m-%d %H:%M")
-        ));
+        );
     }
 
     output
 }
 
 /// Format a list of projects as pretty output
+#[must_use]
 pub fn format_projects_pretty(projects: &[Project]) -> String {
     if projects.is_empty() {
         return "Projects (0)\n  No projects".to_string();
@@ -129,11 +131,11 @@ pub fn format_projects_pretty(projects: &[Project]) -> String {
         let mut line = format!("{} {}", status_icon, project.name.bold());
 
         if let Some(area) = &project.area {
-            line.push_str(&format!("  {}", area.dimmed()));
+            let _ = write!(line, "  {}", area.dimmed());
         }
 
         if let Some(due) = &project.due_date {
-            line.push_str(&format!("  {}", due.to_string().yellow()));
+            let _ = write!(line, "  {}", due.to_string().yellow());
         }
 
         output.push_str(&line);
@@ -144,6 +146,7 @@ pub fn format_projects_pretty(projects: &[Project]) -> String {
 }
 
 /// Format a list of areas as pretty output
+#[must_use]
 pub fn format_areas_pretty(areas: &[Area]) -> String {
     if areas.is_empty() {
         return "Areas (0)\n  No areas".to_string();
@@ -154,13 +157,14 @@ pub fn format_areas_pretty(areas: &[Area]) -> String {
     output.push('\n');
 
     for area in areas {
-        output.push_str(&format!("  {}\n", area.name.bold()));
+        let _ = writeln!(output, "  {}", area.name.bold());
     }
 
     output
 }
 
 /// Format a list of tags as pretty output
+#[must_use]
 pub fn format_tags_pretty(tags: &[Tag]) -> String {
     if tags.is_empty() {
         return "Tags (0)\n  No tags".to_string();
@@ -171,7 +175,7 @@ pub fn format_tags_pretty(tags: &[Tag]) -> String {
     output.push('\n');
 
     for tag in tags {
-        output.push_str(&format!("  #{}\n", tag.name.cyan()));
+        let _ = writeln!(output, "  #{}", tag.name.cyan());
     }
 
     output
@@ -180,8 +184,8 @@ pub fn format_tags_pretty(tags: &[Tag]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{NaiveDate, Utc};
     use crate::things::ChecklistItem;
+    use chrono::{NaiveDate, Utc};
 
     fn make_todo(name: &str, status: Status) -> Todo {
         Todo {

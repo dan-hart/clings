@@ -32,7 +32,7 @@ impl TemplateStorage {
 
     /// Create template storage with a custom directory (for testing).
     #[must_use]
-    pub fn with_dir(dir: PathBuf) -> Self {
+    pub const fn with_dir(dir: PathBuf) -> Self {
         Self { templates_dir: dir }
     }
 

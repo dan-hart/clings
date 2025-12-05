@@ -35,21 +35,41 @@ pub fn todo(
         TodoCommands::Show { id } => {
             let todo = client.get_todo(&id)?;
             format_todo(&todo, format)
-        }
+        },
         TodoCommands::Complete { id } => {
             client.complete_todo(&id)?;
             Ok(format!("Completed todo: {id}"))
-        }
+        },
         TodoCommands::Cancel { id } => {
             client.cancel_todo(&id)?;
             Ok(format!("Canceled todo: {id}"))
-        }
+        },
         TodoCommands::Delete { id } => {
             client.delete_todo(&id)?;
             Ok(format!(
                 "Canceled todo: {id} (Things API doesn't support true deletion)"
             ))
-        }
+        },
+        TodoCommands::Update {
+            id,
+            title,
+            notes,
+            when,
+            deadline,
+            tags,
+            project,
+        } => {
+            client.update_todo(
+                &id,
+                title.as_deref(),
+                notes.as_deref(),
+                when.as_deref(),
+                deadline.as_deref(),
+                tags.as_deref(),
+                project.as_deref(),
+            )?;
+            Ok(format!("Updated todo: {id}"))
+        },
     }
 }
 
@@ -67,7 +87,7 @@ pub fn project(
         ProjectCommands::List => {
             let projects = client.get_projects()?;
             format_projects(&projects, format)
-        }
+        },
         ProjectCommands::Show { id } => {
             // For now, list projects and find by ID
             let projects = client.get_projects()?;
@@ -78,32 +98,41 @@ pub fn project(
             match format {
                 OutputFormat::Json => to_json(project),
                 OutputFormat::Pretty => {
+                    use std::fmt::Write;
                     let mut output = format!("Project: {}\n", project.name);
-                    output.push_str(&format!("  ID: {}\n", project.id));
-                    output.push_str(&format!("  Status: {}\n", project.status));
+                    let _ = writeln!(output, "  ID: {}", project.id);
+                    let _ = writeln!(output, "  Status: {}", project.status);
                     if !project.notes.is_empty() {
-                        output.push_str(&format!("  Notes: {}\n", project.notes));
+                        output.push_str("  Notes: ");
+                        output.push_str(&project.notes);
+                        output.push('\n');
                     }
                     if let Some(area) = &project.area {
-                        output.push_str(&format!("  Area: {area}\n"));
+                        output.push_str("  Area: ");
+                        output.push_str(area);
+                        output.push('\n');
                     }
                     if !project.tags.is_empty() {
-                        output.push_str(&format!("  Tags: {}\n", project.tags.join(", ")));
+                        output.push_str("  Tags: ");
+                        output.push_str(&project.tags.join(", "));
+                        output.push('\n');
                     }
                     if let Some(due) = &project.due_date {
-                        output.push_str(&format!("  Due: {due}\n"));
+                        output.push_str("  Due: ");
+                        output.push_str(&due.to_string());
+                        output.push('\n');
                     }
                     Ok(output)
-                }
+                },
             }
-        }
-        ProjectCommands::Add(args) => add_project(client, args, format),
+        },
+        ProjectCommands::Add(args) => add_project(client, &args, format),
     }
 }
 
 fn add_project(
     client: &ThingsClient,
-    args: AddProjectArgs,
+    args: &AddProjectArgs,
     format: OutputFormat,
 ) -> Result<String, ClingsError> {
     let response = client.add_project(
@@ -184,10 +213,10 @@ pub fn search(
         })
         .collect();
 
-    let title = match query {
-        Some(q) => format!("Search: \"{q}\""),
-        None => "Search Results".to_string(),
-    };
+    let title = query.map_or_else(
+        || "Search Results".to_string(),
+        |q| format!("Search: \"{q}\""),
+    );
     format_todos(&filtered, &title, format)
 }
 

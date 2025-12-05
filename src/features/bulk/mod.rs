@@ -5,6 +5,4 @@
 
 mod operations;
 
-pub use operations::{
-    BulkAction, BulkOperation, BulkResult, BulkSummary, execute_bulk_operation,
-};
+pub use operations::{execute_bulk_operation, BulkAction, BulkOperation, BulkResult, BulkSummary};

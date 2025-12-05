@@ -79,7 +79,7 @@ pub struct PickResult {
     pub aborted: bool,
 }
 
-/// A wrapper around Todo that implements SkimItem.
+/// A wrapper around `Todo` that implements `SkimItem`.
 struct TodoItem {
     todo: Todo,
     display: String,
@@ -107,13 +107,10 @@ impl TodoItem {
         let project = todo
             .project
             .as_ref()
-            .map(|p| format!(" [{}]", p))
+            .map(|p| format!(" [{p}]"))
             .unwrap_or_default();
 
-        let display = format!(
-            "{} {}{}{}{}",
-            status_icon, todo.name, due, project, tags
-        );
+        let display = format!("{} {}{}{}{}", status_icon, todo.name, due, project, tags);
 
         Self { todo, display }
     }
@@ -125,37 +122,38 @@ impl SkimItem for TodoItem {
     }
 
     fn preview(&self, _context: PreviewContext<'_>) -> ItemPreview {
+        use std::fmt::Write;
         let mut preview = String::new();
 
-        preview.push_str(&format!("Title: {}\n", self.todo.name));
-        preview.push_str(&format!("ID: {}\n", self.todo.id));
-        preview.push_str(&format!("Status: {}\n", self.todo.status));
+        let _ = writeln!(preview, "Title: {}", self.todo.name);
+        let _ = writeln!(preview, "ID: {}", self.todo.id);
+        let _ = writeln!(preview, "Status: {}", self.todo.status);
 
         if let Some(ref project) = self.todo.project {
-            preview.push_str(&format!("Project: {}\n", project));
+            let _ = writeln!(preview, "Project: {project}");
         }
 
         if let Some(ref area) = self.todo.area {
-            preview.push_str(&format!("Area: {}\n", area));
+            let _ = writeln!(preview, "Area: {area}");
         }
 
         if let Some(due) = self.todo.due_date {
-            preview.push_str(&format!("Due: {}\n", due.format("%Y-%m-%d")));
+            let _ = writeln!(preview, "Due: {}", due.format("%Y-%m-%d"));
         }
 
         if !self.todo.tags.is_empty() {
-            preview.push_str(&format!("Tags: {}\n", self.todo.tags.join(", ")));
+            let _ = writeln!(preview, "Tags: {}", self.todo.tags.join(", "));
         }
 
         if !self.todo.notes.is_empty() {
-            preview.push_str(&format!("\nNotes:\n{}\n", self.todo.notes));
+            let _ = writeln!(preview, "\nNotes:\n{}", self.todo.notes);
         }
 
         if !self.todo.checklist_items.is_empty() {
             preview.push_str("\nChecklist:\n");
             for item in &self.todo.checklist_items {
                 let check = if item.completed { "[x]" } else { "[ ]" };
-                preview.push_str(&format!("  {} {}\n", check, item.name));
+                let _ = writeln!(preview, "  {check} {}", item.name);
             }
         }
 
@@ -171,6 +169,7 @@ impl SkimItem for TodoItem {
 /// Run the interactive picker on a list of todos.
 ///
 /// Returns the selected items and action, or None if aborted.
+#[must_use]
 pub fn pick_todos(todos: Vec<Todo>, options: PickOptions) -> Option<PickResult> {
     if todos.is_empty() {
         return None;
@@ -187,18 +186,9 @@ pub fn pick_todos(todos: Vec<Todo>, options: PickOptions) -> Option<PickResult> 
     let skim_options = SkimOptionsBuilder::default()
         .height(Some("50%"))
         .multi(options.multi)
-        .prompt(Some(
-            options
-                .prompt
-                .as_deref()
-                .unwrap_or("Select todo > "),
-        ))
+        .prompt(Some(options.prompt.as_deref().unwrap_or("Select todo > ")))
         .query(options.query.as_deref())
-        .preview(if options.preview {
-            Some("")
-        } else {
-            None
-        })
+        .preview(if options.preview { Some("") } else { None })
         .preview_window(if options.preview {
             Some("right:50%:wrap")
         } else {

@@ -30,6 +30,7 @@ pub struct CompletionMetrics {
 
 impl CompletionMetrics {
     /// Calculate completion metrics from data.
+    #[must_use]
     pub fn calculate(data: &CollectedData) -> Self {
         let today = Local::now().date_naive();
         let week_ago = today - Duration::days(7);
@@ -41,18 +42,17 @@ impl CompletionMetrics {
             .filter(|t| t.status == Status::Completed)
             .collect();
 
-        let canceled_todos: Vec<_> = data
+        let canceled_count = data
             .completed_todos
             .iter()
             .filter(|t| t.status == Status::Canceled)
-            .collect();
+            .count();
 
         let completed_7d = completed_todos
             .iter()
             .filter(|t| {
                 t.modification_date
-                    .map(|d| d.date_naive() >= week_ago)
-                    .unwrap_or(false)
+                    .is_some_and(|d| d.date_naive() >= week_ago)
             })
             .count();
 
@@ -60,14 +60,15 @@ impl CompletionMetrics {
             .iter()
             .filter(|t| {
                 t.modification_date
-                    .map(|d| d.date_naive() >= month_ago)
-                    .unwrap_or(false)
+                    .is_some_and(|d| d.date_naive() >= month_ago)
             })
             .count();
 
+        #[allow(clippy::cast_precision_loss)]
         let avg_per_day = completed_30d as f64 / 30.0;
 
-        let total_resolved = completed_todos.len() + canceled_todos.len();
+        let total_resolved = completed_todos.len() + canceled_count;
+        #[allow(clippy::cast_precision_loss)]
         let completion_rate = if total_resolved > 0 {
             completed_todos.len() as f64 / total_resolved as f64
         } else {
@@ -85,8 +86,7 @@ impl CompletionMetrics {
         let (best_day_date, best_day_count) = by_date
             .into_iter()
             .max_by_key(|(_, count)| *count)
-            .map(|(date, count)| (Some(date), count))
-            .unwrap_or((None, 0));
+            .map_or((None, 0), |(date, count)| (Some(date), count));
 
         Self {
             total_completed: completed_todos.len(),
@@ -115,6 +115,7 @@ pub struct StreakInfo {
 
 impl StreakInfo {
     /// Calculate streak from completed todos.
+    #[must_use]
     pub fn calculate(completed_todos: &[Todo]) -> Self {
         let today = Local::now().date_naive();
 
@@ -136,9 +137,8 @@ impl StreakInfo {
         }
 
         let last_completion = dates.last().copied();
-        let days_since = last_completion
-            .map(|d| (today - d).num_days().max(0) as usize)
-            .unwrap_or(0);
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        let days_since = last_completion.map_or(0, |d| (today - d).num_days().max(0) as usize);
 
         // Calculate current streak (from today backwards)
         let mut current = 0;
@@ -209,6 +209,7 @@ pub struct TimeMetrics {
 
 impl TimeMetrics {
     /// Calculate time metrics from completed todos.
+    #[must_use]
     pub fn calculate(completed_todos: &[Todo]) -> Self {
         let mut by_day_of_week = [0usize; 7];
         let mut by_hour = [0usize; 24];
@@ -223,21 +224,27 @@ impl TimeMetrics {
             }
         }
 
-        let day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+        let day_names = [
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday",
+        ];
         let best_day_idx = by_day_of_week
             .iter()
             .enumerate()
             .max_by_key(|(_, &count)| count)
-            .map(|(i, _)| i)
-            .unwrap_or(0);
+            .map_or(0, |(i, _)| i);
         let best_day = day_names[best_day_idx].to_string();
 
         let best_hour = by_hour
             .iter()
             .enumerate()
             .max_by_key(|(_, &count)| count)
-            .map(|(i, _)| i)
-            .unwrap_or(0);
+            .map_or(0, |(i, _)| i);
 
         let morning_completions = by_hour[6..12].iter().sum();
         let afternoon_completions = by_hour[12..18].iter().sum();
@@ -257,6 +264,7 @@ impl TimeMetrics {
     }
 
     /// Format hour as readable time.
+    #[must_use]
     pub fn format_hour(hour: usize) -> String {
         if hour == 0 {
             "12am".to_string()
@@ -289,18 +297,25 @@ pub struct ProjectMetrics {
 
 impl ProjectMetrics {
     /// Calculate metrics for all projects.
+    #[must_use]
     pub fn calculate_all(data: &CollectedData) -> Vec<Self> {
         let today = Local::now().date_naive();
         let mut project_stats: HashMap<String, (usize, usize, Vec<f64>, usize)> = HashMap::new();
 
         // Count open todos per project
         for todo in &data.open_todos {
-            let project = todo.project.clone().unwrap_or_else(|| "(No Project)".to_string());
-            let entry = project_stats.entry(project).or_insert((0, 0, Vec::new(), 0));
+            let project = todo
+                .project
+                .clone()
+                .unwrap_or_else(|| "(No Project)".to_string());
+            let entry = project_stats
+                .entry(project)
+                .or_insert((0, 0, Vec::new(), 0));
             entry.0 += 1;
 
             // Calculate age
             if let Some(created) = todo.creation_date {
+                #[allow(clippy::cast_precision_loss)]
                 let age = (today - created.date_naive()).num_days() as f64;
                 entry.2.push(age);
             }
@@ -316,8 +331,13 @@ impl ProjectMetrics {
         // Count completed todos per project
         for todo in &data.completed_todos {
             if todo.status == Status::Completed {
-                let project = todo.project.clone().unwrap_or_else(|| "(No Project)".to_string());
-                let entry = project_stats.entry(project).or_insert((0, 0, Vec::new(), 0));
+                let project = todo
+                    .project
+                    .clone()
+                    .unwrap_or_else(|| "(No Project)".to_string());
+                let entry = project_stats
+                    .entry(project)
+                    .or_insert((0, 0, Vec::new(), 0));
                 entry.1 += 1;
             }
         }
@@ -326,18 +346,20 @@ impl ProjectMetrics {
             .into_iter()
             .map(|(name, (open, completed, ages, overdue))| {
                 let total = open + completed;
+                #[allow(clippy::cast_precision_loss)]
                 let completion_rate = if total > 0 {
                     completed as f64 / total as f64
                 } else {
                     0.0
                 };
+                #[allow(clippy::cast_precision_loss)]
                 let avg_age_days = if ages.is_empty() {
                     0.0
                 } else {
                     ages.iter().sum::<f64>() / ages.len() as f64
                 };
 
-                ProjectMetrics {
+                Self {
                     name,
                     open_count: open,
                     completed_count: completed,
@@ -365,6 +387,7 @@ pub struct TagMetrics {
 
 impl TagMetrics {
     /// Calculate metrics for all tags.
+    #[must_use]
     pub fn calculate_all(data: &CollectedData) -> Vec<Self> {
         let mut tag_stats: HashMap<String, (usize, usize)> = HashMap::new();
 
@@ -388,7 +411,7 @@ impl TagMetrics {
 
         tag_stats
             .into_iter()
-            .map(|(name, (open, completed))| TagMetrics {
+            .map(|(name, (open, completed))| Self {
                 name,
                 total_count: open + completed,
                 open_count: open,
@@ -431,6 +454,7 @@ pub struct ProductivityMetrics {
 
 impl ProductivityMetrics {
     /// Calculate all productivity metrics.
+    #[must_use]
     pub fn calculate(data: &CollectedData) -> Self {
         let today = Local::now().date_naive();
         let week_end = today + Duration::days(7);
@@ -442,17 +466,13 @@ impl ProductivityMetrics {
         let overdue_count = data
             .open_todos
             .iter()
-            .filter(|t| t.due_date.map(|d| d < today).unwrap_or(false))
+            .filter(|t| t.due_date.is_some_and(|d| d < today))
             .count();
 
         let due_this_week = data
             .open_todos
             .iter()
-            .filter(|t| {
-                t.due_date
-                    .map(|d| d >= today && d <= week_end)
-                    .unwrap_or(false)
-            })
+            .filter(|t| t.due_date.is_some_and(|d| d >= today && d <= week_end))
             .count();
 
         Self {

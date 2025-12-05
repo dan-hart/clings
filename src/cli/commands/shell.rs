@@ -10,6 +10,10 @@ use crate::features::shell::completions::{
 use crate::things::ThingsClient;
 
 /// Execute shell subcommands.
+///
+/// # Errors
+///
+/// Returns an error if shell completion generation fails.
 pub fn shell(
     _client: &ThingsClient,
     cmd: ShellCommands,
@@ -28,7 +32,7 @@ pub fn shell(
             } else {
                 generate_completions(shell_type)
             }
-        }
+        },
     }
 }
 

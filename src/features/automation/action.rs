@@ -18,8 +18,11 @@ pub struct Action {
 impl Action {
     /// Create a new action.
     #[must_use]
-    pub fn new(action_type: ActionType, params: ActionParams) -> Self {
-        Self { action_type, params }
+    pub const fn new(action_type: ActionType, params: ActionParams) -> Self {
+        Self {
+            action_type,
+            params,
+        }
     }
 
     /// Create an add todo action.
@@ -199,7 +202,7 @@ pub enum ActionType {
 impl ActionType {
     /// Get display name.
     #[must_use]
-    pub fn display_name(&self) -> &'static str {
+    pub const fn display_name(&self) -> &'static str {
         match self {
             Self::AddTodo => "Add Todo",
             Self::CompleteTodo => "Complete Todo",
@@ -276,7 +279,7 @@ pub struct ActionResult {
 impl ActionResult {
     /// Create a success result.
     #[must_use]
-    pub fn success() -> Self {
+    pub const fn success() -> Self {
         Self {
             success: true,
             message: None,
@@ -338,8 +341,7 @@ mod tests {
     #[test]
     fn test_substitution() {
         let action = Action::add_todo("Task for {today}: {todo_name}");
-        let ctx = RuleContext::now()
-            .with_todo("ABC".to_string(), "Test".to_string());
+        let ctx = RuleContext::now().with_todo("ABC".to_string(), "Test".to_string());
 
         let substituted = action.with_substitution(&ctx);
 
@@ -448,7 +450,14 @@ mod tests {
 
         let params: ActionParams = serde_json::from_str(json).expect("should deserialize");
 
-        if let ActionParams::AddTodo { title, area, when, deadline, .. } = params {
+        if let ActionParams::AddTodo {
+            title,
+            area,
+            when,
+            deadline,
+            ..
+        } = params
+        {
             assert_eq!(title, "Task");
             assert_eq!(area, Some("Personal".to_string()));
             assert_eq!(when, Some("2024-12-15".to_string()));

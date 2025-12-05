@@ -2,7 +2,7 @@
 //!
 //! All clings data is stored in `~/.clings/`:
 //! - `config.yaml` - Main configuration file
-//! - `clings.db` - SQLite database for stats, sessions, queue
+//! - `clings.db` - `SQLite` database for stats, sessions, queue
 //! - `templates/` - Project templates (YAML files)
 //! - `scripts/` - Lua automation scripts
 //! - `sessions/` - Focus session logs
@@ -38,9 +38,8 @@ impl Paths {
     ///
     /// Returns an error if the home directory cannot be determined.
     pub fn new() -> Result<Self, ClingsError> {
-        let home = std::env::var("HOME").map_err(|_| {
-            ClingsError::Config("Could not determine home directory".to_string())
-        })?;
+        let home = std::env::var("HOME")
+            .map_err(|_| ClingsError::Config("Could not determine home directory".to_string()))?;
 
         let root = PathBuf::from(home).join(".clings");
 
@@ -86,7 +85,10 @@ impl Paths {
         for dir in dirs {
             if !dir.exists() {
                 std::fs::create_dir_all(dir).map_err(|e| {
-                    ClingsError::Config(format!("Failed to create directory {:?}: {}", dir, e))
+                    ClingsError::Config(format!(
+                        "Failed to create directory {}: {e}",
+                        dir.display()
+                    ))
                 })?;
             }
         }

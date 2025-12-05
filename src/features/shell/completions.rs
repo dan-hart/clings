@@ -1,6 +1,6 @@
 //! Shell completions generation.
 //!
-//! Generates shell completion scripts for bash, zsh, fish, and PowerShell.
+//! Generates shell completion scripts for bash, zsh, fish, and `PowerShell`.
 
 use clap::CommandFactory;
 use clap_complete::Shell;
@@ -18,19 +18,23 @@ use crate::error::ClingsError;
 /// # Returns
 ///
 /// The completion script as a string.
+///
+/// # Errors
+///
+/// Returns an error if UTF-8 conversion fails.
 pub fn generate_completions(shell: Shell) -> Result<String, ClingsError> {
     let mut cmd = Cli::command();
     let mut buf = Vec::new();
-    generate_to(&mut buf, shell, &mut cmd)?;
+    generate_to(&mut buf, shell, &mut cmd);
     String::from_utf8(buf).map_err(|e| ClingsError::Script(format!("UTF-8 error: {e}")))
 }
 
-fn generate_to<W: Write>(buf: &mut W, shell: Shell, cmd: &mut clap::Command) -> Result<(), ClingsError> {
+fn generate_to<W: Write>(buf: &mut W, shell: Shell, cmd: &mut clap::Command) {
     clap_complete::generate(shell, cmd, "clings", buf);
-    Ok(())
 }
 
 /// Get shell from string name.
+#[must_use]
 pub fn shell_from_str(s: &str) -> Option<Shell> {
     match s.to_lowercase().as_str() {
         "bash" => Some(Shell::Bash),
@@ -43,16 +47,18 @@ pub fn shell_from_str(s: &str) -> Option<Shell> {
 }
 
 /// Get installation instructions for shell completions.
+#[must_use]
 pub fn completion_install_instructions(shell: Shell) -> String {
     match shell {
-        Shell::Bash => r#"# Add to ~/.bashrc or ~/.bash_profile:
+        Shell::Bash => r"# Add to ~/.bashrc or ~/.bash_profile:
 source <(clings shell completions bash)
 
 # Or save to a file:
 clings shell completions bash > /usr/local/etc/bash_completion.d/clings
-"#.to_string(),
+"
+        .to_string(),
 
-        Shell::Zsh => r#"# Add to ~/.zshrc (before compinit):
+        Shell::Zsh => r"# Add to ~/.zshrc (before compinit):
 source <(clings shell completions zsh)
 
 # Or save to your fpath:
@@ -60,29 +66,33 @@ clings shell completions zsh > ~/.zsh/completions/_clings
 # Then add to ~/.zshrc:
 fpath=(~/.zsh/completions $fpath)
 autoload -Uz compinit && compinit
-"#.to_string(),
+"
+        .to_string(),
 
-        Shell::Fish => r#"# Save to fish completions directory:
+        Shell::Fish => r"# Save to fish completions directory:
 clings shell completions fish > ~/.config/fish/completions/clings.fish
 
 # Or run directly:
 clings shell completions fish | source
-"#.to_string(),
+"
+        .to_string(),
 
-        Shell::PowerShell => r#"# Add to your PowerShell profile ($PROFILE):
+        Shell::PowerShell => r"# Add to your PowerShell profile ($PROFILE):
 clings shell completions powershell | Out-String | Invoke-Expression
 
 # Or save to a file and dot-source it:
 clings shell completions powershell > ~/clings.ps1
 . ~/clings.ps1
-"#.to_string(),
+"
+        .to_string(),
 
-        Shell::Elvish => r#"# Save to elvish completions directory:
+        Shell::Elvish => r"# Save to elvish completions directory:
 clings shell completions elvish > ~/.elvish/lib/clings.elv
 
 # Then add to ~/.elvish/rc.elv:
 use clings
-"#.to_string(),
+"
+        .to_string(),
 
         _ => "Unknown shell".to_string(),
     }

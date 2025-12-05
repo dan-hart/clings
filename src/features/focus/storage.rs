@@ -16,19 +16,28 @@ pub struct FocusStorage {
 
 impl FocusStorage {
     /// Create a new focus storage.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database cannot be opened.
     pub fn new() -> Result<Self, ClingsError> {
         let db = Database::open()?;
         Ok(Self { db })
     }
 
     /// Create storage with an existing database connection.
-    pub fn with_database(db: Database) -> Self {
+    #[must_use]
+    pub const fn with_database(db: Database) -> Self {
         Self { db }
     }
 
     /// Save a focus session.
     ///
     /// If the session has an ID, it will be updated. Otherwise, it will be inserted.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database operation fails.
     pub fn save(&self, session: &mut FocusSession) -> Result<(), ClingsError> {
         if session.id.is_some() {
             self.update(session)
@@ -56,7 +65,7 @@ impl FocusStorage {
                 session.notes,
             ],
         )
-        .map_err(|e| ClingsError::Database(format!("Failed to insert session: {}", e)))?;
+        .map_err(|e| ClingsError::Database(format!("Failed to insert session: {e}")))?;
 
         session.id = Some(conn.last_insert_rowid());
         Ok(())
@@ -89,12 +98,16 @@ impl FocusStorage {
                 session.id,
             ],
         )
-        .map_err(|e| ClingsError::Database(format!("Failed to update session: {}", e)))?;
+        .map_err(|e| ClingsError::Database(format!("Failed to update session: {e}")))?;
 
         Ok(())
     }
 
     /// Get a session by ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
     pub fn get(&self, id: i64) -> Result<Option<FocusSession>, ClingsError> {
         let conn = self.db.connection();
 
@@ -104,17 +117,21 @@ impl FocusStorage {
                          duration_minutes, session_type, completed, notes
                   FROM focus_sessions WHERE id = ?1",
             )
-            .map_err(|e| ClingsError::Database(format!("Failed to prepare query: {}", e)))?;
+            .map_err(|e| ClingsError::Database(format!("Failed to prepare query: {e}")))?;
 
         let result = stmt
-            .query_row([id], |row| row_to_session(row))
+            .query_row([id], row_to_session)
             .optional()
-            .map_err(|e| ClingsError::Database(format!("Failed to query session: {}", e)))?;
+            .map_err(|e| ClingsError::Database(format!("Failed to query session: {e}")))?;
 
         Ok(result)
     }
 
     /// Get the current active session (if any).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
     pub fn get_active(&self) -> Result<Option<FocusSession>, ClingsError> {
         let conn = self.db.connection();
 
@@ -127,17 +144,21 @@ impl FocusStorage {
                   ORDER BY started_at DESC
                   LIMIT 1",
             )
-            .map_err(|e| ClingsError::Database(format!("Failed to prepare query: {}", e)))?;
+            .map_err(|e| ClingsError::Database(format!("Failed to prepare query: {e}")))?;
 
         let result = stmt
-            .query_row([], |row| row_to_session(row))
+            .query_row([], row_to_session)
             .optional()
-            .map_err(|e| ClingsError::Database(format!("Failed to query active session: {}", e)))?;
+            .map_err(|e| ClingsError::Database(format!("Failed to query active session: {e}")))?;
 
         Ok(result)
     }
 
     /// Get recent sessions.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
     pub fn get_recent(&self, limit: usize) -> Result<Vec<FocusSession>, ClingsError> {
         let conn = self.db.connection();
 
@@ -149,11 +170,11 @@ impl FocusStorage {
                   ORDER BY started_at DESC
                   LIMIT ?1",
             )
-            .map_err(|e| ClingsError::Database(format!("Failed to prepare query: {}", e)))?;
+            .map_err(|e| ClingsError::Database(format!("Failed to prepare query: {e}")))?;
 
         let rows = stmt
-            .query_map([limit], |row| row_to_session(row))
-            .map_err(|e| ClingsError::Database(format!("Failed to query sessions: {}", e)))?;
+            .query_map([limit], row_to_session)
+            .map_err(|e| ClingsError::Database(format!("Failed to query sessions: {e}")))?;
 
         let mut sessions = Vec::new();
         for row in rows {
@@ -164,6 +185,10 @@ impl FocusStorage {
     }
 
     /// Get sessions for a date range.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
     pub fn get_range(
         &self,
         start: DateTime<Utc>,
@@ -179,13 +204,11 @@ impl FocusStorage {
                   WHERE started_at >= ?1 AND started_at < ?2
                   ORDER BY started_at DESC",
             )
-            .map_err(|e| ClingsError::Database(format!("Failed to prepare query: {}", e)))?;
+            .map_err(|e| ClingsError::Database(format!("Failed to prepare query: {e}")))?;
 
         let rows = stmt
-            .query_map([start.to_rfc3339(), end.to_rfc3339()], |row| {
-                row_to_session(row)
-            })
-            .map_err(|e| ClingsError::Database(format!("Failed to query sessions: {}", e)))?;
+            .query_map([start.to_rfc3339(), end.to_rfc3339()], row_to_session)
+            .map_err(|e| ClingsError::Database(format!("Failed to query sessions: {e}")))?;
 
         let mut sessions = Vec::new();
         for row in rows {
@@ -196,6 +219,10 @@ impl FocusStorage {
     }
 
     /// Get sessions for a specific task.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
     pub fn get_by_task(&self, task_id: &str) -> Result<Vec<FocusSession>, ClingsError> {
         let conn = self.db.connection();
 
@@ -207,11 +234,11 @@ impl FocusStorage {
                   WHERE task_id = ?1
                   ORDER BY started_at DESC",
             )
-            .map_err(|e| ClingsError::Database(format!("Failed to prepare query: {}", e)))?;
+            .map_err(|e| ClingsError::Database(format!("Failed to prepare query: {e}")))?;
 
         let rows = stmt
-            .query_map([task_id], |row| row_to_session(row))
-            .map_err(|e| ClingsError::Database(format!("Failed to query sessions: {}", e)))?;
+            .query_map([task_id], row_to_session)
+            .map_err(|e| ClingsError::Database(format!("Failed to query sessions: {e}")))?;
 
         let mut sessions = Vec::new();
         for row in rows {
@@ -222,6 +249,10 @@ impl FocusStorage {
     }
 
     /// Get total focus time for a date range.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
     pub fn get_total_time(
         &self,
         start: DateTime<Utc>,
@@ -239,12 +270,16 @@ impl FocusStorage {
                 [start.to_rfc3339(), end.to_rfc3339()],
                 |row| row.get(0),
             )
-            .map_err(|e| ClingsError::Database(format!("Failed to query total time: {}", e)))?;
+            .map_err(|e| ClingsError::Database(format!("Failed to query total time: {e}")))?;
 
         Ok(total)
     }
 
     /// Get session count for a date range.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database query fails.
     pub fn get_session_count(
         &self,
         start: DateTime<Utc>,
@@ -262,18 +297,22 @@ impl FocusStorage {
                 [start.to_rfc3339(), end.to_rfc3339()],
                 |row| row.get(0),
             )
-            .map_err(|e| ClingsError::Database(format!("Failed to query session count: {}", e)))?;
+            .map_err(|e| ClingsError::Database(format!("Failed to query session count: {e}")))?;
 
         Ok(count)
     }
 
     /// Delete a session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database operation fails.
     pub fn delete(&self, id: i64) -> Result<bool, ClingsError> {
         let conn = self.db.connection();
 
         let rows = conn
             .execute("DELETE FROM focus_sessions WHERE id = ?1", [id])
-            .map_err(|e| ClingsError::Database(format!("Failed to delete session: {}", e)))?;
+            .map_err(|e| ClingsError::Database(format!("Failed to delete session: {e}")))?;
 
         Ok(rows > 0)
     }
@@ -284,13 +323,13 @@ impl FocusStorage {
         let conn = self.db.connection();
 
         conn.execute("DELETE FROM focus_sessions", [])
-            .map_err(|e| ClingsError::Database(format!("Failed to delete sessions: {}", e)))?;
+            .map_err(|e| ClingsError::Database(format!("Failed to delete sessions: {e}")))?;
 
         Ok(())
     }
 }
 
-/// Convert a database row to a FocusSession.
+/// Convert a database row to a `FocusSession`.
 fn row_to_session(row: &Row<'_>) -> Result<FocusSession, rusqlite::Error> {
     let id: i64 = row.get(0)?;
     let task_id: Option<String> = row.get(1)?;
@@ -303,8 +342,8 @@ fn row_to_session(row: &Row<'_>) -> Result<FocusSession, rusqlite::Error> {
     let notes: Option<String> = row.get(8)?;
 
     let started_at = DateTime::parse_from_rfc3339(&started_at_str)
-        .map(|t| t.with_timezone(&Utc))
-        .unwrap_or_else(|_| Utc::now());
+        .ok()
+        .map_or_else(Utc::now, |t| t.with_timezone(&Utc));
 
     let ended_at = ended_at_str.and_then(|s| {
         DateTime::parse_from_rfc3339(&s)
@@ -337,7 +376,7 @@ fn row_to_session(row: &Row<'_>) -> Result<FocusSession, rusqlite::Error> {
     })
 }
 
-fn session_type_to_string(st: SessionType) -> &'static str {
+const fn session_type_to_string(st: SessionType) -> &'static str {
     match st {
         SessionType::Pomodoro => "pomodoro",
         SessionType::ShortBreak => "short_break",
@@ -386,10 +425,8 @@ mod tests {
     fn test_save_and_get() {
         let storage = create_test_storage();
 
-        let mut session = FocusSession::pomodoro(
-            Some("task123".to_string()),
-            Some("Test Task".to_string()),
-        );
+        let mut session =
+            FocusSession::pomodoro(Some("task123".to_string()), Some("Test Task".to_string()));
         session.complete();
 
         storage.save(&mut session).unwrap();

@@ -11,6 +11,7 @@
 //! - **Dry-run mode**: Preview changes before applying them with `--dry-run`
 //! - **Explicit override**: Use `--yes` to skip confirmation (for scripting)
 
+use std::fmt::Write as FmtWrite;
 use std::io::{self, Write};
 
 use colored::Colorize;
@@ -27,7 +28,7 @@ use crate::things::{ThingsClient, Todo};
 pub struct BulkSafetyOptions {
     /// Skip confirmation prompt
     pub skip_confirmation: bool,
-    /// Maximum items to process (0 = unlimited, requires skip_confirmation)
+    /// Maximum items to process (0 = unlimited, requires `skip_confirmation`)
     pub limit: usize,
     /// Whether this is a dry run
     pub dry_run: bool,
@@ -103,7 +104,9 @@ fn check_bulk_safety(
             "{} Type 'yes' to confirm, or anything else to cancel: ",
             "CONFIRM:".cyan().bold()
         );
-        io::stdout().flush().map_err(|e| ClingsError::BulkOperation(e.to_string()))?;
+        io::stdout()
+            .flush()
+            .map_err(|e| ClingsError::BulkOperation(e.to_string()))?;
 
         let mut input = String::new();
         io::stdin()
@@ -194,7 +197,10 @@ pub fn bulk_complete(
 
     let all_todos = client.get_all_todos()?;
     let expr = parse_filter(filter_query)?;
-    let matching: Vec<_> = filter_items(&all_todos, &expr).into_iter().cloned().collect();
+    let matching: Vec<_> = filter_items(&all_todos, &expr)
+        .into_iter()
+        .cloned()
+        .collect();
 
     let safety_options = BulkSafetyOptions {
         skip_confirmation,
@@ -252,7 +258,10 @@ pub fn bulk_cancel(
 
     let all_todos = client.get_all_todos()?;
     let expr = parse_filter(filter_query)?;
-    let matching: Vec<_> = filter_items(&all_todos, &expr).into_iter().cloned().collect();
+    let matching: Vec<_> = filter_items(&all_todos, &expr)
+        .into_iter()
+        .cloned()
+        .collect();
 
     let safety_options = BulkSafetyOptions {
         skip_confirmation,
@@ -317,7 +326,10 @@ pub fn bulk_tag(
 
     let all_todos = client.get_all_todos()?;
     let expr = parse_filter(filter_query)?;
-    let matching: Vec<_> = filter_items(&all_todos, &expr).into_iter().cloned().collect();
+    let matching: Vec<_> = filter_items(&all_todos, &expr)
+        .into_iter()
+        .cloned()
+        .collect();
 
     let safety_options = BulkSafetyOptions {
         skip_confirmation,
@@ -374,7 +386,10 @@ pub fn bulk_move(
 
     let all_todos = client.get_all_todos()?;
     let expr = parse_filter(filter_query)?;
-    let matching: Vec<_> = filter_items(&all_todos, &expr).into_iter().cloned().collect();
+    let matching: Vec<_> = filter_items(&all_todos, &expr)
+        .into_iter()
+        .cloned()
+        .collect();
 
     let safety_options = BulkSafetyOptions {
         skip_confirmation,
@@ -416,42 +431,37 @@ fn format_bulk_summary(summary: &BulkSummary, format: OutputFormat) -> Result<St
             });
 
             serde_json::to_string_pretty(&output).map_err(ClingsError::Parse)
-        }
+        },
         OutputFormat::Pretty => {
             let mut output = String::new();
 
             if summary.dry_run {
-                output.push_str(&format!(
-                    "{} {}\n\n",
+                writeln!(
+                    output,
+                    "{} {}\n",
                     "DRY RUN:".yellow().bold(),
                     "No changes will be made".yellow()
-                ));
+                )
+                .map_err(|e| ClingsError::BulkOperation(e.to_string()))?;
             }
 
-            output.push_str(&format!(
-                "{} {}\n",
-                "Action:".cyan().bold(),
-                summary.action
-            ));
-            output.push_str(&format!(
-                "{} {}\n",
-                "Matched:".cyan(),
-                summary.matched
-            ));
+            writeln!(output, "{} {}", "Action:".cyan().bold(), summary.action)
+                .map_err(|e| ClingsError::BulkOperation(e.to_string()))?;
+            writeln!(output, "{} {}", "Matched:".cyan(), summary.matched)
+                .map_err(|e| ClingsError::BulkOperation(e.to_string()))?;
 
             if !summary.dry_run {
-                output.push_str(&format!(
-                    "{} {}\n",
-                    "Succeeded:".green(),
-                    summary.succeeded
-                ));
+                writeln!(output, "{} {}", "Succeeded:".green(), summary.succeeded)
+                    .map_err(|e| ClingsError::BulkOperation(e.to_string()))?;
                 if summary.failed > 0 {
-                    output.push_str(&format!("{} {}\n", "Failed:".red(), summary.failed));
+                    writeln!(output, "{} {}", "Failed:".red(), summary.failed)
+                        .map_err(|e| ClingsError::BulkOperation(e.to_string()))?;
                 }
             }
 
             if !summary.results.is_empty() {
-                output.push_str(&format!("\n{}\n", "Items:".cyan().bold()));
+                writeln!(output, "\n{}", "Items:".cyan().bold())
+                    .map_err(|e| ClingsError::BulkOperation(e.to_string()))?;
                 for result in &summary.results {
                     let status = if result.success {
                         if summary.dry_run {
@@ -463,21 +473,24 @@ fn format_bulk_summary(summary: &BulkSummary, format: OutputFormat) -> Result<St
                         "fail".red()
                     };
 
-                    output.push_str(&format!(
-                        "  [{}] {} ({})\n",
+                    writeln!(
+                        output,
+                        "  [{}] {} ({})",
                         status,
                         result.name,
                         result.id.dimmed()
-                    ));
+                    )
+                    .map_err(|e| ClingsError::BulkOperation(e.to_string()))?;
 
                     if let Some(ref error) = result.error {
-                        output.push_str(&format!("       {} {}\n", "Error:".red(), error));
+                        writeln!(output, "       {} {}", "Error:".red(), error)
+                            .map_err(|e| ClingsError::BulkOperation(e.to_string()))?;
                     }
                 }
             }
 
             Ok(output)
-        }
+        },
     }
 }
 

@@ -38,7 +38,7 @@ impl RuleStorage {
 
     /// Create storage with a custom directory.
     #[must_use]
-    pub fn with_dir(rules_dir: PathBuf) -> Self {
+    pub const fn with_dir(rules_dir: PathBuf) -> Self {
         Self { rules_dir }
     }
 
@@ -48,7 +48,7 @@ impl RuleStorage {
     ///
     /// Returns an error if the rule cannot be saved.
     pub fn save(&self, rule: &Rule) -> Result<(), ClingsError> {
-        let filename = self.rule_filename(&rule.name);
+        let filename = Self::rule_filename(&rule.name);
         let path = self.rules_dir.join(&filename);
 
         let yaml = serde_yaml::to_string(rule)
@@ -66,7 +66,7 @@ impl RuleStorage {
     ///
     /// Returns an error if the rule cannot be loaded.
     pub fn load(&self, name: &str) -> Result<Option<Rule>, ClingsError> {
-        let filename = self.rule_filename(name);
+        let filename = Self::rule_filename(name);
         let path = self.rules_dir.join(&filename);
 
         if !path.exists() {
@@ -98,7 +98,10 @@ impl RuleStorage {
                 entry.map_err(|e| ClingsError::Config(format!("Failed to read entry: {e}")))?;
 
             let path = entry.path();
-            if path.extension().map_or(false, |ext| ext == "yaml" || ext == "yml") {
+            if path
+                .extension()
+                .is_some_and(|ext| ext == "yaml" || ext == "yml")
+            {
                 let yaml = fs::read_to_string(&path)
                     .map_err(|e| ClingsError::Config(format!("Failed to read rule: {e}")))?;
 
@@ -106,8 +109,8 @@ impl RuleStorage {
                     Ok(rule) => rules.push(rule),
                     Err(e) => {
                         // Log but don't fail for individual rule parse errors
-                        eprintln!("Warning: Failed to parse rule {:?}: {e}", path);
-                    }
+                        eprintln!("Warning: Failed to parse rule {}: {e}", path.display());
+                    },
                 }
             }
         }
@@ -124,7 +127,7 @@ impl RuleStorage {
     ///
     /// Returns an error if the rule cannot be deleted.
     pub fn delete(&self, name: &str) -> Result<bool, ClingsError> {
-        let filename = self.rule_filename(name);
+        let filename = Self::rule_filename(name);
         let path = self.rules_dir.join(&filename);
 
         if !path.exists() {
@@ -140,11 +143,11 @@ impl RuleStorage {
     /// Get the path to a rule file.
     #[must_use]
     pub fn rule_path(&self, name: &str) -> PathBuf {
-        self.rules_dir.join(self.rule_filename(name))
+        self.rules_dir.join(Self::rule_filename(name))
     }
 
     /// Generate a filename for a rule.
-    fn rule_filename(&self, name: &str) -> String {
+    fn rule_filename(name: &str) -> String {
         // Sanitize the name for use as a filename
         let safe_name: String = name
             .chars()
@@ -171,7 +174,7 @@ pub struct RuleSet {
 impl RuleSet {
     /// Create a new rule set.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { rules: Vec::new() }
     }
 
@@ -223,8 +226,7 @@ mod tests {
     fn test_save_and_load() {
         let (storage, _temp) = create_test_storage();
 
-        let rule = Rule::new("Test Rule", Trigger::manual())
-            .with_description("A test rule");
+        let rule = Rule::new("Test Rule", Trigger::manual()).with_description("A test rule");
 
         storage.save(&rule).unwrap();
 

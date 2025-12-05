@@ -20,7 +20,8 @@ pub enum InsightLevel {
 
 impl InsightLevel {
     /// Get icon for this level.
-    pub fn icon(&self) -> &'static str {
+    #[must_use]
+    pub const fn icon(&self) -> &'static str {
         match self {
             Self::High => "!",
             Self::Medium => "*",
@@ -29,7 +30,8 @@ impl InsightLevel {
     }
 
     /// Get color name for this level.
-    pub fn color(&self) -> &'static str {
+    #[must_use]
+    pub const fn color(&self) -> &'static str {
         match self {
             Self::High => "red",
             Self::Medium => "yellow",
@@ -68,6 +70,7 @@ impl Insight {
 }
 
 /// Generate insights from collected data.
+#[must_use]
 pub fn generate_insights(data: &CollectedData, metrics: &ProductivityMetrics) -> Vec<Insight> {
     let mut insights = Vec::new();
 
@@ -139,22 +142,17 @@ fn inbox_insights(data: &CollectedData, metrics: &ProductivityMetrics) -> Vec<In
         .inbox_todos
         .iter()
         .filter(|t| {
-            t.creation_date
-                .map(|d| {
-                    let age = chrono::Local::now().signed_duration_since(d).num_days();
-                    age > 7
-                })
-                .unwrap_or(false)
+            t.creation_date.is_some_and(|d| {
+                let age = chrono::Local::now().signed_duration_since(d).num_days();
+                age > 7
+            })
         })
         .collect();
 
     if stale_inbox.len() > 3 {
         insights.push(
             Insight::new(
-                &format!(
-                    "{} inbox items are over a week old",
-                    stale_inbox.len()
-                ),
+                &format!("{} inbox items are over a week old", stale_inbox.len()),
                 InsightLevel::Medium,
                 "Inbox",
             )
@@ -178,7 +176,9 @@ fn overdue_insights(_data: &CollectedData, metrics: &ProductivityMetrics) -> Vec
                 InsightLevel::High,
                 "Deadlines",
             )
-            .with_suggestion("Review overdue items and either complete, reschedule, or cancel them"),
+            .with_suggestion(
+                "Review overdue items and either complete, reschedule, or cancel them",
+            ),
         );
     } else if metrics.overdue_count > 0 {
         insights.push(
@@ -222,7 +222,10 @@ fn streak_insights(metrics: &ProductivityMetrics) -> Vec<Insight> {
         ));
     } else if metrics.streak.current >= 3 {
         insights.push(Insight::new(
-            &format!("{} day streak - you're building momentum!", metrics.streak.current),
+            &format!(
+                "{} day streak - you're building momentum!",
+                metrics.streak.current
+            ),
             InsightLevel::Low,
             "Streak",
         ));
@@ -409,10 +412,7 @@ fn workload_insights(metrics: &ProductivityMetrics) -> Vec<Insight> {
     if metrics.today_count > 15 {
         insights.push(
             Insight::new(
-                &format!(
-                    "{} tasks for today might be ambitious",
-                    metrics.today_count
-                ),
+                &format!("{} tasks for today might be ambitious", metrics.today_count),
                 InsightLevel::Medium,
                 "Workload",
             )
@@ -420,8 +420,12 @@ fn workload_insights(metrics: &ProductivityMetrics) -> Vec<Insight> {
         );
     } else if metrics.today_count == 0 {
         insights.push(
-            Insight::new("No tasks scheduled for today", InsightLevel::Low, "Workload")
-                .with_suggestion("Check 'clings upcoming' or 'clings inbox' for tasks to do"),
+            Insight::new(
+                "No tasks scheduled for today",
+                InsightLevel::Low,
+                "Workload",
+            )
+            .with_suggestion("Check 'clings upcoming' or 'clings inbox' for tasks to do"),
         );
     }
 

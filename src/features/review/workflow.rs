@@ -30,7 +30,7 @@ pub enum ReviewStep {
 impl ReviewStep {
     /// Get the human-readable name for this step.
     #[must_use]
-    pub fn name(&self) -> &'static str {
+    pub const fn name(&self) -> &'static str {
         match self {
             Self::ProcessInbox => "Process Inbox",
             Self::ReviewSomeday => "Review Someday/Maybe",
@@ -43,7 +43,7 @@ impl ReviewStep {
 
     /// Get the step number (1-indexed).
     #[must_use]
-    pub fn number(&self) -> u8 {
+    pub const fn number(&self) -> u8 {
         match self {
             Self::ProcessInbox => 1,
             Self::ReviewSomeday => 2,
@@ -62,23 +62,21 @@ impl ReviewStep {
 
     /// Get the next step in the sequence.
     #[must_use]
-    pub fn next(&self) -> Self {
+    pub const fn next(self) -> Self {
         match self {
             Self::ProcessInbox => Self::ReviewSomeday,
             Self::ReviewSomeday => Self::CheckProjects,
             Self::CheckProjects => Self::ReviewDeadlines,
             Self::ReviewDeadlines => Self::GenerateSummary,
-            Self::GenerateSummary => Self::Complete,
-            Self::Complete => Self::Complete,
+            Self::GenerateSummary | Self::Complete => Self::Complete,
         }
     }
 
     /// Get the previous step.
     #[must_use]
-    pub fn previous(&self) -> Self {
+    pub const fn previous(self) -> Self {
         match self {
-            Self::ProcessInbox => Self::ProcessInbox,
-            Self::ReviewSomeday => Self::ProcessInbox,
+            Self::ProcessInbox | Self::ReviewSomeday => Self::ProcessInbox,
             Self::CheckProjects => Self::ReviewSomeday,
             Self::ReviewDeadlines => Self::CheckProjects,
             Self::GenerateSummary => Self::ReviewDeadlines,
@@ -166,7 +164,9 @@ impl ReviewState {
         if current > total {
             100
         } else {
-            ((current - 1) * 100 / total) as u8
+            #[allow(clippy::cast_possible_truncation)]
+            let percent = ((current - 1) * 100 / total) as u8;
+            percent
         }
     }
 }
@@ -218,9 +218,9 @@ impl ReviewSummary {
         let minutes = self.duration_seconds / 60;
         let seconds = self.duration_seconds % 60;
         if minutes > 0 {
-            format!("{}m {}s", minutes, seconds)
+            format!("{minutes}m {seconds}s")
         } else {
-            format!("{}s", seconds)
+            format!("{seconds}s")
         }
     }
 }
@@ -300,18 +300,19 @@ impl ReviewSession {
 
     /// Get the current state.
     #[must_use]
-    pub fn state(&self) -> &ReviewState {
+    pub const fn state(&self) -> &ReviewState {
         &self.state
     }
 
     /// Get mutable access to the state.
+    #[must_use]
     pub fn state_mut(&mut self) -> &mut ReviewState {
         &mut self.state
     }
 
     /// Get the current step.
     #[must_use]
-    pub fn current_step(&self) -> ReviewStep {
+    pub const fn current_step(&self) -> ReviewStep {
         self.state.current_step
     }
 
@@ -370,10 +371,7 @@ impl ReviewSession {
 
         Ok(todos
             .into_iter()
-            .filter(|t| {
-                t.due_date
-                    .map_or(false, |d| d >= today && d <= deadline)
-            })
+            .filter(|t| t.due_date.is_some_and(|d| d >= today && d <= deadline))
             .collect())
     }
 
@@ -396,7 +394,7 @@ impl ReviewSession {
 
     /// Get the Things client.
     #[must_use]
-    pub fn client(&self) -> &ThingsClient {
+    pub const fn client(&self) -> &ThingsClient {
         &self.client
     }
 }
@@ -411,7 +409,10 @@ mod tests {
         assert_eq!(step.next(), ReviewStep::ReviewSomeday);
         assert_eq!(step.next().next(), ReviewStep::CheckProjects);
         assert_eq!(step.next().next().next(), ReviewStep::ReviewDeadlines);
-        assert_eq!(step.next().next().next().next(), ReviewStep::GenerateSummary);
+        assert_eq!(
+            step.next().next().next().next(),
+            ReviewStep::GenerateSummary
+        );
         assert_eq!(
             step.next().next().next().next().next(),
             ReviewStep::Complete

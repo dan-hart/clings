@@ -59,6 +59,7 @@ impl<'a> App<'a> {
     }
 
     /// Get the currently selected todo.
+    #[must_use]
     pub fn selected_todo(&self) -> Option<&Todo> {
         self.todos.get(self.selected)
     }

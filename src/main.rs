@@ -1,3 +1,10 @@
+#![deny(unsafe_code)]
+#![deny(clippy::unwrap_used)]
+#![deny(clippy::expect_used)]
+#![warn(clippy::pedantic)]
+#![warn(clippy::nursery)]
+#![allow(clippy::module_name_repetitions)]
+
 use anyhow::Result;
 use clap::Parser;
 use colored::Colorize;
@@ -133,7 +140,7 @@ fn run() -> Result<(), ClingsError> {
         Commands::Tui => {
             clings::tui::run(&client)?;
             String::new()
-        }
+        },
     };
 
     if !output.is_empty() {

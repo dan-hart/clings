@@ -2,6 +2,8 @@
 //!
 //! This module implements the `clings add` command for natural language task entry.
 
+use std::fmt::Write;
+
 use colored::Colorize;
 use serde_json::json;
 
@@ -35,7 +37,8 @@ pub fn quick_add(
         task.when = parse_natural_date(&when_str);
     }
     if let Some(deadline_str) = args.deadline {
-        task.deadline = parse_natural_date(&deadline_str).map(|d| d.as_deadline());
+        task.deadline =
+            parse_natural_date(&deadline_str).map(crate::core::DateParseResult::as_deadline);
     }
 
     // If parse-only mode, just show what would be created
@@ -90,7 +93,7 @@ pub fn quick_add(
                 }
             });
             serde_json::to_string_pretty(&output).map_err(ClingsError::Parse)
-        }
+        },
         OutputFormat::Pretty => {
             let mut output = format!(
                 "{} {} (ID: {})\n",
@@ -100,24 +103,24 @@ pub fn quick_add(
             );
 
             if let Some(when) = task.when_date_iso() {
-                output.push_str(&format!("  {} {}\n", "When:".cyan(), when));
+                writeln!(output, "  {} {when}", "When:".cyan()).ok();
             }
             if let Some(deadline) = task.deadline_date_iso() {
-                output.push_str(&format!("  {} {}\n", "Deadline:".red(), deadline));
+                writeln!(output, "  {} {deadline}", "Deadline:".red()).ok();
             }
             if !task.tags.is_empty() {
-                let tags_str: Vec<String> = task.tags.iter().map(|t| format!("#{}", t)).collect();
-                output.push_str(&format!("  {} {}\n", "Tags:".yellow(), tags_str.join(" ")));
+                let tags_str: Vec<String> = task.tags.iter().map(|t| format!("#{t}")).collect();
+                writeln!(output, "  {} {}", "Tags:".yellow(), tags_str.join(" ")).ok();
             }
             if let Some(project) = &task.project {
-                output.push_str(&format!("  {} {}\n", "Project:".magenta(), project));
+                writeln!(output, "  {} {project}", "Project:".magenta()).ok();
             }
             if task.priority != Priority::None {
-                output.push_str(&format!("  {} {}\n", "Priority:".red().bold(), task.priority));
+                writeln!(output, "  {} {}", "Priority:".red().bold(), task.priority).ok();
             }
 
             Ok(output)
-        }
+        },
     }
 }
 
@@ -139,51 +142,47 @@ fn format_parsed_task(task: &ParsedTask, format: OutputFormat) -> Result<String,
                 "has_schedule": task.has_schedule(),
             });
             serde_json::to_string_pretty(&output).map_err(ClingsError::Parse)
-        }
+        },
         OutputFormat::Pretty => {
             let mut output = format!("{}\n", "Parsed Task (not created)".yellow().bold());
-            output.push_str(&format!("  {} {}\n", "Title:".cyan().bold(), task.title));
+            writeln!(output, "  {} {}", "Title:".cyan().bold(), task.title).ok();
 
             if let Some(when) = task.when_date_iso() {
-                output.push_str(&format!("  {} {}\n", "When:".cyan(), when));
+                writeln!(output, "  {} {when}", "When:".cyan()).ok();
                 if let Some(ref w) = task.when {
                     if let Some(time) = w.time {
-                        output.push_str(&format!(
-                            "  {} {}\n",
-                            "Time:".cyan(),
-                            time.format("%H:%M")
-                        ));
+                        writeln!(output, "  {} {}", "Time:".cyan(), time.format("%H:%M")).ok();
                     }
                 }
             }
             if let Some(deadline) = task.deadline_date_iso() {
-                output.push_str(&format!("  {} {}\n", "Deadline:".red(), deadline));
+                writeln!(output, "  {} {deadline}", "Deadline:".red()).ok();
             }
             if !task.tags.is_empty() {
-                let tags_str: Vec<String> = task.tags.iter().map(|t| format!("#{}", t)).collect();
-                output.push_str(&format!("  {} {}\n", "Tags:".yellow(), tags_str.join(" ")));
+                let tags_str: Vec<String> = task.tags.iter().map(|t| format!("#{t}")).collect();
+                writeln!(output, "  {} {}", "Tags:".yellow(), tags_str.join(" ")).ok();
             }
             if let Some(project) = &task.project {
-                output.push_str(&format!("  {} {}\n", "Project:".magenta(), project));
+                writeln!(output, "  {} {project}", "Project:".magenta()).ok();
             }
             if let Some(area) = &task.area {
-                output.push_str(&format!("  {} {}\n", "Area:".blue(), area));
+                writeln!(output, "  {} {area}", "Area:".blue()).ok();
             }
             if task.priority != Priority::None {
-                output.push_str(&format!("  {} {}\n", "Priority:".red().bold(), task.priority));
+                writeln!(output, "  {} {}", "Priority:".red().bold(), task.priority).ok();
             }
             if let Some(notes) = &task.notes {
-                output.push_str(&format!("  {} {}\n", "Notes:".dimmed(), notes));
+                writeln!(output, "  {} {notes}", "Notes:".dimmed()).ok();
             }
             if !task.checklist.is_empty() {
-                output.push_str(&format!("  {}\n", "Checklist:".dimmed()));
+                writeln!(output, "  {}", "Checklist:".dimmed()).ok();
                 for item in &task.checklist {
-                    output.push_str(&format!("    - {}\n", item));
+                    writeln!(output, "    - {item}").ok();
                 }
             }
 
             Ok(output)
-        }
+        },
     }
 }
 

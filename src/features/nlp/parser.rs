@@ -25,24 +25,24 @@ pub enum Priority {
 impl Priority {
     /// Convert to Things 3 priority value (0 = none, 1 = low, 2 = medium, 3 = high).
     #[must_use]
-    pub fn as_things_value(&self) -> Option<u8> {
+    pub const fn as_things_value(&self) -> Option<u8> {
         match self {
-            Priority::None => None,
-            Priority::Low => Some(1),
-            Priority::Medium => Some(2),
-            Priority::High => Some(3),
+            Self::None => None,
+            Self::Low => Some(1),
+            Self::Medium => Some(2),
+            Self::High => Some(3),
         }
     }
 }
 
 impl std::fmt::Display for Priority {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Priority::None => write!(f, "none"),
-            Priority::Low => write!(f, "low"),
-            Priority::Medium => write!(f, "medium"),
-            Priority::High => write!(f, "high"),
-        }
+        f.write_str(match self {
+            Self::None => "none",
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+        })
     }
 }
 
@@ -59,9 +59,9 @@ pub struct ParsedTask {
     pub deadline: Option<DateParseResult>,
     /// Tags extracted from #tag patterns.
     pub tags: Vec<String>,
-    /// Project name (from "for ProjectName" pattern).
+    /// Project name (from `for ProjectName` pattern).
     pub project: Option<String>,
-    /// Area name (from "in AreaName" pattern).
+    /// Area name (from `in AreaName` pattern).
     pub area: Option<String>,
     /// Task priority.
     pub priority: Priority,
@@ -72,7 +72,7 @@ pub struct ParsedTask {
 impl ParsedTask {
     /// Check if this task has any date/time set.
     #[must_use]
-    pub fn has_schedule(&self) -> bool {
+    pub const fn has_schedule(&self) -> bool {
         self.when.is_some() || self.deadline.is_some()
     }
 
@@ -90,14 +90,12 @@ impl ParsedTask {
 }
 
 // Compiled regex patterns
-static TAG_PATTERN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"#([\w-]+)").unwrap_or_else(|e| panic!("Invalid tag regex: {e}"))
-});
+static TAG_PATTERN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"#([\w-]+)").unwrap_or_else(|e| panic!("Invalid tag regex: {e}")));
 
 static PROJECT_PATTERN: Lazy<Regex> = Lazy::new(|| {
     // "for ProjectName" - capture word(s) after "for"
-    Regex::new(r"\bfor\s+(\w+(?:\s+\w+)*)")
-        .unwrap_or_else(|e| panic!("Invalid project regex: {e}"))
+    Regex::new(r"\bfor\s+(\w+(?:\s+\w+)*)").unwrap_or_else(|e| panic!("Invalid project regex: {e}"))
 });
 
 static AREA_PATTERN: Lazy<Regex> = Lazy::new(|| {
@@ -164,7 +162,7 @@ pub fn parse_task(input: &str) -> ParsedTask {
         let parts: Vec<String> = remaining.split(" - ").map(String::from).collect();
         if parts.len() > 1 {
             // First part is the title/text before checklist
-            remaining = parts[0].clone();
+            remaining.clone_from(&parts[0]);
             // Rest are checklist items
             for item in &parts[1..] {
                 let trimmed = item.trim();
@@ -612,7 +610,10 @@ mod tests {
     #[test]
     fn test_parse_notes_preserve_content() {
         let task = parse_task("task // notes with #hashtag and !priority");
-        assert_eq!(task.notes, Some("notes with #hashtag and !priority".to_string()));
+        assert_eq!(
+            task.notes,
+            Some("notes with #hashtag and !priority".to_string())
+        );
         // The #hashtag in notes should NOT be parsed as a tag
         assert!(task.tags.is_empty());
     }
@@ -648,16 +649,15 @@ mod tests {
 
     #[test]
     fn test_parse_complex_task() {
-        let task = parse_task("write tests tomorrow 2pm #work #dev for Clings !high // don't forget edge cases");
+        let task = parse_task(
+            "write tests tomorrow 2pm #work #dev for Clings !high // don't forget edge cases",
+        );
         assert_eq!(task.title, "write tests");
         assert!(task.when.is_some());
         assert_eq!(task.tags, vec!["work", "dev"]);
         assert_eq!(task.project, Some("Clings".to_string()));
         assert_eq!(task.priority, Priority::High);
-        assert_eq!(
-            task.notes,
-            Some("don't forget edge cases".to_string())
-        );
+        assert_eq!(task.notes, Some("don't forget edge cases".to_string()));
     }
 
     #[test]

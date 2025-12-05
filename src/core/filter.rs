@@ -69,7 +69,6 @@ pub enum Operator {
     In,
 }
 
-
 /// A single filter condition.
 #[derive(Debug, Clone)]
 pub struct Condition {
@@ -82,7 +81,7 @@ pub struct Condition {
 }
 
 /// A value in a filter expression.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FilterValue {
     /// String value (e.g., 'work')
     String(String),
@@ -133,7 +132,7 @@ impl FilterValue {
         match trimmed.to_lowercase().as_str() {
             "true" => return Self::Bool(true),
             "false" => return Self::Bool(false),
-            _ => {}
+            _ => {},
         }
 
         // Check for integer
@@ -204,7 +203,7 @@ fn evaluate_condition<T: Filterable>(item: &T, condition: &Condition) -> bool {
         Operator::GreaterThan => match_compare(&field_value, &condition.value, |a, b| a > b),
         Operator::GreaterThanOrEqual => {
             match_compare(&field_value, &condition.value, |a, b| a >= b)
-        }
+        },
         Operator::Like => match_like(&field_value, &condition.value),
         Operator::Contains => match_contains(&field_value, &condition.value),
         Operator::IsNull => field_value.is_null(),
@@ -216,17 +215,15 @@ fn evaluate_condition<T: Filterable>(item: &T, condition: &Condition) -> bool {
 /// Match equality.
 fn match_equal(field_value: &FieldValue, filter_value: &FilterValue) -> bool {
     match (field_value, filter_value) {
-        (FieldValue::String(s), FilterValue::String(v)) => s.eq_ignore_ascii_case(v),
-        (FieldValue::OptionalString(Some(s)), FilterValue::String(v)) => s.eq_ignore_ascii_case(v),
-        (FieldValue::OptionalString(None), FilterValue::String(_)) => false,
-        (FieldValue::Date(d), FilterValue::Date(v)) => d == v,
-        (FieldValue::OptionalDate(Some(d)), FilterValue::Date(v)) => d == v,
-        (FieldValue::OptionalDate(None), FilterValue::Date(_)) => false,
+        (FieldValue::String(s) | FieldValue::OptionalString(Some(s)), FilterValue::String(v)) => {
+            s.eq_ignore_ascii_case(v)
+        },
+        (FieldValue::Date(d) | FieldValue::OptionalDate(Some(d)), FilterValue::Date(v)) => d == v,
         (FieldValue::Bool(b), FilterValue::Bool(v)) => b == v,
         (FieldValue::Integer(i), FilterValue::Integer(v)) => i == v,
         (FieldValue::StringList(list), FilterValue::String(v)) => {
             list.iter().any(|s| s.eq_ignore_ascii_case(v))
-        }
+        },
         _ => false,
     }
 }
@@ -237,13 +234,9 @@ where
     F: Fn(&NaiveDate, &NaiveDate) -> bool,
 {
     match (field_value, filter_value) {
-        (FieldValue::Date(d), FilterValue::Date(v)) => cmp(d, v),
-        (FieldValue::OptionalDate(Some(d)), FilterValue::Date(v)) => cmp(d, v),
-        (FieldValue::OptionalDate(None), FilterValue::Date(_)) => false,
-        (FieldValue::Integer(_), FilterValue::Integer(_)) => {
-            // Integers can't be compared as dates
-            false
-        }
+        (FieldValue::Date(d) | FieldValue::OptionalDate(Some(d)), FilterValue::Date(v)) => {
+            cmp(d, v)
+        },
         _ => false,
     }
 }
@@ -255,19 +248,16 @@ fn match_like(field_value: &FieldValue, filter_value: &FilterValue) -> bool {
     };
 
     let text = match field_value {
-        FieldValue::String(s) => s.to_lowercase(),
-        FieldValue::OptionalString(Some(s)) => s.to_lowercase(),
+        FieldValue::String(s) | FieldValue::OptionalString(Some(s)) => s.to_lowercase(),
         _ => return false,
     };
 
     let pattern_lower = pattern.to_lowercase();
 
     // Convert LIKE pattern to regex
-    let regex_pattern = pattern_lower
-        .replace('%', ".*")
-        .replace('_', ".");
+    let regex_pattern = pattern_lower.replace('%', ".*").replace('_', ".");
 
-    let full_pattern = format!("^{}$", regex_pattern);
+    let full_pattern = format!("^{regex_pattern}$");
 
     Regex::new(&full_pattern)
         .map(|re| re.is_match(&text))
@@ -297,11 +287,10 @@ fn match_in(field_value: &FieldValue, filter_value: &FilterValue) -> bool {
             items
                 .iter()
                 .any(|item| list.iter().any(|v| item.eq_ignore_ascii_case(v)))
-        }
+        },
         _ => false,
     }
 }
-
 
 /// Parse a filter query string into a filter expression.
 ///
@@ -344,14 +333,14 @@ pub fn parse_filter(query: &str) -> Result<FilterExpr, ClingsError> {
             // Check if rest starts with AND or OR (case-insensitive)
             let rest_upper = rest.to_uppercase();
             if rest_upper.starts_with("AND ") {
-                let right = parse_filter(&rest[4..].trim())?;
+                let right = parse_filter(rest[4..].trim())?;
                 return Ok(FilterExpr::Compound {
                     left: Box::new(inner),
                     op: LogicalOp::And,
                     right: Box::new(right),
                 });
             } else if rest_upper.starts_with("OR ") {
-                let right = parse_filter(&rest[3..].trim())?;
+                let right = parse_filter(rest[3..].trim())?;
                 return Ok(FilterExpr::Compound {
                     left: Box::new(inner),
                     op: LogicalOp::Or,
@@ -390,7 +379,7 @@ fn split_by_logical_op(query: &str) -> Option<(&str, LogicalOp, &str)> {
         match c {
             '(' => paren_depth += 1,
             ')' => paren_depth -= 1,
-            _ => {}
+            _ => {},
         }
 
         if paren_depth == 0 {
@@ -407,7 +396,7 @@ fn split_by_logical_op(query: &str) -> Option<(&str, LogicalOp, &str)> {
         match c {
             '(' => paren_depth += 1,
             ')' => paren_depth -= 1,
-            _ => {}
+            _ => {},
         }
 
         if paren_depth == 0 && query_upper[i..].starts_with(" AND ") {
@@ -429,8 +418,8 @@ fn find_matching_paren(s: &str) -> Option<usize> {
                 if depth == 0 {
                     return Some(i);
                 }
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
     None
@@ -506,8 +495,7 @@ fn parse_condition(s: &str) -> Result<Condition, ClingsError> {
     }
 
     Err(ClingsError::Filter(format!(
-        "Invalid filter condition: {}",
-        s
+        "Invalid filter condition: {s}"
     )))
 }
 
@@ -746,7 +734,8 @@ mod tests {
     #[test]
     fn test_and_or_precedence() {
         // OR should be evaluated first (lower precedence in splitting)
-        let expr = parse_filter("status = open AND tags CONTAINS 'a' OR tags CONTAINS 'b'").unwrap();
+        let expr =
+            parse_filter("status = open AND tags CONTAINS 'a' OR tags CONTAINS 'b'").unwrap();
         // This should be: (status = open AND tags CONTAINS 'a') OR tags CONTAINS 'b'
         let only_b = make_todo("B", Status::Completed, None, &["b"]);
         assert!(expr.matches(&only_b)); // Should match because of OR

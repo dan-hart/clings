@@ -27,9 +27,9 @@ pub enum PromptFormat {
 
 impl PromptFormat {
     /// Parse format from string.
-    pub fn from_str(s: &str) -> Self {
+    #[must_use]
+    pub fn parse(s: &str) -> Self {
         match s.to_lowercase().as_str() {
-            "plain" => Self::Plain,
             "emoji" => Self::Emoji,
             "labeled" | "label" => Self::Labeled,
             "json" => Self::Json,
@@ -58,14 +58,14 @@ pub enum PromptSegment {
 
 impl PromptSegment {
     /// Parse segment from string.
-    pub fn from_str(s: &str) -> Self {
+    #[must_use]
+    pub fn parse(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "inbox" | "i" => Self::Inbox,
             "today" | "t" => Self::Today,
             "upcoming" | "u" => Self::Upcoming,
             "anytime" | "a" => Self::Anytime,
             "someday" | "s" => Self::Someday,
-            "all" | "*" => Self::All,
             _ => Self::All,
         }
     }
@@ -83,10 +83,20 @@ pub struct PromptCounts {
 
 impl PromptCounts {
     /// Get counts from Things 3.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if Things 3 client operations fail.
     pub fn fetch(client: &ThingsClient) -> Result<Self, ClingsError> {
         // Fetch counts for each list
-        let inbox = client.get_list(ListView::Inbox).map(|t| t.len()).unwrap_or(0);
-        let today = client.get_list(ListView::Today).map(|t| t.len()).unwrap_or(0);
+        let inbox = client
+            .get_list(ListView::Inbox)
+            .map(|t| t.len())
+            .unwrap_or(0);
+        let today = client
+            .get_list(ListView::Today)
+            .map(|t| t.len())
+            .unwrap_or(0);
         let upcoming = client
             .get_list(ListView::Upcoming)
             .map(|t| t.len())
@@ -110,7 +120,8 @@ impl PromptCounts {
     }
 
     /// Check if all counts are zero.
-    pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
         self.inbox == 0
             && self.today == 0
             && self.upcoming == 0
@@ -128,6 +139,10 @@ impl PromptCounts {
 /// * `format` - Output format
 /// * `custom_format` - Custom format string (for Custom format)
 ///
+/// # Errors
+///
+/// Returns an error if Things 3 client operations fail or JSON serialization fails.
+///
 /// # Returns
 ///
 /// Formatted string for shell prompt.
@@ -143,11 +158,11 @@ pub fn prompt_segment(
         PromptFormat::Json => {
             let json = serde_json::to_string(&counts)?;
             Ok(json)
-        }
+        },
         PromptFormat::Custom => {
             let template = custom_format.unwrap_or("{inbox} {today}");
             Ok(apply_custom_format(template, &counts))
-        }
+        },
         _ => Ok(format_counts(&counts, segment, format)),
     }
 }
@@ -164,40 +179,36 @@ fn format_counts(counts: &PromptCounts, segment: PromptSegment, format: PromptFo
     ];
 
     for (seg, count, emoji, label) in segments {
-        if segment == PromptSegment::All || segment == seg {
-            if count > 0 || segment != PromptSegment::All {
-                let part = match format {
-                    PromptFormat::Plain => count.to_string(),
-                    PromptFormat::Emoji => format!("{emoji}{count}"),
-                    PromptFormat::Labeled => format!("{label}:{count}"),
-                    PromptFormat::Powerline => format_powerline_segment(emoji, count),
-                    _ => count.to_string(),
-                };
-                if count > 0 || segment != PromptSegment::All {
-                    parts.push(part);
-                }
-            }
+        if (segment == PromptSegment::All || segment == seg)
+            && (count > 0 || segment != PromptSegment::All)
+        {
+            let part = match format {
+                PromptFormat::Plain | PromptFormat::Custom | PromptFormat::Json => {
+                    count.to_string()
+                },
+                PromptFormat::Emoji => format!("{emoji}{count}"),
+                PromptFormat::Labeled => format!("{label}:{count}"),
+                PromptFormat::Powerline => format_powerline_segment(emoji, count),
+            };
+            parts.push(part);
         }
     }
 
     // Filter out zero counts for "all" segment
     if segment == PromptSegment::All {
-        match format {
-            PromptFormat::Plain => parts
-                .iter()
-                .zip([counts.inbox, counts.today, counts.upcoming, counts.anytime, counts.someday])
-                .filter(|(_, c)| *c > 0)
-                .map(|(p, _)| p.clone())
-                .collect::<Vec<_>>()
-                .join(" "),
-            _ => parts
-                .into_iter()
-                .zip([counts.inbox, counts.today, counts.upcoming, counts.anytime, counts.someday])
-                .filter(|(_, c)| *c > 0)
-                .map(|(p, _)| p)
-                .collect::<Vec<_>>()
-                .join(" "),
-        }
+        parts
+            .into_iter()
+            .zip([
+                counts.inbox,
+                counts.today,
+                counts.upcoming,
+                counts.anytime,
+                counts.someday,
+            ])
+            .filter(|(_, c)| *c > 0)
+            .map(|(p, _)| p)
+            .collect::<Vec<_>>()
+            .join(" ")
     } else {
         parts.join(" ")
     }
@@ -223,22 +234,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_prompt_format_from_str() {
-        assert_eq!(PromptFormat::from_str("plain"), PromptFormat::Plain);
-        assert_eq!(PromptFormat::from_str("emoji"), PromptFormat::Emoji);
-        assert_eq!(PromptFormat::from_str("labeled"), PromptFormat::Labeled);
-        assert_eq!(PromptFormat::from_str("json"), PromptFormat::Json);
-        assert_eq!(PromptFormat::from_str("powerline"), PromptFormat::Powerline);
-        assert_eq!(PromptFormat::from_str("unknown"), PromptFormat::Plain);
+    fn test_prompt_format_parse() {
+        assert_eq!(PromptFormat::parse("plain"), PromptFormat::Plain);
+        assert_eq!(PromptFormat::parse("emoji"), PromptFormat::Emoji);
+        assert_eq!(PromptFormat::parse("labeled"), PromptFormat::Labeled);
+        assert_eq!(PromptFormat::parse("json"), PromptFormat::Json);
+        assert_eq!(PromptFormat::parse("powerline"), PromptFormat::Powerline);
+        assert_eq!(PromptFormat::parse("unknown"), PromptFormat::Plain);
     }
 
     #[test]
-    fn test_prompt_segment_from_str() {
-        assert_eq!(PromptSegment::from_str("inbox"), PromptSegment::Inbox);
-        assert_eq!(PromptSegment::from_str("i"), PromptSegment::Inbox);
-        assert_eq!(PromptSegment::from_str("today"), PromptSegment::Today);
-        assert_eq!(PromptSegment::from_str("all"), PromptSegment::All);
-        assert_eq!(PromptSegment::from_str("*"), PromptSegment::All);
+    fn test_prompt_segment_parse() {
+        assert_eq!(PromptSegment::parse("inbox"), PromptSegment::Inbox);
+        assert_eq!(PromptSegment::parse("i"), PromptSegment::Inbox);
+        assert_eq!(PromptSegment::parse("today"), PromptSegment::Today);
+        assert_eq!(PromptSegment::parse("all"), PromptSegment::All);
+        assert_eq!(PromptSegment::parse("*"), PromptSegment::All);
     }
 
     #[test]

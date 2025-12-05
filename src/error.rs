@@ -59,10 +59,11 @@ pub enum ClingsError {
 
 impl ClingsError {
     /// Classify an error from osascript stderr output
+    #[must_use]
     pub fn from_stderr(stderr: &str) -> Self {
         // Error -1743: Automation permission denied
         if stderr.contains("-1743") || stderr.contains("not authorized") {
-            return ClingsError::PermissionDenied;
+            return Self::PermissionDenied;
         }
 
         // Things not installed (no application bundle found)
@@ -70,7 +71,7 @@ impl ClingsError {
             || stderr.contains("Application can't be found")
             || stderr.contains("unable to find application")
         {
-            return ClingsError::ThingsNotInstalled;
+            return Self::ThingsNotInstalled;
         }
 
         // Things not running
@@ -78,7 +79,7 @@ impl ClingsError {
             || stderr.contains("connection is invalid")
             || stderr.contains("is not running")
         {
-            return ClingsError::ThingsNotRunning;
+            return Self::ThingsNotRunning;
         }
 
         // Can't get item
@@ -88,10 +89,10 @@ impl ClingsError {
                 .find(|l| l.contains("Can't get"))
                 .unwrap_or(stderr)
                 .to_string();
-            return ClingsError::NotFound(msg);
+            return Self::NotFound(msg);
         }
 
-        ClingsError::Script(stderr.to_string())
+        Self::Script(stderr.to_string())
     }
 }
 
@@ -103,13 +104,17 @@ mod tests {
 
     #[test]
     fn test_from_stderr_permission_denied_error_code() {
-        let err = ClingsError::from_stderr("execution error: Error -1743: Not authorized to send Apple events to Things3.");
+        let err = ClingsError::from_stderr(
+            "execution error: Error -1743: Not authorized to send Apple events to Things3.",
+        );
         assert!(matches!(err, ClingsError::PermissionDenied));
     }
 
     #[test]
     fn test_from_stderr_permission_denied_not_authorized() {
-        let err = ClingsError::from_stderr("System Events got an error: not authorized to perform this action");
+        let err = ClingsError::from_stderr(
+            "System Events got an error: not authorized to perform this action",
+        );
         assert!(matches!(err, ClingsError::PermissionDenied));
     }
 
@@ -202,7 +207,10 @@ mod tests {
     fn test_display_things_not_running() {
         let err = ClingsError::ThingsNotRunning;
         let display = format!("{err}");
-        assert_eq!(display, "Things 3 is not running. Please launch Things 3 and try again.");
+        assert_eq!(
+            display,
+            "Things 3 is not running. Please launch Things 3 and try again."
+        );
     }
 
     #[test]
@@ -212,7 +220,9 @@ mod tests {
         assert!(display.contains("Automation permission required"));
         assert!(display.contains("System Settings > Privacy & Security > Automation"));
         assert!(display.contains("Enable \"Things 3\""));
-        assert!(display.contains("x-apple.systempreferences:com.apple.preference.security?Privacy_Automation"));
+        assert!(display.contains(
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation"
+        ));
     }
 
     #[test]
@@ -276,7 +286,8 @@ mod tests {
     #[test]
     fn test_from_stderr_priority_not_installed_over_not_running() {
         // Not installed should take priority over not running
-        let err = ClingsError::from_stderr("Can't get application Things3 - Application isn't running");
+        let err =
+            ClingsError::from_stderr("Can't get application Things3 - Application isn't running");
         assert!(matches!(err, ClingsError::ThingsNotInstalled));
     }
 
