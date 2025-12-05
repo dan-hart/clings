@@ -38,7 +38,7 @@ pub enum OperationType {
 impl OperationType {
     /// Get the display name for this operation type.
     #[must_use]
-    pub fn display_name(&self) -> &'static str {
+    pub const fn display_name(&self) -> &'static str {
         match self {
             Self::AddTodo => "Add Todo",
             Self::CompleteTodo => "Complete Todo",
@@ -57,7 +57,7 @@ impl OperationType {
 
     /// Check if this operation is idempotent (safe to retry).
     #[must_use]
-    pub fn is_idempotent(&self) -> bool {
+    pub const fn is_idempotent(&self) -> bool {
         matches!(
             self,
             Self::CompleteTodo
@@ -71,13 +71,18 @@ impl OperationType {
 
     /// Get the priority of this operation (lower = higher priority).
     #[must_use]
-    pub fn priority(&self) -> i32 {
+    pub const fn priority(&self) -> i32 {
         match self {
             // Deletions and completions are high priority
             Self::DeleteTodo | Self::CompleteTodo | Self::CancelTodo => 1,
             // Updates are medium priority
-            Self::UpdateTodo | Self::UpdateProject | Self::MoveTodo => 2,
-            Self::AddTags | Self::RemoveTags | Self::SetDueDate | Self::ClearDueDate => 2,
+            Self::UpdateTodo
+            | Self::UpdateProject
+            | Self::MoveTodo
+            | Self::AddTags
+            | Self::RemoveTags
+            | Self::SetDueDate
+            | Self::ClearDueDate => 2,
             // Creations are lower priority
             Self::AddTodo | Self::AddProject => 3,
         }
@@ -109,14 +114,15 @@ pub enum OperationStatus {
 impl OperationStatus {
     /// Check if this status is terminal (no more action needed).
     #[must_use]
-    pub fn is_terminal(&self) -> bool {
+    pub const fn is_terminal(&self) -> bool {
         matches!(self, Self::Completed | Self::Failed | Self::Skipped)
     }
 
     /// Convert from string.
     #[must_use]
-    pub fn from_str(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
+    pub fn from_string(s: &str) -> Self {
+        let lower = s.to_lowercase();
+        match lower.as_str() {
             "pending" => Self::Pending,
             "in_progress" | "inprogress" => Self::InProgress,
             "completed" => Self::Completed,
@@ -239,9 +245,13 @@ impl Operation {
     }
 
     /// Create an add todo operation.
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic. Serialization errors are handled by returning an empty string.
     #[must_use]
-    pub fn add_todo(payload: AddTodoPayload) -> Self {
-        let json = serde_json::to_string(&payload).unwrap_or_default();
+    pub fn add_todo(payload: &AddTodoPayload) -> Self {
+        let json = serde_json::to_string(payload).unwrap_or_default();
         Self::new(OperationType::AddTodo, json)
     }
 
@@ -270,9 +280,13 @@ impl Operation {
     }
 
     /// Create an add project operation.
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic. Serialization errors are handled by returning an empty string.
     #[must_use]
-    pub fn add_project(payload: AddProjectPayload) -> Self {
-        let json = serde_json::to_string(&payload).unwrap_or_default();
+    pub fn add_project(payload: &AddProjectPayload) -> Self {
+        let json = serde_json::to_string(payload).unwrap_or_default();
         Self::new(OperationType::AddProject, json)
     }
 
@@ -295,7 +309,10 @@ impl Operation {
     /// Create a set due date operation.
     #[must_use]
     pub fn set_due_date(id: String, date: String) -> Self {
-        let payload = DueDatePayload { id, date: Some(date) };
+        let payload = DueDatePayload {
+            id,
+            date: Some(date),
+        };
         let json = serde_json::to_string(&payload).unwrap_or_default();
         Self::new(OperationType::SetDueDate, json)
     }
@@ -318,7 +335,7 @@ impl Operation {
     #[must_use]
     pub fn retry_delay_seconds(&self) -> i64 {
         // Base delay of 5 seconds, doubling each attempt up to 5 minutes
-        let delay = 5 * (2_i64.pow(self.attempts as u32));
+        let delay = 5 * (2_i64.pow(u32::try_from(self.attempts).unwrap_or(10)));
         delay.min(300) // Cap at 5 minutes
     }
 
@@ -329,12 +346,10 @@ impl Operation {
             OperationType::AddTodo | OperationType::AddProject => None,
             _ => {
                 // Try to extract "id" field from JSON
-                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&self.payload) {
-                    v.get("id").and_then(|id| id.as_str()).map(String::from)
-                } else {
-                    None
-                }
-            }
+                serde_json::from_str::<serde_json::Value>(&self.payload)
+                    .ok()
+                    .and_then(|v| v.get("id").and_then(|id| id.as_str()).map(String::from))
+            },
         }
     }
 }
@@ -369,7 +384,7 @@ mod tests {
 
     #[test]
     fn test_create_operations() {
-        let add = Operation::add_todo(AddTodoPayload {
+        let add = Operation::add_todo(&AddTodoPayload {
             title: "Test".to_string(),
             notes: None,
             when: None,

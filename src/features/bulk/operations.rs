@@ -203,42 +203,44 @@ pub fn execute_bulk_operation(
             let ids: Vec<String> = matching.iter().map(|t| t.id.clone()).collect();
             let batch_result = client.complete_todos_batch(&ids)?;
             apply_batch_result_to_summary(&mut summary, &batch_result, &id_to_name);
-        }
+        },
         BulkAction::Cancel => {
             let ids: Vec<String> = matching.iter().map(|t| t.id.clone()).collect();
             let batch_result = client.cancel_todos_batch(&ids)?;
             apply_batch_result_to_summary(&mut summary, &batch_result, &id_to_name);
-        }
+        },
         BulkAction::Tag(tags) => {
             let ids: Vec<String> = matching.iter().map(|t| t.id.clone()).collect();
             let batch_result = client.add_tags_batch(&ids, tags)?;
             apply_batch_result_to_summary(&mut summary, &batch_result, &id_to_name);
-        }
+        },
         BulkAction::MoveToProject(project) => {
             let ids: Vec<String> = matching.iter().map(|t| t.id.clone()).collect();
             let batch_result = client.move_todos_batch(&ids, project)?;
             apply_batch_result_to_summary(&mut summary, &batch_result, &id_to_name);
-        }
+        },
         BulkAction::SetDue(date) => {
             let ids: Vec<String> = matching.iter().map(|t| t.id.clone()).collect();
             let batch_result = client.update_todos_due_batch(&ids, date)?;
             apply_batch_result_to_summary(&mut summary, &batch_result, &id_to_name);
-        }
+        },
         BulkAction::ClearDue => {
             let ids: Vec<String> = matching.iter().map(|t| t.id.clone()).collect();
             let batch_result = client.clear_todos_due_batch(&ids)?;
             apply_batch_result_to_summary(&mut summary, &batch_result, &id_to_name);
-        }
+        },
         // Fallback to sequential execution for unsupported batch operations
         _ => {
             for todo in matching {
                 let result = execute_action(client, todo, &operation.action);
                 match result {
                     Ok(()) => summary.add_success(todo.id.clone(), todo.name.clone()),
-                    Err(e) => summary.add_failure(todo.id.clone(), todo.name.clone(), e.to_string()),
+                    Err(e) => {
+                        summary.add_failure(todo.id.clone(), todo.name.clone(), e.to_string());
+                    },
                 }
             }
-        }
+        },
     }
 
     Ok(summary)
@@ -280,21 +282,21 @@ fn execute_action(
             // Things 3 URL scheme supports adding tags
             let tag_str = tags.join(",");
             client.update_todo_tags(&todo.id, &tag_str)
-        }
+        },
         BulkAction::Untag(_tags) => {
             // Note: Things 3 API doesn't have direct tag removal
             // This would require reading current tags, removing, then setting
             Err(ClingsError::BulkOperation(
                 "Tag removal not yet supported".to_string(),
             ))
-        }
+        },
         BulkAction::MoveToProject(project) => client.move_todo_to_list(&todo.id, project),
         BulkAction::MoveToArea(_area) => {
             // Things 3 API doesn't support moving directly to an area
             Err(ClingsError::BulkOperation(
                 "Moving to area not yet supported".to_string(),
             ))
-        }
+        },
         BulkAction::SetDue(date) => client.update_todo_due(&todo.id, date),
         BulkAction::ClearDue => client.clear_todo_due(&todo.id),
         BulkAction::Open => client.open(&todo.id),

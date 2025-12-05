@@ -19,7 +19,7 @@ pub struct DateParseResult {
 impl DateParseResult {
     /// Create a new result with just a date.
     #[must_use]
-    pub fn date_only(date: NaiveDate) -> Self {
+    pub const fn date_only(date: NaiveDate) -> Self {
         Self {
             date,
             time: None,
@@ -29,7 +29,7 @@ impl DateParseResult {
 
     /// Create a new result with date and time.
     #[must_use]
-    pub fn with_time(date: NaiveDate, time: NaiveTime) -> Self {
+    pub const fn with_time(date: NaiveDate, time: NaiveTime) -> Self {
         Self {
             date,
             time: Some(time),
@@ -39,7 +39,7 @@ impl DateParseResult {
 
     /// Mark this as a deadline.
     #[must_use]
-    pub fn as_deadline(mut self) -> Self {
+    pub const fn as_deadline(mut self) -> Self {
         self.is_deadline = true;
         self
     }
@@ -53,7 +53,9 @@ impl DateParseResult {
     /// Convert to a datetime, using the time if available or midnight otherwise.
     #[must_use]
     pub fn to_datetime(&self) -> NaiveDateTime {
-        let time = self.time.unwrap_or_else(|| NaiveTime::from_hms_opt(0, 0, 0).unwrap_or_default());
+        let time = self
+            .time
+            .unwrap_or_else(|| NaiveTime::from_hms_opt(0, 0, 0).unwrap_or_default());
         NaiveDateTime::new(self.date, time)
     }
 }
@@ -75,11 +77,9 @@ pub fn parse_natural_date(input: &str) -> Option<DateParseResult> {
     let today = Local::now().date_naive();
 
     // Handle "by" prefix for deadlines
-    let (input, is_deadline) = if let Some(rest) = input.strip_prefix("by ") {
-        (rest.to_string(), true)
-    } else {
-        (input, false)
-    };
+    let (input, is_deadline) = input
+        .strip_prefix("by ")
+        .map_or_else(|| (input.clone(), false), |rest| (rest.to_string(), true));
 
     let result = parse_date_internal(&input, today)?;
 
@@ -106,11 +106,9 @@ pub fn parse_natural_datetime(input: &str) -> Option<DateParseResult> {
     // Common patterns: "tomorrow 3pm", "monday at 2:30pm", "in 3 days at noon"
 
     // Handle "by" prefix for deadlines
-    let (input, is_deadline) = if let Some(rest) = input.strip_prefix("by ") {
-        (rest.to_string(), true)
-    } else {
-        (input, false)
-    };
+    let (input, is_deadline) = input
+        .strip_prefix("by ")
+        .map_or_else(|| (input.clone(), false), |rest| (rest.to_string(), true));
 
     // Try to extract time from the end
     let (date_part, time) = extract_time(&input);
@@ -134,7 +132,7 @@ fn parse_date_internal(input: &str, today: NaiveDate) -> Option<DateParseResult>
         "today" => return Some(DateParseResult::date_only(today)),
         "tomorrow" => return Some(DateParseResult::date_only(today + Duration::days(1))),
         "yesterday" => return Some(DateParseResult::date_only(today - Duration::days(1))),
-        _ => {}
+        _ => {},
     }
 
     // "in X days/weeks/months"
@@ -149,11 +147,15 @@ fn parse_date_internal(input: &str, today: NaiveDate) -> Option<DateParseResult>
 
     // "next week" (next Monday)
     if input == "next week" {
-        let days_until_monday = (Weekday::Mon.num_days_from_sunday() as i64
-            - today.weekday().num_days_from_sunday() as i64
+        let days_until_monday = (i64::from(Weekday::Mon.num_days_from_sunday())
+            - i64::from(today.weekday().num_days_from_sunday())
             + 7)
             % 7;
-        let days = if days_until_monday == 0 { 7 } else { days_until_monday };
+        let days = if days_until_monday == 0 {
+            7
+        } else {
+            days_until_monday
+        };
         return Some(DateParseResult::date_only(today + Duration::days(days)));
     }
 
@@ -198,11 +200,9 @@ fn parse_relative_offset(input: &str, today: NaiveDate) -> Option<DateParseResul
 
 /// Parse weekday names.
 fn parse_weekday(input: &str, today: NaiveDate) -> Option<DateParseResult> {
-    let (is_next, day_str) = if let Some(rest) = input.strip_prefix("next ") {
-        (true, rest)
-    } else {
-        (false, input)
-    };
+    let (is_next, day_str) = input
+        .strip_prefix("next ")
+        .map_or((false, input), |rest| (true, rest));
 
     let target_weekday = match day_str {
         "monday" | "mon" => Weekday::Mon,
@@ -216,8 +216,8 @@ fn parse_weekday(input: &str, today: NaiveDate) -> Option<DateParseResult> {
     };
 
     let today_weekday = today.weekday();
-    let mut days_until = (target_weekday.num_days_from_sunday() as i64
-        - today_weekday.num_days_from_sunday() as i64
+    let mut days_until = (i64::from(target_weekday.num_days_from_sunday())
+        - i64::from(today_weekday.num_days_from_sunday())
         + 7)
         % 7;
 
@@ -226,7 +226,9 @@ fn parse_weekday(input: &str, today: NaiveDate) -> Option<DateParseResult> {
         days_until += 7;
     }
 
-    Some(DateParseResult::date_only(today + Duration::days(days_until)))
+    Some(DateParseResult::date_only(
+        today + Duration::days(days_until),
+    ))
 }
 
 /// Parse month and day patterns.
@@ -287,7 +289,7 @@ fn parse_us_date(input: &str, today: NaiveDate) -> Option<DateParseResult> {
             }
 
             NaiveDate::from_ymd_opt(year, month, day).map(DateParseResult::date_only)
-        }
+        },
         3 => {
             let month: u32 = parts[0].parse().ok()?;
             let day: u32 = parts[1].parse().ok()?;
@@ -297,7 +299,7 @@ fn parse_us_date(input: &str, today: NaiveDate) -> Option<DateParseResult> {
             let year = if year < 100 { 2000 + year } else { year };
 
             NaiveDate::from_ymd_opt(year, month, day).map(DateParseResult::date_only)
-        }
+        },
         _ => None,
     }
 }
@@ -335,7 +337,7 @@ fn parse_time(input: &str) -> Option<NaiveTime> {
         "afternoon" => return NaiveTime::from_hms_opt(14, 0, 0),
         "evening" => return NaiveTime::from_hms_opt(18, 0, 0),
         "night" => return NaiveTime::from_hms_opt(21, 0, 0),
-        _ => {}
+        _ => {},
     }
 
     // 24-hour format (15:00, 15:30)

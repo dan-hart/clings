@@ -22,7 +22,12 @@ const FULL_BLOCK: char = '█';
 /// # Returns
 ///
 /// A multi-line string with the chart.
-pub fn render_bar_chart(data: &[(String, usize)], max_label_width: usize, bar_width: usize) -> String {
+#[must_use]
+pub fn render_bar_chart(
+    data: &[(String, usize)],
+    max_label_width: usize,
+    bar_width: usize,
+) -> String {
     if data.is_empty() {
         return String::new();
     }
@@ -34,14 +39,19 @@ pub fn render_bar_chart(data: &[(String, usize)], max_label_width: usize, bar_wi
         let truncated_label = if label.len() > max_label_width {
             format!("{}...", &label[..max_label_width - 3])
         } else {
-            format!("{:width$}", label, width = max_label_width)
+            format!("{label:max_label_width$}")
         };
 
+        #[allow(
+            clippy::cast_precision_loss,
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss
+        )]
         let bar_length = (*value as f64 / max_value as f64 * bar_width as f64) as usize;
         let bar = FULL_BLOCK.to_string().repeat(bar_length);
         let padding = " ".repeat(bar_width - bar_length);
 
-        lines.push(format!("{} |{}{} {}", truncated_label, bar, padding, value));
+        lines.push(format!("{truncated_label} |{bar}{padding} {value}"));
     }
 
     lines.join("\n")
@@ -56,6 +66,7 @@ pub fn render_bar_chart(data: &[(String, usize)], max_label_width: usize, bar_wi
 /// # Returns
 ///
 /// A single-line string with the sparkline.
+#[must_use]
 pub fn render_sparkline(values: &[usize]) -> String {
     if values.is_empty() {
         return String::new();
@@ -67,6 +78,11 @@ pub fn render_sparkline(values: &[usize]) -> String {
     values
         .iter()
         .map(|&v| {
+            #[allow(
+                clippy::cast_precision_loss,
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss
+            )]
             let normalized = (v as f64 / max_value as f64 * 7.0) as usize;
             if v == 0 {
                 BAR_CHARS[0]
@@ -89,9 +105,11 @@ pub fn render_sparkline(values: &[usize]) -> String {
 /// # Returns
 ///
 /// Multi-line string with the heatmap.
+#[must_use]
 pub fn render_heatmap(completed_todos: &[Todo], weeks: usize) -> String {
     let today = Local::now().date_naive();
     let days = weeks * 7;
+    #[allow(clippy::cast_possible_wrap)]
     let start_date = today - Duration::days(days as i64 - 1);
 
     // Count completions by date
@@ -114,16 +132,18 @@ pub fn render_heatmap(completed_todos: &[Todo], weeks: usize) -> String {
     // Header with week numbers
     let mut header = "     ".to_string();
     for w in 0..weeks {
-        header.push_str(&format!("W{:<2}", weeks - w));
+        use std::fmt::Write;
+        let _ = write!(header, "W{:<2}", weeks - w);
     }
     lines.push(header);
 
     // Each row is a day of the week
-    for day_idx in 0..7 {
-        let mut row = format!("{} ", day_labels[day_idx]);
+    for (day_idx, &day_label) in day_labels.iter().enumerate() {
+        let mut row = format!("{day_label} ");
 
         for week in (0..weeks).rev() {
             let days_back = week * 7 + (6 - day_idx);
+            #[allow(clippy::cast_possible_wrap)]
             let date = today - Duration::days(days_back as i64);
 
             // Adjust for day of week alignment
@@ -137,6 +157,11 @@ pub fn render_heatmap(completed_todos: &[Todo], weeks: usize) -> String {
             let intensity = if count == 0 {
                 '·'
             } else {
+                #[allow(
+                    clippy::cast_precision_loss,
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss
+                )]
                 let level = (count as f64 / max_count as f64 * 4.0) as usize;
                 match level {
                     0 => '░',
@@ -145,7 +170,8 @@ pub fn render_heatmap(completed_todos: &[Todo], weeks: usize) -> String {
                     _ => '█',
                 }
             };
-            row.push_str(&format!(" {} ", intensity));
+            use std::fmt::Write;
+            let _ = write!(row, " {intensity} ");
         }
 
         lines.push(row);
@@ -169,9 +195,16 @@ pub fn render_heatmap(completed_todos: &[Todo], weeks: usize) -> String {
 /// # Returns
 ///
 /// A single-line string with the progress bar.
+#[must_use]
 pub fn render_progress_bar(current: usize, total: usize, width: usize) -> String {
     let total = total.max(1);
+    #[allow(clippy::cast_precision_loss)]
     let progress = (current as f64 / total as f64).min(1.0);
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss
+    )]
     let filled = (progress * width as f64) as usize;
     let empty = width - filled;
 
@@ -193,12 +226,13 @@ pub fn render_progress_bar(current: usize, total: usize, width: usize) -> String
 /// # Returns
 ///
 /// Multi-line string with the chart.
+#[must_use]
 pub fn render_day_of_week_chart(counts: &[usize; 7]) -> String {
     let day_labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     let data: Vec<(String, usize)> = day_labels
         .iter()
         .zip(counts.iter())
-        .map(|(l, &c)| (l.to_string(), c))
+        .map(|(l, &c)| ((*l).to_string(), c))
         .collect();
 
     render_bar_chart(&data, 3, 20)
@@ -213,6 +247,7 @@ pub fn render_day_of_week_chart(counts: &[usize; 7]) -> String {
 /// # Returns
 ///
 /// Multi-line string with a compact hourly chart.
+#[must_use]
 pub fn render_hour_chart(counts: &[usize; 24]) -> String {
     let mut lines = Vec::new();
 
@@ -228,12 +263,13 @@ pub fn render_hour_chart(counts: &[usize; 24]) -> String {
 
     let data: Vec<(String, usize)> = periods
         .iter()
-        .map(|(label, slice)| (label.to_string(), slice.iter().sum()))
+        .map(|(label, slice)| ((*label).to_string(), slice.iter().sum()))
         .collect();
 
     lines.push(render_bar_chart(&data, 9, 20));
     lines.push(String::new());
-    lines.push(format!("Hourly: {}", render_sparkline(counts)));
+    let sparkline = render_sparkline(counts);
+    lines.push(format!("Hourly: {sparkline}"));
 
     lines.join("\n")
 }
@@ -248,6 +284,7 @@ pub fn render_hour_chart(counts: &[usize; 24]) -> String {
 /// # Returns
 ///
 /// Multi-line string with a bordered box.
+#[must_use]
 pub fn render_summary_box(title: &str, items: &[(&str, String)]) -> String {
     let max_label_len = items.iter().map(|(l, _)| l.len()).max().unwrap_or(0);
     let max_value_len = items.iter().map(|(_, v)| v.len()).max().unwrap_or(0);
@@ -273,9 +310,9 @@ pub fn render_summary_box(title: &str, items: &[(&str, String)]) -> String {
 
     // Items
     for (label, value) in items {
-        let item_str = format!("{:>width$} : {}", label, value, width = max_label_len);
+        let item_str = format!("{label:>max_label_len$} : {value}");
         let padding = box_width - item_str.len();
-        lines.push(format!("│ {}{} │", item_str, " ".repeat(padding - 2)));
+        lines.push(format!("│ {item_str}{} │", " ".repeat(padding - 2)));
     }
 
     // Bottom border
@@ -328,10 +365,7 @@ mod tests {
 
     #[test]
     fn test_render_summary_box() {
-        let items = [
-            ("Tasks", "42".to_string()),
-            ("Completed", "35".to_string()),
-        ];
+        let items = [("Tasks", "42".to_string()), ("Completed", "35".to_string())];
         let box_str = render_summary_box("Summary", &items);
         assert!(box_str.contains("Summary"));
         assert!(box_str.contains("42"));

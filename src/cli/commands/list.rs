@@ -51,22 +51,6 @@ impl ListTarget {
             _ => None,
         }
     }
-
-    /// Get the display name for this list target.
-    #[must_use]
-    pub const fn display_name(&self) -> &'static str {
-        match self {
-            Self::Today => "Today",
-            Self::Inbox => "Inbox",
-            Self::Upcoming => "Upcoming",
-            Self::Anytime => "Anytime",
-            Self::Someday => "Someday",
-            Self::Logbook => "Logbook",
-            Self::Areas => "Areas",
-            Self::Tags => "Tags",
-            Self::Projects => "Projects",
-        }
-    }
 }
 
 /// Execute the list command.
@@ -88,8 +72,7 @@ pub fn list(
     let list_target = match target {
         Some(s) => ListTarget::from_str(s).ok_or_else(|| {
             ClingsError::InvalidArgument(format!(
-                "Unknown list view: '{}'. Valid options: today, inbox, upcoming, anytime, someday, logbook, areas, tags, projects",
-                s
+                "Unknown list view: '{s}'. Valid options: today, inbox, upcoming, anytime, someday, logbook, areas, tags, projects"
             ))
         })?,
         None => ListTarget::default(),
@@ -99,39 +82,39 @@ pub fn list(
         ListTarget::Today => {
             let todos = client.get_list(ListView::Today)?;
             format_todos(&todos, "Today", format)
-        }
+        },
         ListTarget::Inbox => {
             let todos = client.get_list(ListView::Inbox)?;
             format_todos(&todos, "Inbox", format)
-        }
+        },
         ListTarget::Upcoming => {
             let todos = client.get_list(ListView::Upcoming)?;
             format_todos(&todos, "Upcoming", format)
-        }
+        },
         ListTarget::Anytime => {
             let todos = client.get_list(ListView::Anytime)?;
             format_todos(&todos, "Anytime", format)
-        }
+        },
         ListTarget::Someday => {
             let todos = client.get_list(ListView::Someday)?;
             format_todos(&todos, "Someday", format)
-        }
+        },
         ListTarget::Logbook => {
             let todos = client.get_list(ListView::Logbook)?;
             format_todos(&todos, "Logbook", format)
-        }
+        },
         ListTarget::Areas => {
             let areas = client.get_areas()?;
             format_areas(&areas, format)
-        }
+        },
         ListTarget::Tags => {
             let tags = client.get_tags()?;
             format_tags(&tags, format)
-        }
+        },
         ListTarget::Projects => {
             let projects = client.get_projects()?;
             format_projects(&projects, format)
-        }
+        },
     }
 }
 
@@ -168,13 +151,5 @@ mod tests {
     #[test]
     fn test_list_target_default() {
         assert_eq!(ListTarget::default(), ListTarget::Today);
-    }
-
-    #[test]
-    fn test_list_target_display_name() {
-        assert_eq!(ListTarget::Today.display_name(), "Today");
-        assert_eq!(ListTarget::Inbox.display_name(), "Inbox");
-        assert_eq!(ListTarget::Upcoming.display_name(), "Upcoming");
-        assert_eq!(ListTarget::Areas.display_name(), "Areas");
     }
 }

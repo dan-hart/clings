@@ -2,6 +2,8 @@
 //!
 //! This module implements the `clings review` command for interactive weekly reviews.
 
+use std::fmt::Write;
+
 use colored::Colorize;
 use serde_json::json;
 
@@ -15,7 +17,11 @@ use crate::things::ThingsClient;
 /// # Errors
 ///
 /// Returns an error if the Things 3 API call fails or the review cannot be started.
-pub fn review(client: ThingsClient, args: &ReviewArgs, format: OutputFormat) -> Result<String, ClingsError> {
+pub fn review(
+    client: ThingsClient,
+    args: &ReviewArgs,
+    format: OutputFormat,
+) -> Result<String, ClingsError> {
     // Handle status request
     if args.status {
         return show_status(format);
@@ -30,21 +36,18 @@ pub fn review(client: ThingsClient, args: &ReviewArgs, format: OutputFormat) -> 
 
     // Start or resume review
     let mut session = if args.resume {
-        match ReviewSession::resume(client.clone()) {
-            Ok(s) => {
-                ReviewPrompt::resume_message(
-                    s.current_step().name(),
-                    s.state().progress_percent(),
-                );
-                s
-            }
-            Err(_) => {
+        ReviewSession::resume(client.clone()).map_or_else(
+            |_| {
                 println!("No saved review to resume. Starting new review.");
                 let s = ReviewSession::new(client);
                 ReviewPrompt::welcome();
                 s
-            }
-        }
+            },
+            |s| {
+                ReviewPrompt::resume_message(s.current_step().name(), s.state().progress_percent());
+                s
+            },
+        )
     } else {
         let s = ReviewSession::new(client);
         ReviewPrompt::welcome();
@@ -74,7 +77,7 @@ pub fn review(client: ThingsClient, args: &ReviewArgs, format: OutputFormat) -> 
                     "notes": summary.notes,
                 });
                 serde_json::to_string_pretty(&output).map_err(ClingsError::Parse)
-            }
+            },
             OutputFormat::Pretty => {
                 ReviewPrompt::display_summary(
                     &summary.format_duration(),
@@ -86,7 +89,7 @@ pub fn review(client: ThingsClient, args: &ReviewArgs, format: OutputFormat) -> 
                     summary.deadlines_reviewed,
                 );
                 Ok(String::new())
-            }
+            },
         }
     } else {
         // Review was paused
@@ -96,6 +99,7 @@ pub fn review(client: ThingsClient, args: &ReviewArgs, format: OutputFormat) -> 
 }
 
 /// Show the current review status.
+#[allow(clippy::too_many_lines)]
 fn show_status(format: OutputFormat) -> Result<String, ClingsError> {
     let paths = crate::config::Paths::default();
     let state_path = paths.root.join("review_state.yaml");
@@ -107,7 +111,7 @@ fn show_status(format: OutputFormat) -> Result<String, ClingsError> {
                     "active_review": false,
                 });
                 serde_json::to_string_pretty(&output).map_err(ClingsError::Parse)
-            }
+            },
             OutputFormat::Pretty => Ok("No active review session.".to_string()),
         };
     }
@@ -135,70 +139,58 @@ fn show_status(format: OutputFormat) -> Result<String, ClingsError> {
                 "items_scheduled": state.items_scheduled.len(),
             });
             serde_json::to_string_pretty(&output).map_err(ClingsError::Parse)
-        }
+        },
         OutputFormat::Pretty => {
             let mut output = String::new();
-            output.push_str(&format!(
-                "{}\n",
-                "Active Review Session".cyan().bold()
-            ));
-            output.push_str(&format!("{}\n", "─".repeat(40).dimmed()));
-            output.push_str(&format!(
-                "  {} Step {}/{}: {}\n",
+            let _ = writeln!(output, "{}", "Active Review Session".cyan().bold());
+            let _ = writeln!(output, "{}", "─".repeat(40).dimmed());
+            let _ = writeln!(
+                output,
+                "  {} Step {}/{}: {}",
                 "Current:".bold(),
                 state.current_step.number(),
                 ReviewStep::total_steps(),
                 state.current_step.name()
-            ));
-            output.push_str(&format!(
-                "  {} {}%\n",
+            );
+            let _ = writeln!(
+                output,
+                "  {} {}%",
                 "Progress:".bold(),
                 state.progress_percent()
-            ));
-            output.push_str(&format!(
-                "  {} {}\n",
+            );
+            let _ = writeln!(
+                output,
+                "  {} {}",
                 "Started:".bold(),
                 state.started_at.format("%Y-%m-%d %H:%M")
-            ));
-            output.push_str(&format!(
-                "  {} {}\n",
+            );
+            let _ = writeln!(
+                output,
+                "  {} {}",
                 "Updated:".bold(),
                 state.updated_at.format("%Y-%m-%d %H:%M")
-            ));
-            output.push_str("\n");
-            output.push_str(&format!("{}\n", "Statistics:".cyan().bold()));
-            output.push_str(&format!(
-                "  {} inbox items processed\n",
-                state.inbox_processed
-            ));
-            output.push_str(&format!(
-                "  {} someday items reviewed\n",
+            );
+            output.push('\n');
+            let _ = writeln!(output, "{}", "Statistics:".cyan().bold());
+            let _ = writeln!(output, "  {} inbox items processed", state.inbox_processed);
+            let _ = writeln!(
+                output,
+                "  {} someday items reviewed",
                 state.someday_reviewed
-            ));
-            output.push_str(&format!(
-                "  {} projects checked\n",
-                state.projects_checked
-            ));
-            output.push_str(&format!(
-                "  {} deadlines reviewed\n",
-                state.deadlines_reviewed
-            ));
-            output.push_str(&format!(
-                "  {} items completed\n",
-                state.items_completed.len()
-            ));
-            output.push_str(&format!(
-                "  {} items moved to someday\n",
+            );
+            let _ = writeln!(output, "  {} projects checked", state.projects_checked);
+            let _ = writeln!(output, "  {} deadlines reviewed", state.deadlines_reviewed);
+            let _ = writeln!(output, "  {} items completed", state.items_completed.len());
+            let _ = writeln!(
+                output,
+                "  {} items moved to someday",
                 state.items_moved_to_someday.len()
-            ));
-            output.push_str(&format!(
-                "  {} items scheduled\n",
-                state.items_scheduled.len()
-            ));
-            output.push_str("\n");
+            );
+            let _ = writeln!(output, "  {} items scheduled", state.items_scheduled.len());
+            output.push('\n');
             output.push_str("Use 'clings review --resume' to continue.\n");
             Ok(output)
-        }
+        },
     }
 }
 
@@ -226,7 +218,7 @@ fn run_review_loop(session: &mut ReviewSession, deadline_days: i64) -> Result<()
                 // Summary is displayed after the loop
                 session.advance();
                 true
-            }
+            },
             ReviewStep::Complete => break,
         };
 
@@ -256,47 +248,49 @@ fn process_inbox(session: &mut ReviewSession) -> Result<bool, ClingsError> {
         let result = ReviewPrompt::inbox_item(todo, i, inbox.len());
 
         match result {
-            ReviewPromptResult::Next => {
-                session.state_mut().inbox_processed += 1;
-            }
-            ReviewPromptResult::Skip => {
-                // Skip without counting
-            }
+            ReviewPromptResult::Next | ReviewPromptResult::Skip => {
+                if !matches!(result, ReviewPromptResult::Skip) {
+                    session.state_mut().inbox_processed += 1;
+                }
+            },
             ReviewPromptResult::Complete => {
                 session.complete_todo(&todo.id)?;
                 session.state_mut().inbox_processed += 1;
-            }
+            },
             ReviewPromptResult::MoveToSomeday => {
                 // Move to someday via Things
                 session.client().move_to_someday(&todo.id)?;
-                session.state_mut().items_moved_to_someday.push(todo.id.clone());
+                session
+                    .state_mut()
+                    .items_moved_to_someday
+                    .push(todo.id.clone());
                 session.state_mut().inbox_processed += 1;
-            }
+            },
             ReviewPromptResult::Schedule(date) => {
                 let parsed_date = crate::cli::args::parse_date(&date);
                 session.client().update_todo_due(&todo.id, &parsed_date)?;
                 session.state_mut().items_scheduled.push(todo.id.clone());
                 session.state_mut().inbox_processed += 1;
-            }
+            },
             ReviewPromptResult::Back => {
                 session.go_back();
                 return Ok(true);
-            }
+            },
             ReviewPromptResult::Pause => {
                 if ReviewPrompt::confirm_pause() {
                     return Ok(false);
                 }
-            }
+            },
             ReviewPromptResult::Quit => {
                 if ReviewPrompt::confirm_quit() {
                     // Don't save state on quit
                     session.clear_saved_state()?;
                     std::process::exit(0);
                 }
-            }
+            },
             ReviewPromptResult::AddNote(_) => {
                 // Not used in inbox processing
-            }
+            },
         }
     }
 
@@ -325,38 +319,37 @@ fn review_someday(session: &mut ReviewSession) -> Result<bool, ClingsError> {
         let result = ReviewPrompt::someday_item(todo, i, someday.len());
 
         match result {
-            ReviewPromptResult::Next => {
-                session.state_mut().someday_reviewed += 1;
-            }
-            ReviewPromptResult::Skip => {
-                // Skip without counting
-            }
+            ReviewPromptResult::Next | ReviewPromptResult::Skip => {
+                if !matches!(result, ReviewPromptResult::Skip) {
+                    session.state_mut().someday_reviewed += 1;
+                }
+            },
             ReviewPromptResult::Complete => {
                 session.complete_todo(&todo.id)?;
                 session.state_mut().someday_reviewed += 1;
-            }
+            },
             ReviewPromptResult::Schedule(date) => {
                 let parsed_date = crate::cli::args::parse_date(&date);
                 session.client().update_todo_due(&todo.id, &parsed_date)?;
                 session.state_mut().items_scheduled.push(todo.id.clone());
                 session.state_mut().someday_reviewed += 1;
-            }
+            },
             ReviewPromptResult::Back => {
                 session.go_back();
                 return Ok(true);
-            }
+            },
             ReviewPromptResult::Pause => {
                 if ReviewPrompt::confirm_pause() {
                     return Ok(false);
                 }
-            }
+            },
             ReviewPromptResult::Quit => {
                 if ReviewPrompt::confirm_quit() {
                     session.clear_saved_state()?;
                     std::process::exit(0);
                 }
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
 
@@ -389,28 +382,27 @@ fn check_projects(session: &mut ReviewSession) -> Result<bool, ClingsError> {
         let result = ReviewPrompt::project_item(project, i, active_projects.len());
 
         match result {
-            ReviewPromptResult::Next => {
-                session.state_mut().projects_checked += 1;
-            }
-            ReviewPromptResult::Skip => {
-                // Skip without counting
-            }
+            ReviewPromptResult::Next | ReviewPromptResult::Skip => {
+                if !matches!(result, ReviewPromptResult::Skip) {
+                    session.state_mut().projects_checked += 1;
+                }
+            },
             ReviewPromptResult::Back => {
                 session.go_back();
                 return Ok(true);
-            }
+            },
             ReviewPromptResult::Pause => {
                 if ReviewPrompt::confirm_pause() {
                     return Ok(false);
                 }
-            }
+            },
             ReviewPromptResult::Quit => {
                 if ReviewPrompt::confirm_quit() {
                     session.clear_saved_state()?;
                     std::process::exit(0);
                 }
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
 
@@ -427,7 +419,7 @@ fn review_deadlines(session: &mut ReviewSession, days: i64) -> Result<bool, Clin
     let deadlines = session.get_upcoming_deadlines(days)?;
 
     if deadlines.is_empty() {
-        ReviewPrompt::no_items(&format!("deadlines in the next {} days", days));
+        ReviewPrompt::no_items(&format!("deadlines in the next {days} days"));
         if !ReviewPrompt::continue_prompt() {
             return Ok(false);
         }
@@ -439,38 +431,37 @@ fn review_deadlines(session: &mut ReviewSession, days: i64) -> Result<bool, Clin
         let result = ReviewPrompt::deadline_item(todo, i, deadlines.len());
 
         match result {
-            ReviewPromptResult::Next => {
-                session.state_mut().deadlines_reviewed += 1;
-            }
-            ReviewPromptResult::Skip => {
-                // Skip without counting
-            }
+            ReviewPromptResult::Next | ReviewPromptResult::Skip => {
+                if !matches!(result, ReviewPromptResult::Skip) {
+                    session.state_mut().deadlines_reviewed += 1;
+                }
+            },
             ReviewPromptResult::Complete => {
                 session.complete_todo(&todo.id)?;
                 session.state_mut().deadlines_reviewed += 1;
-            }
+            },
             ReviewPromptResult::Schedule(date) => {
                 let parsed_date = crate::cli::args::parse_date(&date);
                 session.client().update_todo_due(&todo.id, &parsed_date)?;
                 session.state_mut().items_scheduled.push(todo.id.clone());
                 session.state_mut().deadlines_reviewed += 1;
-            }
+            },
             ReviewPromptResult::Back => {
                 session.go_back();
                 return Ok(true);
-            }
+            },
             ReviewPromptResult::Pause => {
                 if ReviewPrompt::confirm_pause() {
                     return Ok(false);
                 }
-            }
+            },
             ReviewPromptResult::Quit => {
                 if ReviewPrompt::confirm_quit() {
                     session.clear_saved_state()?;
                     std::process::exit(0);
                 }
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
 

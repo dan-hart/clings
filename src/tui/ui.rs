@@ -33,7 +33,11 @@ fn render_header(frame: &mut Frame<'_>, app: &App<'_>, area: Rect) {
     let title = format!(" {} ({} items) ", app.view, app.todos.len());
 
     let header = Paragraph::new(title)
-        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
         .block(
             Block::default()
                 .borders(Borders::ALL)
@@ -89,7 +93,12 @@ fn render_list(frame: &mut Frame<'_>, app: &App<'_>, area: Rect) {
 
             // Add tags if present
             if !todo.tags.is_empty() {
-                let tags_str = todo.tags.iter().map(|t| format!("#{t}")).collect::<Vec<_>>().join(" ");
+                let tags_str = todo
+                    .tags
+                    .iter()
+                    .map(|t| format!("#{t}"))
+                    .collect::<Vec<_>>()
+                    .join(" ");
                 spans.push(Span::styled(
                     format!("  {tags_str}"),
                     Style::default().fg(Color::Blue),

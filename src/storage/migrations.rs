@@ -17,7 +17,7 @@ pub fn get_version(conn: &Connection) -> Result<i32, ClingsError> {
     // Try to read from user_version pragma
     let version: i32 = conn
         .query_row("PRAGMA user_version", [], |row| row.get(0))
-        .map_err(|e| ClingsError::Database(format!("Failed to get schema version: {}", e)))?;
+        .map_err(|e| ClingsError::Database(format!("Failed to get schema version: {e}")))?;
 
     Ok(version)
 }
@@ -25,7 +25,7 @@ pub fn get_version(conn: &Connection) -> Result<i32, ClingsError> {
 /// Set the schema version in the database.
 fn set_version(conn: &Connection, version: i32) -> Result<(), ClingsError> {
     conn.execute_batch(&format!("PRAGMA user_version = {version};"))
-        .map_err(|e| ClingsError::Database(format!("Failed to set schema version: {}", e)))
+        .map_err(|e| ClingsError::Database(format!("Failed to set schema version: {e}")))
 }
 
 /// Run all pending migrations.
@@ -118,7 +118,7 @@ fn migrate_v1(conn: &Connection) -> Result<(), ClingsError> {
         );
         ",
     )
-    .map_err(|e| ClingsError::Database(format!("Migration v1 failed: {}", e)))
+    .map_err(|e| ClingsError::Database(format!("Migration v1 failed: {e}")))
 }
 
 #[cfg(test)]

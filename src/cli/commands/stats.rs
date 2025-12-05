@@ -14,6 +14,10 @@ use crate::output::to_json;
 use crate::things::ThingsClient;
 
 /// Execute stats command with optional flags.
+///
+/// # Errors
+///
+/// Returns an error if stats collection fails or rendering fails.
 pub fn stats(
     client: &ThingsClient,
     args: &StatsArgs,
@@ -149,14 +153,10 @@ fn render_dashboard(
             let last_7_days: Vec<usize> = (0..7)
                 .rev()
                 .map(|i| {
-                    let date = chrono::Local::now().date_naive() - chrono::Duration::days(i);
+                    let day = chrono::Local::now().date_naive() - chrono::Duration::days(i);
                     data.completed_todos
                         .iter()
-                        .filter(|t| {
-                            t.modification_date
-                                .map(|d| d.date_naive() == date)
-                                .unwrap_or(false)
-                        })
+                        .filter(|t| t.modification_date.is_some_and(|d| d.date_naive() == day))
                         .count()
                 })
                 .collect();
@@ -180,7 +180,7 @@ fn render_dashboard(
             }
 
             Ok(output.join("\n"))
-        }
+        },
     }
 }
 
@@ -195,17 +195,14 @@ fn render_trends(
     // Calculate daily completions
     let mut daily_counts: Vec<(String, usize)> = Vec::new();
     for i in (0..days).rev() {
-        let date = today - chrono::Duration::days(i as i64);
+        #[allow(clippy::cast_possible_wrap)]
+        let day = today - chrono::Duration::days(i as i64);
         let count = data
             .completed_todos
             .iter()
-            .filter(|t| {
-                t.modification_date
-                    .map(|d| d.date_naive() == date)
-                    .unwrap_or(false)
-            })
+            .filter(|t| t.modification_date.is_some_and(|d| d.date_naive() == day))
             .count();
-        daily_counts.push((date.format("%m/%d").to_string(), count));
+        daily_counts.push((day.format("%m/%d").to_string(), count));
     }
 
     match format {
@@ -214,7 +211,7 @@ fn render_trends(
             let mut output = Vec::new();
 
             output.push(
-                format!("📈 Completion Trends (Last {} days)", days)
+                format!("📈 Completion Trends (Last {days} days)")
                     .bold()
                     .to_string(),
             );
@@ -241,17 +238,17 @@ fn render_trends(
 
             // Summary stats
             let total: usize = values.iter().sum();
+            #[allow(clippy::cast_precision_loss)]
             let avg = total as f64 / days as f64;
             let max = values.iter().max().copied().unwrap_or(0);
 
             output.push(String::new());
             output.push(format!(
-                "Total: {}  Average: {:.1}/day  Peak: {}",
-                total, avg, max
+                "Total: {total}  Average: {avg:.1}/day  Peak: {max}"
             ));
 
             Ok(output.join("\n"))
-        }
+        },
     }
 }
 
@@ -271,20 +268,21 @@ fn render_heatmap_cmd(
 
             for todo in &data.completed_todos {
                 if let Some(mod_date) = todo.modification_date {
-                    let date = mod_date.date_naive();
-                    if (today - date).num_days() < days as i64 {
-                        *by_date.entry(date.to_string()).or_default() += 1;
+                    let day = mod_date.date_naive();
+                    #[allow(clippy::cast_possible_wrap)]
+                    if (today - day).num_days() < days as i64 {
+                        *by_date.entry(day.to_string()).or_default() += 1;
                     }
                 }
             }
 
             to_json(&by_date)
-        }
+        },
         OutputFormat::Pretty => {
             let mut output = Vec::new();
 
             output.push(
-                format!("📅 Completion Heatmap (Last {} weeks)", weeks)
+                format!("📅 Completion Heatmap (Last {weeks} weeks)")
                     .bold()
                     .to_string(),
             );
@@ -293,7 +291,7 @@ fn render_heatmap_cmd(
             output.push(render_heatmap(&data.completed_todos, weeks));
 
             Ok(output.join("\n"))
-        }
+        },
     }
 }
 

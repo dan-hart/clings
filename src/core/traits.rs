@@ -6,7 +6,7 @@
 use chrono::NaiveDate;
 
 /// A value that can be extracted from a filterable item.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FieldValue {
     /// String value.
     String(String),
@@ -30,13 +30,17 @@ impl FieldValue {
     pub fn contains_str(&self, needle: &str) -> bool {
         let needle_lower = needle.to_lowercase();
         match self {
-            Self::String(s) => s.to_lowercase().contains(&needle_lower),
-            Self::OptionalString(Some(s)) => s.to_lowercase().contains(&needle_lower),
-            Self::OptionalString(None) => false,
+            Self::String(s) | Self::OptionalString(Some(s)) => {
+                s.to_lowercase().contains(&needle_lower)
+            },
             Self::StringList(list) => list
                 .iter()
                 .any(|s| s.to_lowercase().contains(&needle_lower)),
-            _ => false,
+            Self::OptionalString(None)
+            | Self::Bool(_)
+            | Self::Integer(_)
+            | Self::Date(_)
+            | Self::OptionalDate(_) => false,
         }
     }
 
@@ -44,25 +48,25 @@ impl FieldValue {
     #[must_use]
     pub fn equals_str(&self, other: &str) -> bool {
         match self {
-            Self::String(s) => s.eq_ignore_ascii_case(other),
-            Self::OptionalString(Some(s)) => s.eq_ignore_ascii_case(other),
-            Self::OptionalString(None) => false,
-            _ => false,
+            Self::String(s) | Self::OptionalString(Some(s)) => s.eq_ignore_ascii_case(other),
+            Self::OptionalString(None)
+            | Self::Bool(_)
+            | Self::Integer(_)
+            | Self::Date(_)
+            | Self::OptionalDate(_)
+            | Self::StringList(_) => false,
         }
     }
 
     /// Check if this value is null/none.
     #[must_use]
-    pub fn is_null(&self) -> bool {
-        match self {
-            Self::OptionalString(None) | Self::OptionalDate(None) => true,
-            _ => false,
-        }
+    pub const fn is_null(&self) -> bool {
+        matches!(self, Self::OptionalString(None) | Self::OptionalDate(None))
     }
 
     /// Get as a date for comparison.
     #[must_use]
-    pub fn as_date(&self) -> Option<NaiveDate> {
+    pub const fn as_date(&self) -> Option<NaiveDate> {
         match self {
             Self::Date(d) => Some(*d),
             Self::OptionalDate(d) => *d,
@@ -108,23 +112,20 @@ pub trait Schedulable {
     /// Check if this item is due today or earlier.
     fn is_due(&self) -> bool {
         let today = chrono::Local::now().date_naive();
-        self.when_date()
-            .map_or(false, |d| d <= today)
+        self.when_date().is_some_and(|d| d <= today)
     }
 
     /// Check if this item is overdue (past deadline).
     fn is_overdue(&self) -> bool {
         let today = chrono::Local::now().date_naive();
-        self.deadline()
-            .map_or(false, |d| d < today)
+        self.deadline().is_some_and(|d| d < today)
     }
 
     /// Check if this item is due within the next N days.
     fn is_due_within(&self, days: i64) -> bool {
         let today = chrono::Local::now().date_naive();
         let deadline = today + chrono::Duration::days(days);
-        self.when_date()
-            .map_or(false, |d| d <= deadline)
+        self.when_date().is_some_and(|d| d <= deadline)
     }
 }
 

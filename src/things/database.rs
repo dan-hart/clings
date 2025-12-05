@@ -1,6 +1,6 @@
 //! Direct database access for Things 3.
 //!
-//! This module provides read-only access to the Things 3 SQLite database
+//! This module provides read-only access to the Things 3 `SQLite` database
 //! for fast data retrieval. All read operations should use this module
 //! for best performance.
 //!
@@ -20,7 +20,7 @@
 use std::path::PathBuf;
 
 use chrono::{DateTime, Local, NaiveDate, TimeZone, Utc};
-use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 
 use crate::error::ClingsError;
 use crate::things::types::{Area, ChecklistItem, ListView, Project, Status, Tag, Todo};
@@ -28,10 +28,11 @@ use crate::things::types::{Area, ChecklistItem, ListView, Project, Status, Tag, 
 /// Find the Things 3 database path.
 ///
 /// Things 3 stores its database in a Group Container with a variable suffix.
+#[must_use]
 pub fn find_database_path() -> Option<PathBuf> {
     let home = std::env::var("HOME").ok()?;
-    let container_path = PathBuf::from(&home)
-        .join("Library/Group Containers/JLMPQHK86H.com.culturedcode.ThingsMac");
+    let container_path =
+        PathBuf::from(&home).join("Library/Group Containers/JLMPQHK86H.com.culturedcode.ThingsMac");
 
     // Look for ThingsData-* directories
     let entries = std::fs::read_dir(&container_path).ok()?;
@@ -54,25 +55,25 @@ pub fn find_database_path() -> Option<PathBuf> {
 
 /// Open a read-only connection to the Things database.
 fn open_connection() -> Result<Connection, ClingsError> {
-    let path = find_database_path().ok_or_else(|| {
-        ClingsError::Config("Could not find Things 3 database".to_string())
-    })?;
+    let path = find_database_path()
+        .ok_or_else(|| ClingsError::Config("Could not find Things 3 database".to_string()))?;
 
     Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
         .map_err(|e| ClingsError::Database(e.to_string()))
 }
 
-/// Convert a Things timestamp (seconds since reference date) to DateTime<Utc>.
+/// Convert a Things timestamp (seconds since reference date) to `DateTime<Utc>`.
 fn things_timestamp_to_datetime(timestamp: f64) -> Option<DateTime<Utc>> {
     // Things uses Core Data timestamps (seconds since 2001-01-01)
     // We need to convert to Unix timestamp (seconds since 1970-01-01)
     const CORE_DATA_EPOCH_OFFSET: i64 = 978_307_200; // seconds between 1970 and 2001
 
+    #[allow(clippy::cast_possible_truncation)]
     let unix_timestamp = timestamp as i64 + CORE_DATA_EPOCH_OFFSET;
     Utc.timestamp_opt(unix_timestamp, 0).single()
 }
 
-/// Convert a Things date integer (days since reference date) to NaiveDate.
+/// Convert a Things date integer (days since reference date) to `NaiveDate`.
 fn things_date_to_naive_date(days: i64) -> Option<NaiveDate> {
     // Things date integers are days since 2001-01-01
     let base_date = NaiveDate::from_ymd_opt(2001, 1, 1)?;
@@ -99,22 +100,30 @@ pub struct DbStatsData {
 /// Fetch statistics data directly from the Things database.
 ///
 /// This is much faster than JXA for large datasets.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or queried.
 pub fn fetch_stats_data() -> Result<DbStatsData, ClingsError> {
     let conn = open_connection()?;
 
     let mut data = DbStatsData::default();
 
     // Calculate today's date in Things format (days since 2001-01-01)
-    let today_days = (Local::now().date_naive() - NaiveDate::from_ymd_opt(2001, 1, 1).unwrap_or_default()).num_days();
+    let today_days = (Local::now().date_naive()
+        - NaiveDate::from_ymd_opt(2001, 1, 1).unwrap_or_default())
+    .num_days();
 
     // Fetch completed todos from the last 90 days
     let ninety_days_ago = Local::now() - chrono::Duration::days(90);
     let cutoff_timestamp = ninety_days_ago.timestamp() - 978_307_200; // Convert to Core Data timestamp
 
+    #[allow(clippy::cast_precision_loss)]
+    let cutoff_f64 = cutoff_timestamp as f64;
     data.completed_todos = fetch_todos_with_filter(
         &conn,
         "status = 3 AND trashed = 0 AND type = 0 AND stopDate >= ?",
-        &[&(cutoff_timestamp as f64)],
+        &[&cutoff_f64],
     )?;
 
     // Fetch open todos by list
@@ -174,6 +183,10 @@ pub fn fetch_stats_data() -> Result<DbStatsData, ClingsError> {
 ///
 /// This is the primary function for fetching todos, replacing JXA-based
 /// `ThingsClient::get_list()` for better performance.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or queried.
 pub fn fetch_list(view: ListView) -> Result<Vec<Todo>, ClingsError> {
     let conn = open_connection()?;
     let today_days = days_since_reference_date(Local::now().date_naive());
@@ -225,6 +238,10 @@ pub fn fetch_list(view: ListView) -> Result<Vec<Todo>, ClingsError> {
 }
 
 /// Fetch a single todo by ID with full details including tags and checklist items.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened, queried, or if the todo is not found.
 pub fn fetch_todo(id: &str) -> Result<Todo, ClingsError> {
     let conn = open_connection()?;
 
@@ -233,14 +250,16 @@ pub fn fetch_todo(id: &str) -> Result<Todo, ClingsError> {
                FROM TMTask \
                WHERE uuid = ? AND type = 0";
 
-    let mut stmt = conn.prepare(sql).map_err(|e| ClingsError::Database(e.to_string()))?;
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| ClingsError::Database(e.to_string()))?;
 
     let todo = stmt
-        .query_row(params![id], |row| {
-            Ok(row_to_todo_tuple(row)?)
-        })
+        .query_row(params![id], row_to_todo_tuple)
         .map_err(|e| match e {
-            rusqlite::Error::QueryReturnedNoRows => ClingsError::NotFound(format!("Todo with id '{id}' not found")),
+            rusqlite::Error::QueryReturnedNoRows => {
+                ClingsError::NotFound(format!("Todo with id '{id}' not found"))
+            },
             _ => ClingsError::Database(e.to_string()),
         })?;
 
@@ -256,6 +275,10 @@ pub fn fetch_todo(id: &str) -> Result<Todo, ClingsError> {
 }
 
 /// Fetch all projects.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or queried.
 pub fn fetch_projects() -> Result<Vec<Project>, ClingsError> {
     let conn = open_connection()?;
 
@@ -264,7 +287,9 @@ pub fn fetch_projects() -> Result<Vec<Project>, ClingsError> {
                WHERE type = 1 AND trashed = 0 AND status = 0 \
                ORDER BY \"index\"";
 
-    let mut stmt = conn.prepare(sql).map_err(|e| ClingsError::Database(e.to_string()))?;
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| ClingsError::Database(e.to_string()))?;
 
     let projects = stmt
         .query_map([], |row| {
@@ -277,7 +302,15 @@ pub fn fetch_projects() -> Result<Vec<Project>, ClingsError> {
             let creation_date: Option<f64> = row.get(6)?;
             let area_uuid: Option<String> = row.get(7)?;
 
-            Ok((uuid, title, notes, status_int, deadline, creation_date, area_uuid))
+            Ok((
+                uuid,
+                title,
+                notes,
+                status_int,
+                deadline,
+                creation_date,
+                area_uuid,
+            ))
         })
         .map_err(|e| ClingsError::Database(e.to_string()))?;
 
@@ -315,12 +348,18 @@ pub fn fetch_projects() -> Result<Vec<Project>, ClingsError> {
 }
 
 /// Fetch all areas.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or queried.
 pub fn fetch_areas() -> Result<Vec<Area>, ClingsError> {
     let conn = open_connection()?;
 
     let sql = "SELECT uuid, title FROM TMArea ORDER BY \"index\"";
 
-    let mut stmt = conn.prepare(sql).map_err(|e| ClingsError::Database(e.to_string()))?;
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| ClingsError::Database(e.to_string()))?;
 
     let areas = stmt
         .query_map([], |row| {
@@ -348,18 +387,27 @@ pub fn fetch_areas() -> Result<Vec<Area>, ClingsError> {
 }
 
 /// Fetch all tags.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or queried.
 pub fn fetch_tags() -> Result<Vec<Tag>, ClingsError> {
     let conn = open_connection()?;
 
     let sql = "SELECT uuid, title FROM TMTag ORDER BY title";
 
-    let mut stmt = conn.prepare(sql).map_err(|e| ClingsError::Database(e.to_string()))?;
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| ClingsError::Database(e.to_string()))?;
 
     let tags = stmt
         .query_map([], |row| {
             let uuid: String = row.get(0)?;
             let title: String = row.get(1)?;
-            Ok(Tag { id: uuid, name: title })
+            Ok(Tag {
+                id: uuid,
+                name: title,
+            })
         })
         .map_err(|e| ClingsError::Database(e.to_string()))?;
 
@@ -368,6 +416,10 @@ pub fn fetch_tags() -> Result<Vec<Tag>, ClingsError> {
 }
 
 /// Search todos by title or notes.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or queried.
 pub fn search_todos(query: &str) -> Result<Vec<Todo>, ClingsError> {
     let conn = open_connection()?;
 
@@ -384,6 +436,10 @@ pub fn search_todos(query: &str) -> Result<Vec<Todo>, ClingsError> {
 }
 
 /// Fetch all open todos (no filtering by list).
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or queried.
 pub fn fetch_all_todos() -> Result<Vec<Todo>, ClingsError> {
     let conn = open_connection()?;
 
@@ -397,6 +453,10 @@ pub fn fetch_all_todos() -> Result<Vec<Todo>, ClingsError> {
 }
 
 /// Fetch todos for a specific project.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or queried.
 pub fn fetch_project_todos(project_id: &str) -> Result<Vec<Todo>, ClingsError> {
     let conn = open_connection()?;
 
@@ -420,11 +480,10 @@ fn days_since_reference_date(date: NaiveDate) -> i64 {
 }
 
 /// Convert status integer to Status enum.
-fn int_to_status(status_int: i32) -> Status {
+const fn int_to_status(status_int: i32) -> Status {
     match status_int {
-        0 => Status::Open,
-        3 => Status::Completed,
         2 => Status::Canceled,
+        3 => Status::Completed,
         _ => Status::Open,
     }
 }
@@ -436,7 +495,9 @@ fn fetch_tags_for_task(conn: &Connection, task_uuid: &str) -> Result<Vec<String>
                JOIN TMTag AS tag ON tt.tags = tag.uuid \
                WHERE tt.tasks = ?";
 
-    let mut stmt = conn.prepare(sql).map_err(|e| ClingsError::Database(e.to_string()))?;
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| ClingsError::Database(e.to_string()))?;
 
     let tags = stmt
         .query_map(params![task_uuid], |row| row.get(0))
@@ -453,7 +514,9 @@ fn fetch_tags_for_area(conn: &Connection, area_uuid: &str) -> Result<Vec<String>
                JOIN TMTag AS tag ON at.tags = tag.uuid \
                WHERE at.areas = ?";
 
-    let mut stmt = conn.prepare(sql).map_err(|e| ClingsError::Database(e.to_string()))?;
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| ClingsError::Database(e.to_string()))?;
 
     let tags = stmt
         .query_map(params![area_uuid], |row| row.get(0))
@@ -464,10 +527,15 @@ fn fetch_tags_for_area(conn: &Connection, area_uuid: &str) -> Result<Vec<String>
 }
 
 /// Fetch checklist items for a task.
-fn fetch_checklist_items(conn: &Connection, task_uuid: &str) -> Result<Vec<ChecklistItem>, ClingsError> {
+fn fetch_checklist_items(
+    conn: &Connection,
+    task_uuid: &str,
+) -> Result<Vec<ChecklistItem>, ClingsError> {
     let sql = "SELECT title, status FROM TMChecklistItem WHERE task = ? ORDER BY \"index\"";
 
-    let mut stmt = conn.prepare(sql).map_err(|e| ClingsError::Database(e.to_string()))?;
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| ClingsError::Database(e.to_string()))?;
 
     let items = stmt
         .query_map(params![task_uuid], |row| {
@@ -480,12 +548,16 @@ fn fetch_checklist_items(conn: &Connection, task_uuid: &str) -> Result<Vec<Check
         })
         .map_err(|e| ClingsError::Database(e.to_string()))?;
 
-    items.collect::<Result<Vec<_>, _>>()
+    items
+        .collect::<Result<Vec<_>, _>>()
         .map_err(|e| ClingsError::Database(e.to_string()))
 }
 
 /// Look up project name by UUID.
-fn lookup_project_name(conn: &Connection, project_uuid: &str) -> Result<Option<String>, ClingsError> {
+fn lookup_project_name(
+    conn: &Connection,
+    project_uuid: &str,
+) -> Result<Option<String>, ClingsError> {
     let sql = "SELECT title FROM TMTask WHERE uuid = ? AND type = 1";
 
     conn.query_row(sql, params![project_uuid], |row| row.get(0))
@@ -494,6 +566,10 @@ fn lookup_project_name(conn: &Connection, project_uuid: &str) -> Result<Option<S
 }
 
 /// Look up project UUID by name.
+///
+/// # Errors
+///
+/// Returns an error if the database cannot be opened or queried.
 pub fn lookup_project_id_by_name(name: &str) -> Result<Option<String>, ClingsError> {
     let conn = open_connection()?;
     let sql = "SELECT uuid FROM TMTask WHERE title = ? AND type = 1 AND trashed = 0 AND status = 0";
@@ -513,7 +589,18 @@ fn lookup_area_name(conn: &Connection, area_uuid: &str) -> Result<Option<String>
 }
 
 /// Type alias for todo row data.
-type TodoRowTuple = (String, String, Option<String>, i32, Option<f64>, Option<i64>, Option<f64>, Option<f64>, Option<String>, Option<String>);
+type TodoRowTuple = (
+    String,
+    String,
+    Option<String>,
+    i32,
+    Option<f64>,
+    Option<i64>,
+    Option<f64>,
+    Option<f64>,
+    Option<String>,
+    Option<String>,
+);
 
 /// Extract todo data from a row.
 fn row_to_todo_tuple(row: &rusqlite::Row<'_>) -> rusqlite::Result<TodoRowTuple> {
@@ -532,13 +619,27 @@ fn row_to_todo_tuple(row: &rusqlite::Row<'_>) -> rusqlite::Result<TodoRowTuple> 
 }
 
 /// Convert a todo tuple to a Todo struct.
+#[allow(clippy::unnecessary_wraps)]
 fn tuple_to_todo(conn: &Connection, tuple: TodoRowTuple) -> Result<Todo, ClingsError> {
-    let (uuid, title, notes, status_int, stop_date, deadline, creation_date, modification_date, project_uuid, area_uuid) = tuple;
+    let (
+        uuid,
+        title,
+        notes,
+        status_int,
+        stop_date,
+        deadline,
+        creation_date,
+        modification_date,
+        project_uuid,
+        area_uuid,
+    ) = tuple;
 
     let status = int_to_status(status_int);
     let due_date = deadline.and_then(things_date_to_naive_date);
     let creation_dt = creation_date.and_then(things_timestamp_to_datetime);
-    let modification_dt = modification_date.or(stop_date).and_then(things_timestamp_to_datetime);
+    let modification_dt = modification_date
+        .or(stop_date)
+        .and_then(things_timestamp_to_datetime);
 
     // Look up project and area names
     let project_name = project_uuid
@@ -571,10 +672,12 @@ fn fetch_todos_from_sql(
     sql: &str,
     params: &[&dyn rusqlite::ToSql],
 ) -> Result<Vec<Todo>, ClingsError> {
-    let mut stmt = conn.prepare(sql).map_err(|e| ClingsError::Database(e.to_string()))?;
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| ClingsError::Database(e.to_string()))?;
 
     let rows = stmt
-        .query_map(params, |row| row_to_todo_tuple(row))
+        .query_map(params, row_to_todo_tuple)
         .map_err(|e| ClingsError::Database(e.to_string()))?;
 
     let mut result = Vec::new();
@@ -621,7 +724,9 @@ fn fetch_todos_with_filter(
          ORDER BY todayIndex, \"index\""
     );
 
-    let mut stmt = conn.prepare(&sql).map_err(|e| ClingsError::Database(e.to_string()))?;
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| ClingsError::Database(e.to_string()))?;
 
     let todos = stmt
         .query_map(params, |row| {
@@ -634,7 +739,16 @@ fn fetch_todos_with_filter(
             let creation_date: Option<f64> = row.get(6)?;
             let modification_date: Option<f64> = row.get(7)?;
 
-            Ok((uuid, title, notes, status_int, stop_date, deadline, creation_date, modification_date))
+            Ok((
+                uuid,
+                title,
+                notes,
+                status_int,
+                stop_date,
+                deadline,
+                creation_date,
+                modification_date,
+            ))
         })
         .map_err(|e| ClingsError::Database(e.to_string()))?;
 
@@ -643,16 +757,13 @@ fn fetch_todos_with_filter(
         let (uuid, title, notes, status_int, stop_date, deadline, creation_date, modification_date) =
             todo_result.map_err(|e| ClingsError::Database(e.to_string()))?;
 
-        let status = match status_int {
-            0 => Status::Open,
-            3 => Status::Completed,
-            2 => Status::Canceled,
-            _ => Status::Open,
-        };
+        let status = int_to_status(status_int);
 
         let due_date = deadline.and_then(things_date_to_naive_date);
         let creation_dt = creation_date.and_then(things_timestamp_to_datetime);
-        let modification_dt = modification_date.or(stop_date).and_then(things_timestamp_to_datetime);
+        let modification_dt = modification_date
+            .or(stop_date)
+            .and_then(things_timestamp_to_datetime);
 
         result.push(Todo {
             id: uuid,

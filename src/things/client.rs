@@ -3,18 +3,33 @@ use std::process::Command;
 use serde::de::DeserializeOwned;
 
 use crate::error::ClingsError;
-use crate::things::types::{AllListsResult, Area, BatchResult, CreateResponse, ListView, OpenListsResult, Project, Tag, Todo};
 use crate::things::database;
+use crate::things::types::{
+    AllListsResult, Area, BatchResult, CreateResponse, ListView, OpenListsResult, Project, Tag,
+    Todo,
+};
+
+/// Type alias for todo tuples used in project structure creation.
+pub type TodoTuple = (String, Option<String>, Option<String>, Vec<String>);
+
+/// Type alias for heading tuples used in project structure creation.
+pub type HeadingTuple = (String, Vec<TodoTuple>);
 
 #[derive(Clone)]
 pub struct ThingsClient;
 
 impl ThingsClient {
-    pub fn new() -> Self {
-        ThingsClient
+    #[must_use]
+    pub const fn new() -> Self {
+        Self
     }
 
     /// Execute a JXA script and parse the JSON result
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the script execution fails, Things 3 is not running,
+    /// or the JSON parsing fails.
     pub fn execute<T: DeserializeOwned>(&self, script: &str) -> Result<T, ClingsError> {
         let output = Command::new("osascript")
             .arg("-l")
@@ -40,6 +55,10 @@ impl ThingsClient {
     }
 
     /// Execute a JXA script that returns nothing
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the script execution fails or Things 3 is not running.
     pub fn execute_void(&self, script: &str) -> Result<(), ClingsError> {
         let output = Command::new("osascript")
             .arg("-l")
@@ -59,18 +78,19 @@ impl ThingsClient {
     /// Get todos from a specific list view.
     ///
     /// Uses direct database access for best performance, falling back to JXA if needed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if both database and JXA methods fail.
     pub fn get_list(&self, view: ListView) -> Result<Vec<Todo>, ClingsError> {
         // Try database first for better performance
-        match database::fetch_list(view) {
-            Ok(todos) => Ok(todos),
-            Err(_) => self.get_list_jxa(view),
-        }
+        database::fetch_list(view).or_else(|_| self.get_list_jxa(view))
     }
 
     /// Get todos from a specific list view using JXA (fallback).
     fn get_list_jxa(&self, view: ListView) -> Result<Vec<Todo>, ClingsError> {
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
     const list = Things.lists.byName('{}');
     const todos = list.toDos();
@@ -103,7 +123,7 @@ impl ThingsClient {
             modificationDate: t.modificationDate() ? t.modificationDate().toISOString() : null
         }};
     }}));
-}})()"#,
+}})()",
             view.as_str()
         );
 
@@ -113,21 +133,22 @@ impl ThingsClient {
     /// Get a specific todo by ID.
     ///
     /// Uses direct database access for best performance, falling back to JXA if needed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the todo is not found or cannot be accessed.
     pub fn get_todo(&self, id: &str) -> Result<Todo, ClingsError> {
         // Try database first for better performance
-        match database::fetch_todo(id) {
-            Ok(todo) => Ok(todo),
-            Err(_) => self.get_todo_jxa(id),
-        }
+        database::fetch_todo(id).or_else(|_| self.get_todo_jxa(id))
     }
 
     /// Get a specific todo by ID using JXA (fallback).
     fn get_todo_jxa(&self, id: &str) -> Result<Todo, ClingsError> {
         let script = format!(
-            r#"(() => {{
+            r"(() {{
     const Things = Application('Things3');
-    const t = Things.toDos.byId('{}');
-    if (!t.exists()) throw new Error("Can't get todo");
+    const t = Things.toDos.byId('{id}');
+    if (!t.exists()) throw new Error('Can\'t get todo');
 
     let tags = [];
     try {{
@@ -167,8 +188,7 @@ impl ThingsClient {
         creationDate: t.creationDate() ? t.creationDate().toISOString() : null,
         modificationDate: t.modificationDate() ? t.modificationDate().toISOString() : null
     }});
-}})()"#,
-            id
+}})()"
         );
 
         self.execute(&script)
@@ -186,6 +206,10 @@ impl ThingsClient {
     /// * `list` - Optional project/list name to move todo into
     /// * `area` - Optional area name (ignored if list is specified)
     /// * `checklist` - Optional checklist items
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if todo creation fails or Things 3 is not running.
     #[allow(clippy::too_many_arguments)]
     pub fn add_todo(
         &self,
@@ -204,7 +228,7 @@ impl ThingsClient {
 
         // Deadline sets the due date property
         let deadline_js = deadline
-            .map(|d| format!("props.dueDate = new Date('{}');", d))
+            .map(|d| format!("props.dueDate = new Date('{d}');"))
             .unwrap_or_default();
 
         let tags_js = tags
@@ -215,36 +239,35 @@ impl ThingsClient {
         let schedule_js = when_date
             .map(|d| {
                 format!(
-                    r#"
-    Things.schedule(todo, {{ for: new Date('{}') }});"#,
-                    d
+                    r"
+    Things.schedule(todo, {{ for: new Date('{d}') }});"
                 )
             })
             .unwrap_or_default();
 
         let list_js = list
             .map(|l| {
+                let list_name = Self::js_string(l);
                 format!(
-                    r#"
-    const targetList = Things.lists.byName({});
+                    r"
+    const targetList = Things.lists.byName({list_name});
     if (targetList.exists()) {{
         Things.move(todo, {{ to: targetList }});
-    }}"#,
-                    Self::js_string(l)
+    }}"
                 )
             })
             .unwrap_or_default();
 
-        // Area assignment - only if no list/project specified (project takes precedence)
+        // Area assignment - set in props before make() (only if no list/project specified)
         let area_js = if list.is_none() {
             area.map(|a| {
+                let area_name = Self::js_string(a);
                 format!(
-                    r#"
-    const targetArea = Things.areas.byName({});
+                    r"
+    const targetArea = Things.areas.byName({area_name});
     if (targetArea.exists()) {{
-        todo.area = targetArea;
-    }}"#,
-                    Self::js_string(a)
+        props.area = targetArea;
+    }}"
                 )
             })
             .unwrap_or_default()
@@ -255,75 +278,78 @@ impl ThingsClient {
         let checklist_js = checklist
             .map(|items| {
                 let items_str: Vec<String> = items.iter().map(|i| Self::js_string(i)).collect();
+                let items_joined = items_str.join(", ");
                 format!(
-                    r#"
-    const checklistItems = [{}];
+                    r"
+    const checklistItems = [{items_joined}];
     for (const item of checklistItems) {{
         Things.make({{ new: 'toDo', withProperties: {{ name: item }}, at: todo }});
-    }}"#,
-                    items_str.join(", ")
+    }}"
                 )
             })
             .unwrap_or_default();
 
+        let title_str = Self::js_string(title);
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const props = {{ name: {} }};
-    {}
-    {}
-    {}
+    const props = {{ name: {title_str} }};
+    {notes_js}
+    {deadline_js}
+    {tags_js}
+    {area_js}
     const todo = Things.make({{ new: 'toDo', withProperties: props }});
-    {}
-    {}
-    {}
-    {}
+    {schedule_js}
+    {list_js}
+    {checklist_js}
     return JSON.stringify({{ id: todo.id(), name: todo.name() }});
-}})()"#,
-            Self::js_string(title),
-            notes_js,
-            deadline_js,
-            tags_js,
-            schedule_js,
-            list_js,
-            area_js,
-            checklist_js
+}})()"
         );
 
         self.execute(&script)
     }
 
     /// Mark a todo as complete
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the todo is not found or cannot be updated.
     pub fn complete_todo(&self, id: &str) -> Result<(), ClingsError> {
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const todo = Things.toDos.byId('{}');
-    if (!todo.exists()) throw new Error("Can't get todo");
+    const todo = Things.toDos.byId('{id}');
+    if (!todo.exists()) throw new Error('Can\'t get todo');
     todo.status = 'completed';
-}})()"#,
-            id
+}})()"
         );
 
         self.execute_void(&script)
     }
 
     /// Mark a todo as canceled
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the todo is not found or cannot be updated.
     pub fn cancel_todo(&self, id: &str) -> Result<(), ClingsError> {
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const todo = Things.toDos.byId('{}');
-    if (!todo.exists()) throw new Error("Can't get todo");
+    const todo = Things.toDos.byId('{id}');
+    if (!todo.exists()) throw new Error('Can\'t get todo');
     todo.status = 'canceled';
-}})()"#,
-            id
+}})()"
         );
 
         self.execute_void(&script)
     }
 
-    /// Delete a todo (cancel it - Things 3 AppleScript doesn't support true deletion)
+    /// Delete a todo (cancel it - Things 3 `AppleScript` doesn't support true deletion)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the todo is not found or cannot be canceled.
     pub fn delete_todo(&self, id: &str) -> Result<(), ClingsError> {
         // Note: Things 3 AppleScript API doesn't support moving items to trash.
         // This cancels the todo instead. Use the Things app to permanently delete.
@@ -333,16 +359,17 @@ impl ThingsClient {
     /// Get all projects.
     ///
     /// Uses direct database access for best performance, falling back to JXA if needed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if projects cannot be fetched.
     pub fn get_projects(&self) -> Result<Vec<Project>, ClingsError> {
-        match database::fetch_projects() {
-            Ok(projects) => Ok(projects),
-            Err(_) => self.get_projects_jxa(),
-        }
+        database::fetch_projects().or_else(|_| self.get_projects_jxa())
     }
 
     /// Get all projects using JXA (fallback).
     fn get_projects_jxa(&self) -> Result<Vec<Project>, ClingsError> {
-        let script = r#"(() => {
+        let script = r"(() => {
     const Things = Application('Things3');
     const projects = Things.projects();
     return JSON.stringify(projects.map(p => {
@@ -371,12 +398,16 @@ impl ThingsClient {
             creationDate: p.creationDate() ? p.creationDate().toISOString() : null
         };
     }));
-})()"#;
+})()";
 
         self.execute(script)
     }
 
     /// Add a new project
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if project creation fails or Things 3 is not running.
     pub fn add_project(
         &self,
         title: &str,
@@ -390,7 +421,7 @@ impl ThingsClient {
             .unwrap_or_default();
 
         let due_js = due_date
-            .map(|d| format!("props.dueDate = new Date('{}');", d))
+            .map(|d| format!("props.dueDate = new Date('{d}');"))
             .unwrap_or_default();
 
         let tags_js = tags
@@ -399,33 +430,29 @@ impl ThingsClient {
 
         let area_js = area
             .map(|a| {
+                let area_name = Self::js_string(a);
                 format!(
-                    r#"
-    const targetArea = Things.areas.byName({});
+                    r"
+    const targetArea = Things.areas.byName({area_name});
     if (targetArea.exists()) {{
         project.area = targetArea;
-    }}"#,
-                    Self::js_string(a)
+    }}"
                 )
             })
             .unwrap_or_default();
 
+        let title_str = Self::js_string(title);
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const props = {{ name: {} }};
-    {}
-    {}
-    {}
+    const props = {{ name: {title_str} }};
+    {notes_js}
+    {due_js}
+    {tags_js}
     const project = Things.make({{ new: 'project', withProperties: props }});
-    {}
+    {area_js}
     return JSON.stringify({{ id: project.id(), name: project.name() }});
-}})()"#,
-            Self::js_string(title),
-            notes_js,
-            due_js,
-            tags_js,
-            area_js
+}})()"
         );
 
         self.execute(&script)
@@ -434,16 +461,17 @@ impl ThingsClient {
     /// Get all areas.
     ///
     /// Uses direct database access for best performance, falling back to JXA if needed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if areas cannot be fetched.
     pub fn get_areas(&self) -> Result<Vec<Area>, ClingsError> {
-        match database::fetch_areas() {
-            Ok(areas) => Ok(areas),
-            Err(_) => self.get_areas_jxa(),
-        }
+        database::fetch_areas().or_else(|_| self.get_areas_jxa())
     }
 
     /// Get all areas using JXA (fallback).
     fn get_areas_jxa(&self) -> Result<Vec<Area>, ClingsError> {
-        let script = r#"(() => {
+        let script = r"(() => {
     const Things = Application('Things3');
     const areas = Things.areas();
     return JSON.stringify(areas.map(a => {
@@ -461,7 +489,7 @@ impl ThingsClient {
             tags: tags
         };
     }));
-})()"#;
+})()";
 
         self.execute(script)
     }
@@ -469,23 +497,24 @@ impl ThingsClient {
     /// Get all tags.
     ///
     /// Uses direct database access for best performance, falling back to JXA if needed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if tags cannot be fetched.
     pub fn get_tags(&self) -> Result<Vec<Tag>, ClingsError> {
-        match database::fetch_tags() {
-            Ok(tags) => Ok(tags),
-            Err(_) => self.get_tags_jxa(),
-        }
+        database::fetch_tags().or_else(|_| self.get_tags_jxa())
     }
 
     /// Get all tags using JXA (fallback).
     fn get_tags_jxa(&self) -> Result<Vec<Tag>, ClingsError> {
-        let script = r#"(() => {
+        let script = r"(() => {
     const Things = Application('Things3');
     const tags = Things.tags();
     return JSON.stringify(tags.map(t => ({
         id: t.id(),
         name: t.name()
     })));
-})()"#;
+})()";
 
         self.execute(script)
     }
@@ -493,19 +522,21 @@ impl ThingsClient {
     /// Search todos by query.
     ///
     /// Uses direct database access for best performance, falling back to JXA if needed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the search fails.
     pub fn search(&self, query: &str) -> Result<Vec<Todo>, ClingsError> {
-        match database::search_todos(query) {
-            Ok(todos) => Ok(todos),
-            Err(_) => self.search_jxa(query),
-        }
+        database::search_todos(query).or_else(|_| self.search_jxa(query))
     }
 
     /// Search todos by query using JXA (fallback).
     fn search_jxa(&self, query: &str) -> Result<Vec<Todo>, ClingsError> {
+        let query_str = Self::js_string(query);
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const query = {}.toLowerCase();
+    const query = {query_str}.toLowerCase();
     const todos = Things.toDos().filter(t => {{
         const name = t.name().toLowerCase();
         const notes = (t.notes() || '').toLowerCase();
@@ -540,152 +571,240 @@ impl ThingsClient {
             modificationDate: t.modificationDate() ? t.modificationDate().toISOString() : null
         }};
     }}));
-}})()"#,
-            Self::js_string(query)
+}})()"
         );
 
         self.execute(&script)
     }
 
     /// Open Things to a specific view or item
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if Things 3 cannot be opened or the target is not found.
     pub fn open(&self, target: &str) -> Result<(), ClingsError> {
         // Check if target is a list name or an ID
         let script = match target.to_lowercase().as_str() {
             "inbox" | "today" | "upcoming" | "anytime" | "someday" | "logbook" | "trash" => {
+                let cap_target = capitalize(target);
                 format!(
-                    r#"(() => {{
+                    r"(() => {{
     const Things = Application('Things3');
     Things.activate();
-    Things.show(Things.lists.byName('{}'));
-}})()"#,
-                    capitalize(target)
+    Things.show(Things.lists.byName('{cap_target}'));
+}})()"
                 )
-            }
+            },
             _ => {
                 // Assume it's an ID
                 format!(
-                    r#"(() => {{
+                    r"(() => {{
     const Things = Application('Things3');
     Things.activate();
-    const todo = Things.toDos.byId('{}');
+    const todo = Things.toDos.byId('{target}');
     if (todo.exists()) {{
         Things.show(todo);
     }} else {{
-        const project = Things.projects.byId('{}');
+        const project = Things.projects.byId('{target}');
         if (project.exists()) {{
             Things.show(project);
         }} else {{
-            throw new Error("Can't get item");
+            throw new Error('Can\'t get item');
         }}
     }}
-}})()"#,
-                    target, target
+}})()"
                 )
-            }
+            },
         };
 
         self.execute_void(&script)
     }
 
     /// Update tags for a todo (adds to existing tags)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the todo is not found or cannot be updated.
     pub fn update_todo_tags(&self, id: &str, tags: &str) -> Result<(), ClingsError> {
+        let tags_str = Self::js_string(tags);
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const todo = Things.toDos.byId('{}');
-    if (!todo.exists()) throw new Error("Can't get todo");
+    const todo = Things.toDos.byId('{id}');
+    if (!todo.exists()) throw new Error('Can\'t get todo');
     const currentTags = todo.tagNames() || '';
-    const newTags = currentTags ? currentTags + ', ' + {} : {};
+    const newTags = currentTags ? currentTags + ', ' + {tags_str} : {tags_str};
     todo.tagNames = newTags;
-}})()"#,
-            id,
-            Self::js_string(tags),
-            Self::js_string(tags)
+}})()"
         );
 
         self.execute_void(&script)
     }
 
     /// Move a todo to a list/project
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the todo or list is not found.
     pub fn move_todo_to_list(&self, id: &str, list_name: &str) -> Result<(), ClingsError> {
+        let list_str = Self::js_string(list_name);
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const todo = Things.toDos.byId('{}');
-    if (!todo.exists()) throw new Error("Can't get todo");
-    const targetList = Things.lists.byName({});
+    const todo = Things.toDos.byId('{id}');
+    if (!todo.exists()) throw new Error('Can\'t get todo');
+    const targetList = Things.lists.byName({list_str});
     if (!targetList.exists()) {{
-        const targetProject = Things.projects.whose({{ name: {} }})[0];
+        const targetProject = Things.projects.whose({{ name: {list_str} }})[0];
         if (targetProject) {{
             Things.move(todo, {{ to: targetProject }});
         }} else {{
-            throw new Error("Can't find list or project");
+            throw new Error('Can\'t find list or project');
         }}
     }} else {{
         Things.move(todo, {{ to: targetList }});
     }}
-}})()"#,
-            id,
-            Self::js_string(list_name),
-            Self::js_string(list_name)
+}})()"
         );
 
         self.execute_void(&script)
     }
 
     /// Update the due date for a todo
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the todo is not found or cannot be updated.
     pub fn update_todo_due(&self, id: &str, due_date: &str) -> Result<(), ClingsError> {
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const todo = Things.toDos.byId('{}');
-    if (!todo.exists()) throw new Error("Can't get todo");
-    todo.dueDate = new Date('{}');
-}})()"#,
-            id, due_date
+    const todo = Things.toDos.byId('{id}');
+    if (!todo.exists()) throw new Error('Can\'t get todo');
+    todo.dueDate = new Date('{due_date}');
+}})()"
         );
 
         self.execute_void(&script)
     }
 
     /// Clear the due date for a todo
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the todo is not found or cannot be updated.
     pub fn clear_todo_due(&self, id: &str) -> Result<(), ClingsError> {
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const todo = Things.toDos.byId('{}');
-    if (!todo.exists()) throw new Error("Can't get todo");
+    const todo = Things.toDos.byId('{id}');
+    if (!todo.exists()) throw new Error('Can\'t get todo');
     todo.dueDate = null;
-}})()"#,
-            id
+}})()"
         );
 
         self.execute_void(&script)
     }
 
     /// Move a todo to the Someday list
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the todo is not found or cannot be moved.
     pub fn move_to_someday(&self, id: &str) -> Result<(), ClingsError> {
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const todo = Things.toDos.byId('{}');
-    if (!todo.exists()) throw new Error("Can't get todo");
+    const todo = Things.toDos.byId('{id}');
+    if (!todo.exists()) throw new Error('Can\'t get todo');
     const somedayList = Things.lists.byName('Someday');
     Things.move(todo, {{ to: somedayList }});
-}})()"#,
-            id
+}})()"
+        );
+
+        self.execute_void(&script)
+    }
+
+    /// Update a todo's properties
+    ///
+    /// Only specified fields are updated; None values are skipped.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the todo is not found or cannot be updated.
+    #[allow(clippy::too_many_arguments)]
+    pub fn update_todo(
+        &self,
+        id: &str,
+        title: Option<&str>,
+        notes: Option<&str>,
+        when_date: Option<&str>,
+        deadline: Option<&str>,
+        tags: Option<&str>,
+        project: Option<&str>,
+    ) -> Result<(), ClingsError> {
+        let title_js = title
+            .map(|t| format!("todo.name = {};", Self::js_string(t)))
+            .unwrap_or_default();
+
+        let notes_js = notes
+            .map(|n| format!("todo.notes = {};", Self::js_string(n)))
+            .unwrap_or_default();
+
+        let deadline_js = deadline
+            .map(|d| format!("todo.dueDate = new Date('{d}');"))
+            .unwrap_or_default();
+
+        let tags_js = tags
+            .map(|t| format!("todo.tagNames = {};", Self::js_string(t)))
+            .unwrap_or_default();
+
+        let schedule_js = when_date
+            .map(|d| format!("Things.schedule(todo, {{ for: new Date('{d}') }});"))
+            .unwrap_or_default();
+
+        let project_js = project
+            .map(|p| {
+                let proj_name = Self::js_string(p);
+                format!(
+                    r"
+    const targetList = Things.lists.byName({proj_name});
+    if (targetList.exists()) {{
+        Things.move(todo, {{ to: targetList }});
+    }}"
+                )
+            })
+            .unwrap_or_default();
+
+        let script = format!(
+            r"(() => {{
+    const Things = Application('Things3');
+    const todo = Things.toDos.byId('{id}');
+    if (!todo.exists()) throw new Error('Can\'t get todo');
+    {title_js}
+    {notes_js}
+    {deadline_js}
+    {tags_js}
+    {schedule_js}
+    {project_js}
+}})()"
         );
 
         self.execute_void(&script)
     }
 
     /// Get a project by name.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the project is not found.
     pub fn get_project_by_name(&self, name: &str) -> Result<Project, ClingsError> {
+        let name_str = Self::js_string(name);
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const projects = Things.projects.whose({{ name: {} }});
-    if (projects.length === 0) throw new Error("Can't find project");
+    const projects = Things.projects.whose({{ name: {name_str} }});
+    if (projects.length === 0) throw new Error('Can\'t find project');
     const p = projects[0];
 
     let tags = [];
@@ -712,8 +831,7 @@ impl ThingsClient {
         dueDate: dueDate,
         creationDate: p.creationDate() ? p.creationDate().toISOString() : null
     }});
-}})()"#,
-            Self::js_string(name)
+}})()"
         );
 
         self.execute(&script)
@@ -722,6 +840,10 @@ impl ThingsClient {
     /// Get todos for a specific project by name.
     ///
     /// Uses direct database access for best performance, falling back to JXA if needed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the project is not found or todos cannot be fetched.
     pub fn get_project_todos(&self, project_name: &str) -> Result<Vec<Todo>, ClingsError> {
         // Try to look up project ID and use database
         if let Ok(Some(project_id)) = database::lookup_project_id_by_name(project_name) {
@@ -735,11 +857,12 @@ impl ThingsClient {
 
     /// Get todos for a specific project using JXA (fallback).
     fn get_project_todos_jxa(&self, project_name: &str) -> Result<Vec<Todo>, ClingsError> {
+        let proj_name = Self::js_string(project_name);
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const projects = Things.projects.whose({{ name: {} }});
-    if (projects.length === 0) throw new Error("Can't find project");
+    const projects = Things.projects.whose({{ name: {proj_name} }});
+    if (projects.length === 0) throw new Error('Can\'t find project');
     const project = projects[0];
     const todos = project.toDos();
 
@@ -784,8 +907,7 @@ impl ThingsClient {
             modificationDate: t.modificationDate() ? t.modificationDate().toISOString() : null
         }};
     }}));
-}})()"#,
-            Self::js_string(project_name)
+}})()"
         );
 
         self.execute(&script)
@@ -793,16 +915,27 @@ impl ThingsClient {
 
     /// Get headings from a project.
     ///
-    /// Returns a list of (heading_name, [todo_names]) tuples.
+    /// Returns a list of `(heading_name, [todo_names])` tuples.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the project is not found or headings cannot be fetched.
     pub fn get_project_headings(
         &self,
         project_name: &str,
     ) -> Result<Vec<(String, Vec<String>)>, ClingsError> {
+        #[derive(serde::Deserialize)]
+        struct HeadingData {
+            name: String,
+            todos: Vec<String>,
+        }
+
+        let proj_name = Self::js_string(project_name);
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const projects = Things.projects.whose({{ name: {} }});
-    if (projects.length === 0) throw new Error("Can't find project");
+    const projects = Things.projects.whose({{ name: {proj_name} }});
+    if (projects.length === 0) throw new Error('Can\'t find project');
     const project = projects[0];
 
     // Get all headings
@@ -819,15 +952,8 @@ impl ThingsClient {
     }} catch(e) {{}}
 
     return JSON.stringify(headings);
-}})()"#,
-            Self::js_string(project_name)
+}})()"
         );
-
-        #[derive(serde::Deserialize)]
-        struct HeadingData {
-            name: String,
-            todos: Vec<String>,
-        }
 
         let headings: Vec<HeadingData> = self.execute(&script)?;
         Ok(headings.into_iter().map(|h| (h.name, h.todos)).collect())
@@ -836,14 +962,18 @@ impl ThingsClient {
     /// Create a project with headings and todos.
     ///
     /// This creates the project, then adds headings and todos to it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if project creation or structure addition fails.
     pub fn create_project_with_structure(
         &self,
         name: &str,
         notes: Option<&str>,
         area: Option<&str>,
         tags: Option<&[String]>,
-        headings: &[(String, Vec<(String, Option<String>, Option<&str>, Vec<String>)>)],
-        root_todos: &[(String, Option<String>, Option<&str>, Vec<String>)],
+        headings: &[HeadingTuple],
+        root_todos: &[TodoTuple],
     ) -> Result<CreateResponse, ClingsError> {
         // First create the project
         let response = self.add_project(name, notes, area, tags, None)?;
@@ -880,16 +1010,19 @@ impl ThingsClient {
     }
 
     /// Add a heading to a project.
-    fn add_heading_to_project(&self, project_id: &str, heading_name: &str) -> Result<(), ClingsError> {
+    fn add_heading_to_project(
+        &self,
+        project_id: &str,
+        heading_name: &str,
+    ) -> Result<(), ClingsError> {
+        let heading_str = Self::js_string(heading_name);
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const project = Things.projects.byId('{}');
-    if (!project.exists()) throw new Error("Can't find project");
-    Things.make({{ new: 'heading', withProperties: {{ name: {} }}, at: project }});
-}})()"#,
-            project_id,
-            Self::js_string(heading_name)
+    const project = Things.projects.byId('{project_id}');
+    if (!project.exists()) throw new Error('Can\'t find project');
+    Things.make({{ new: 'heading', withProperties: {{ name: {heading_str} }}, at: project }});
+}})()"
         );
 
         self.execute_void(&script)
@@ -909,29 +1042,25 @@ impl ThingsClient {
             .unwrap_or_default();
 
         let due_js = due_date
-            .map(|d| format!("props.dueDate = new Date('{}');", d))
+            .map(|d| format!("props.dueDate = new Date('{d}');"))
             .unwrap_or_default();
 
         let tags_js = tags
             .map(|t| format!("props.tagNames = {};", Self::js_string(&t.join(", "))))
             .unwrap_or_default();
 
+        let title_str = Self::js_string(title);
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const project = Things.projects.byId('{}');
-    if (!project.exists()) throw new Error("Can't find project");
-    const props = {{ name: {} }};
-    {}
-    {}
-    {}
+    const project = Things.projects.byId('{project_id}');
+    if (!project.exists()) throw new Error('Can\'t find project');
+    const props = {{ name: {title_str} }};
+    {notes_js}
+    {due_js}
+    {tags_js}
     Things.make({{ new: 'toDo', withProperties: props, at: project }});
-}})()"#,
-            project_id,
-            Self::js_string(title),
-            notes_js,
-            due_js,
-            tags_js
+}})()"
         );
 
         self.execute_void(&script)
@@ -952,36 +1081,32 @@ impl ThingsClient {
             .unwrap_or_default();
 
         let due_js = due_date
-            .map(|d| format!("props.dueDate = new Date('{}');", d))
+            .map(|d| format!("props.dueDate = new Date('{d}');"))
             .unwrap_or_default();
 
         let tags_js = tags
             .map(|t| format!("props.tagNames = {};", Self::js_string(&t.join(", "))))
             .unwrap_or_default();
 
+        let heading_str = Self::js_string(heading_name);
+        let title_str = Self::js_string(title);
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const project = Things.projects.byId('{}');
-    if (!project.exists()) throw new Error("Can't find project");
+    const project = Things.projects.byId('{project_id}');
+    if (!project.exists()) throw new Error('Can\'t find project');
 
     // Find the heading
-    const headings = project.headings.whose({{ name: {} }});
-    if (headings.length === 0) throw new Error("Can't find heading");
+    const headings = project.headings.whose({{ name: {heading_str} }});
+    if (headings.length === 0) throw new Error('Can\'t find heading');
     const heading = headings[0];
 
-    const props = {{ name: {} }};
-    {}
-    {}
-    {}
+    const props = {{ name: {title_str} }};
+    {notes_js}
+    {due_js}
+    {tags_js}
     Things.make({{ new: 'toDo', withProperties: props, at: heading }});
-}})()"#,
-            project_id,
-            Self::js_string(heading_name),
-            Self::js_string(title),
-            notes_js,
-            due_js,
-            tags_js
+}})()"
         );
 
         self.execute_void(&script)
@@ -990,16 +1115,17 @@ impl ThingsClient {
     /// Get all open todos.
     ///
     /// Uses direct database access for best performance, falling back to JXA if needed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if todos cannot be fetched.
     pub fn get_all_todos(&self) -> Result<Vec<Todo>, ClingsError> {
-        match database::fetch_all_todos() {
-            Ok(todos) => Ok(todos),
-            Err(_) => self.get_all_todos_jxa(),
-        }
+        database::fetch_all_todos().or_else(|_| self.get_all_todos_jxa())
     }
 
     /// Get all todos using JXA (fallback).
     fn get_all_todos_jxa(&self) -> Result<Vec<Todo>, ClingsError> {
-        let script = r#"(() => {
+        let script = r"(() => {
     const Things = Application('Things3');
     const todos = Things.toDos();
     return JSON.stringify(todos.map(t => {
@@ -1031,7 +1157,7 @@ impl ThingsClient {
             modificationDate: t.modificationDate() ? t.modificationDate().toISOString() : null
         };
     }));
-})()"#;
+})()";
 
         self.execute(script)
     }
@@ -1043,6 +1169,10 @@ impl ThingsClient {
     /// Mark multiple todos as complete in a single JXA call.
     ///
     /// Returns the number of todos successfully completed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the JXA script execution fails.
     pub fn complete_todos_batch(&self, ids: &[String]) -> Result<BatchResult, ClingsError> {
         if ids.is_empty() {
             return Ok(BatchResult::default());
@@ -1050,9 +1180,9 @@ impl ThingsClient {
 
         let ids_array = Self::js_string_array(ids);
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const ids = {};
+    const ids = {ids_array};
     let succeeded = 0;
     let failed = 0;
     const errors = [];
@@ -1074,8 +1204,7 @@ impl ThingsClient {
     }}
 
     return JSON.stringify({{ succeeded, failed, errors }});
-}})()"#,
-            ids_array
+}})()"
         );
 
         self.execute(&script)
@@ -1084,6 +1213,10 @@ impl ThingsClient {
     /// Mark multiple todos as canceled in a single JXA call.
     ///
     /// Returns the number of todos successfully canceled.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the JXA script execution fails.
     pub fn cancel_todos_batch(&self, ids: &[String]) -> Result<BatchResult, ClingsError> {
         if ids.is_empty() {
             return Ok(BatchResult::default());
@@ -1091,9 +1224,9 @@ impl ThingsClient {
 
         let ids_array = Self::js_string_array(ids);
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const ids = {};
+    const ids = {ids_array};
     let succeeded = 0;
     let failed = 0;
     const errors = [];
@@ -1115,8 +1248,7 @@ impl ThingsClient {
     }}
 
     return JSON.stringify({{ succeeded, failed, errors }});
-}})()"#,
-            ids_array
+}})()"
         );
 
         self.execute(&script)
@@ -1125,7 +1257,15 @@ impl ThingsClient {
     /// Add tags to multiple todos in a single JXA call.
     ///
     /// The tags are appended to any existing tags on each todo.
-    pub fn add_tags_batch(&self, ids: &[String], tags: &[String]) -> Result<BatchResult, ClingsError> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the JXA script execution fails.
+    pub fn add_tags_batch(
+        &self,
+        ids: &[String],
+        tags: &[String],
+    ) -> Result<BatchResult, ClingsError> {
         if ids.is_empty() {
             return Ok(BatchResult::default());
         }
@@ -1133,10 +1273,10 @@ impl ThingsClient {
         let ids_array = Self::js_string_array(ids);
         let tags_str = Self::js_string(&tags.join(", "));
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const ids = {};
-    const newTags = {};
+    const ids = {ids_array};
+    const newTags = {tags_str};
     let succeeded = 0;
     let failed = 0;
     const errors = [];
@@ -1159,30 +1299,38 @@ impl ThingsClient {
     }}
 
     return JSON.stringify({{ succeeded, failed, errors }});
-}})()"#,
-            ids_array, tags_str
+}})()"
         );
 
         self.execute(&script)
     }
 
     /// Move multiple todos to a project in a single JXA call.
-    pub fn move_todos_batch(&self, ids: &[String], project_name: &str) -> Result<BatchResult, ClingsError> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the project is not found or the JXA script execution fails.
+    pub fn move_todos_batch(
+        &self,
+        ids: &[String],
+        project_name: &str,
+    ) -> Result<BatchResult, ClingsError> {
         if ids.is_empty() {
             return Ok(BatchResult::default());
         }
 
         let ids_array = Self::js_string_array(ids);
+        let proj_str = Self::js_string(project_name);
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const ids = {};
+    const ids = {ids_array};
     let succeeded = 0;
     let failed = 0;
     const errors = [];
 
     // Find target project
-    const projects = Things.projects.whose({{ name: {} }});
+    const projects = Things.projects.whose({{ name: {proj_str} }});
     if (projects.length === 0) {{
         return JSON.stringify({{ succeeded: 0, failed: ids.length, errors: [{{ id: 'all', error: 'Project not found' }}] }});
     }}
@@ -1205,26 +1353,32 @@ impl ThingsClient {
     }}
 
     return JSON.stringify({{ succeeded, failed, errors }});
-}})()"#,
-            ids_array,
-            Self::js_string(project_name)
+}})()"
         );
 
         self.execute(&script)
     }
 
     /// Set due date for multiple todos in a single JXA call.
-    pub fn update_todos_due_batch(&self, ids: &[String], due_date: &str) -> Result<BatchResult, ClingsError> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the JXA script execution fails.
+    pub fn update_todos_due_batch(
+        &self,
+        ids: &[String],
+        due_date: &str,
+    ) -> Result<BatchResult, ClingsError> {
         if ids.is_empty() {
             return Ok(BatchResult::default());
         }
 
         let ids_array = Self::js_string_array(ids);
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const ids = {};
-    const dueDate = new Date('{}');
+    const ids = {ids_array};
+    const dueDate = new Date('{due_date}');
     let succeeded = 0;
     let failed = 0;
     const errors = [];
@@ -1246,14 +1400,17 @@ impl ThingsClient {
     }}
 
     return JSON.stringify({{ succeeded, failed, errors }});
-}})()"#,
-            ids_array, due_date
+}})()"
         );
 
         self.execute(&script)
     }
 
     /// Clear due date for multiple todos in a single JXA call.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the JXA script execution fails.
     pub fn clear_todos_due_batch(&self, ids: &[String]) -> Result<BatchResult, ClingsError> {
         if ids.is_empty() {
             return Ok(BatchResult::default());
@@ -1261,9 +1418,9 @@ impl ThingsClient {
 
         let ids_array = Self::js_string_array(ids);
         let script = format!(
-            r#"(() => {{
+            r"(() => {{
     const Things = Application('Things3');
-    const ids = {};
+    const ids = {ids_array};
     let succeeded = 0;
     let failed = 0;
     const errors = [];
@@ -1285,8 +1442,7 @@ impl ThingsClient {
     }}
 
     return JSON.stringify({{ succeeded, failed, errors }});
-}})()"#,
-            ids_array
+}})()"
         );
 
         self.execute(&script)
@@ -1299,8 +1455,12 @@ impl ThingsClient {
     ///
     /// The Logbook is limited to the 500 most recent completions for
     /// performance, as full Logbook history can contain thousands of items.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if lists cannot be fetched or the JXA script execution fails.
     pub fn get_all_lists(&self) -> Result<AllListsResult, ClingsError> {
-        let script = r#"(() => {
+        let script = r"(() => {
     const Things = Application('Things3');
 
     function mapTodo(t) {
@@ -1366,7 +1526,7 @@ impl ThingsClient {
     } catch(e) {}
 
     return JSON.stringify(result);
-})()"#;
+})()";
 
         self.execute(script)
     }
@@ -1376,8 +1536,12 @@ impl ThingsClient {
     /// This excludes the Logbook for better performance. Use `get_all_lists()`
     /// when you need completed todos, or access the database directly for
     /// large Logbooks.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if lists cannot be fetched or the JXA script execution fails.
     pub fn get_open_lists(&self) -> Result<OpenListsResult, ClingsError> {
-        let script = r#"(() => {
+        let script = r"(() => {
     const Things = Application('Things3');
 
     function mapTodo(t) {
@@ -1428,7 +1592,7 @@ impl ThingsClient {
     }
 
     return JSON.stringify(result);
-})()"#;
+})()";
 
         self.execute(script)
     }
@@ -1445,13 +1609,14 @@ impl ThingsClient {
             .replace('\n', "\\n")
             .replace('\r', "\\r")
             .replace('\t', "\\t");
-        format!("'{}'", escaped)
+        format!("'{escaped}'")
     }
 
     /// Convert a slice of strings to a JavaScript array literal
     fn js_string_array(items: &[String]) -> String {
         let escaped: Vec<String> = items.iter().map(|s| Self::js_string(s)).collect();
-        format!("[{}]", escaped.join(", "))
+        let joined = escaped.join(", ");
+        format!("[{joined}]")
     }
 }
 
@@ -1463,10 +1628,8 @@ impl Default for ThingsClient {
 
 fn capitalize(s: &str) -> String {
     let mut c = s.chars();
-    match c.next() {
-        None => String::new(),
-        Some(f) => f.to_uppercase().chain(c).collect(),
-    }
+    c.next()
+        .map_or_else(String::new, |f| f.to_uppercase().chain(c).collect())
 }
 
 #[cfg(test)]
@@ -1542,13 +1705,19 @@ mod tests {
     #[test]
     fn test_js_string_array_multiple() {
         let items = vec!["one".to_string(), "two".to_string(), "three".to_string()];
-        assert_eq!(ThingsClient::js_string_array(&items), "['one', 'two', 'three']");
+        assert_eq!(
+            ThingsClient::js_string_array(&items),
+            "['one', 'two', 'three']"
+        );
     }
 
     #[test]
     fn test_js_string_array_with_escapes() {
         let items = vec!["it's".to_string(), "a\ntest".to_string()];
-        assert_eq!(ThingsClient::js_string_array(&items), "['it\\'s', 'a\\ntest']");
+        assert_eq!(
+            ThingsClient::js_string_array(&items),
+            "['it\\'s', 'a\\ntest']"
+        );
     }
 
     // ==================== capitalize Tests ====================
@@ -1679,11 +1848,16 @@ mod tests {
             .unwrap_or_default();
 
         let deadline_js = deadline
-            .map(|d| format!("props.dueDate = new Date('{}');", d))
+            .map(|d| format!("props.dueDate = new Date('{d}');"))
             .unwrap_or_default();
 
         let tags_js = tags
-            .map(|t| format!("props.tagNames = {};", ThingsClient::js_string(&t.join(", "))))
+            .map(|t| {
+                format!(
+                    "props.tagNames = {};",
+                    ThingsClient::js_string(&t.join(", "))
+                )
+            })
             .unwrap_or_default();
 
         let schedule_js = when_date
@@ -1715,7 +1889,7 @@ mod tests {
                     r#"
     const targetArea = Things.areas.byName({});
     if (targetArea.exists()) {{
-        todo.area = targetArea;
+        props.area = targetArea;
     }}"#,
                     ThingsClient::js_string(a)
                 )
@@ -1727,7 +1901,8 @@ mod tests {
 
         let checklist_js = checklist
             .map(|items| {
-                let items_str: Vec<String> = items.iter().map(|i| ThingsClient::js_string(i)).collect();
+                let items_str: Vec<String> =
+                    items.iter().map(|i| ThingsClient::js_string(i)).collect();
                 format!(
                     r#"
     const checklistItems = [{}];
@@ -1746,8 +1921,8 @@ mod tests {
     {}
     {}
     {}
-    const todo = Things.make({{ new: 'toDo', withProperties: props }});
     {}
+    const todo = Things.make({{ new: 'toDo', withProperties: props }});
     {}
     {}
     {}
@@ -1757,30 +1932,24 @@ mod tests {
             notes_js,
             deadline_js,
             tags_js,
+            area_js,
             schedule_js,
             list_js,
-            area_js,
             checklist_js
         )
     }
 
     #[test]
     fn test_add_todo_script_basic() {
-        let script = generate_add_todo_script(
-            "Buy milk",
-            None, None, None, None, None, None, None,
-        );
+        let script = generate_add_todo_script("Buy milk", None, None, None, None, None, None, None);
         assert!(script.contains("const props = { name: 'Buy milk' }"));
         assert!(script.contains("Things.make({ new: 'toDo', withProperties: props })"));
     }
 
     #[test]
     fn test_add_todo_script_with_notes() {
-        let script = generate_add_todo_script(
-            "Task",
-            Some("My notes"),
-            None, None, None, None, None, None,
-        );
+        let script =
+            generate_add_todo_script("Task", Some("My notes"), None, None, None, None, None, None);
         assert!(script.contains("props.notes = 'My notes'"));
     }
 
@@ -1790,7 +1959,11 @@ mod tests {
             "Task",
             None,
             Some("2024-12-15"),
-            None, None, None, None, None,
+            None,
+            None,
+            None,
+            None,
+            None,
         );
         // Should use schedule command for "when" date
         assert!(script.contains("Things.schedule(todo, { for: new Date('2024-12-15') })"));
@@ -1805,7 +1978,10 @@ mod tests {
             None,
             None,
             Some("2024-12-20"),
-            None, None, None, None,
+            None,
+            None,
+            None,
+            None,
         );
         // Should set dueDate for deadline
         assert!(script.contains("props.dueDate = new Date('2024-12-20')"));
@@ -1818,9 +1994,12 @@ mod tests {
         let script = generate_add_todo_script(
             "Task",
             None,
-            Some("2024-12-15"),  // when
-            Some("2024-12-20"),  // deadline
-            None, None, None, None,
+            Some("2024-12-15"), // when
+            Some("2024-12-20"), // deadline
+            None,
+            None,
+            None,
+            None,
         );
         // Should have both: schedule for when, dueDate for deadline
         assert!(script.contains("Things.schedule(todo, { for: new Date('2024-12-15') })"));
@@ -1830,12 +2009,8 @@ mod tests {
     #[test]
     fn test_add_todo_script_with_tags() {
         let tags = vec!["work".to_string(), "urgent".to_string()];
-        let script = generate_add_todo_script(
-            "Task",
-            None, None, None,
-            Some(&tags),
-            None, None, None,
-        );
+        let script =
+            generate_add_todo_script("Task", None, None, None, Some(&tags), None, None, None);
         assert!(script.contains("props.tagNames = 'work, urgent'"));
     }
 
@@ -1843,9 +2018,13 @@ mod tests {
     fn test_add_todo_script_with_project() {
         let script = generate_add_todo_script(
             "Task",
-            None, None, None, None,
+            None,
+            None,
+            None,
+            None,
             Some("My Project"),
-            None, None,
+            None,
+            None,
         );
         assert!(script.contains("Things.lists.byName('My Project')"));
         assert!(script.contains("Things.move(todo, { to: targetList })"));
@@ -1853,43 +2032,39 @@ mod tests {
 
     #[test]
     fn test_add_todo_script_with_area() {
-        let script = generate_add_todo_script(
-            "Task",
-            None, None, None, None,
-            None,
-            Some("Work"),
-            None,
-        );
+        let script =
+            generate_add_todo_script("Task", None, None, None, None, None, Some("Work"), None);
         assert!(script.contains("Things.areas.byName('Work')"));
-        assert!(script.contains("todo.area = targetArea"));
+        assert!(script.contains("props.area = targetArea"));
     }
 
     #[test]
     fn test_add_todo_script_area_ignored_when_project_specified() {
         let script = generate_add_todo_script(
             "Task",
-            None, None, None, None,
-            Some("My Project"),  // project takes precedence
-            Some("Work"),        // area should be ignored
+            None,
+            None,
+            None,
+            None,
+            Some("My Project"), // project takes precedence
+            Some("Work"),       // area should be ignored
             None,
         );
         // Project should be set
         assert!(script.contains("Things.lists.byName('My Project')"));
         // Area should NOT be set when project is specified
         assert!(!script.contains("Things.areas.byName"));
-        assert!(!script.contains("todo.area"));
+        assert!(!script.contains("props.area"));
     }
 
     #[test]
     fn test_add_todo_script_with_checklist() {
         let checklist = vec!["Item 1".to_string(), "Item 2".to_string()];
-        let script = generate_add_todo_script(
-            "Task",
-            None, None, None, None, None, None,
-            Some(&checklist),
-        );
+        let script =
+            generate_add_todo_script("Task", None, None, None, None, None, None, Some(&checklist));
         assert!(script.contains("const checklistItems = ['Item 1', 'Item 2']"));
-        assert!(script.contains("Things.make({ new: 'toDo', withProperties: { name: item }, at: todo })"));
+        assert!(script
+            .contains("Things.make({ new: 'toDo', withProperties: { name: item }, at: todo })"));
     }
 
     #[test]
@@ -1903,7 +2078,7 @@ mod tests {
             Some("2024-12-20"),
             Some(&tags),
             Some("Project X"),
-            Some("Work"),  // Will be ignored due to project
+            Some("Work"), // Will be ignored due to project
             Some(&checklist),
         );
 
@@ -1923,10 +2098,206 @@ mod tests {
         let script = generate_add_todo_script(
             "Task with 'quotes' and\nnewline",
             Some("Notes with\ttabs"),
-            None, None, None, None, None, None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
         );
         assert!(script.contains("'Task with \\'quotes\\' and\\nnewline'"));
         assert!(script.contains("'Notes with\\ttabs'"));
+    }
+
+    // ==================== Update Todo Tests ====================
+
+    /// Helper to generate the JXA script that update_todo would create
+    /// This allows us to test the script generation without executing it
+    fn generate_update_todo_script(
+        id: &str,
+        title: Option<&str>,
+        notes: Option<&str>,
+        when_date: Option<&str>,
+        deadline: Option<&str>,
+        tags: Option<&str>,
+        project: Option<&str>,
+    ) -> String {
+        let title_js = title
+            .map(|t| format!("todo.name = {};", ThingsClient::js_string(t)))
+            .unwrap_or_default();
+
+        let notes_js = notes
+            .map(|n| format!("todo.notes = {};", ThingsClient::js_string(n)))
+            .unwrap_or_default();
+
+        let deadline_js = deadline
+            .map(|d| format!("todo.dueDate = new Date('{d}');"))
+            .unwrap_or_default();
+
+        let tags_js = tags
+            .map(|t| format!("todo.tagNames = {};", ThingsClient::js_string(t)))
+            .unwrap_or_default();
+
+        let schedule_js = when_date
+            .map(|d| format!("Things.schedule(todo, {{ for: new Date('{d}') }});"))
+            .unwrap_or_default();
+
+        let project_js = project
+            .map(|p| {
+                format!(
+                    r#"
+    const targetList = Things.lists.byName({});
+    if (targetList.exists()) {{
+        Things.move(todo, {{ to: targetList }});
+    }}"#,
+                    ThingsClient::js_string(p)
+                )
+            })
+            .unwrap_or_default();
+
+        format!(
+            r#"(() => {{
+    const Things = Application('Things3');
+    const todo = Things.toDos.byId('{}');
+    if (!todo.exists()) throw new Error("Can't get todo");
+    {}
+    {}
+    {}
+    {}
+    {}
+    {}
+}})()"#,
+            id, title_js, notes_js, deadline_js, tags_js, schedule_js, project_js
+        )
+    }
+
+    #[test]
+    fn test_update_todo_script_with_title_only() {
+        let script =
+            generate_update_todo_script("ABC123", Some("New Title"), None, None, None, None, None);
+        assert!(script.contains("Things.toDos.byId('ABC123')"));
+        assert!(script.contains("todo.name = 'New Title'"));
+        assert!(!script.contains("todo.notes"));
+        assert!(!script.contains("todo.dueDate"));
+        assert!(!script.contains("todo.tagNames"));
+        assert!(!script.contains("Things.schedule"));
+        assert!(!script.contains("Things.move"));
+    }
+
+    #[test]
+    fn test_update_todo_script_with_notes_only() {
+        let script = generate_update_todo_script(
+            "ABC123",
+            None,
+            Some("Important notes here"),
+            None,
+            None,
+            None,
+            None,
+        );
+        assert!(script.contains("todo.notes = 'Important notes here'"));
+        assert!(!script.contains("todo.name ="));
+    }
+
+    #[test]
+    fn test_update_todo_script_with_deadline_only() {
+        let script =
+            generate_update_todo_script("ABC123", None, None, None, Some("2024-12-20"), None, None);
+        assert!(script.contains("todo.dueDate = new Date('2024-12-20')"));
+    }
+
+    #[test]
+    fn test_update_todo_script_with_tags_only() {
+        let script = generate_update_todo_script(
+            "ABC123",
+            None,
+            None,
+            None,
+            None,
+            Some("work, urgent"),
+            None,
+        );
+        assert!(script.contains("todo.tagNames = 'work, urgent'"));
+    }
+
+    #[test]
+    fn test_update_todo_script_with_when_only() {
+        let script =
+            generate_update_todo_script("ABC123", None, None, Some("2024-12-15"), None, None, None);
+        assert!(script.contains("Things.schedule(todo, { for: new Date('2024-12-15') })"));
+    }
+
+    #[test]
+    fn test_update_todo_script_with_project_only() {
+        let script =
+            generate_update_todo_script("ABC123", None, None, None, None, None, Some("Project X"));
+        assert!(script.contains("Things.lists.byName('Project X')"));
+        assert!(script.contains("Things.move(todo, { to: targetList })"));
+    }
+
+    #[test]
+    fn test_update_todo_script_with_all_fields() {
+        let script = generate_update_todo_script(
+            "ABC123",
+            Some("New Title"),
+            Some("New notes"),
+            Some("2024-12-15"),
+            Some("2024-12-20"),
+            Some("work, urgent"),
+            Some("Project X"),
+        );
+        assert!(script.contains("Things.toDos.byId('ABC123')"));
+        assert!(script.contains("todo.name = 'New Title'"));
+        assert!(script.contains("todo.notes = 'New notes'"));
+        assert!(script.contains("todo.dueDate = new Date('2024-12-20')"));
+        assert!(script.contains("todo.tagNames = 'work, urgent'"));
+        assert!(script.contains("Things.schedule(todo, { for: new Date('2024-12-15') })"));
+        assert!(script.contains("Things.lists.byName('Project X')"));
+        assert!(script.contains("Things.move(todo, { to: targetList })"));
+    }
+
+    #[test]
+    fn test_update_todo_script_with_no_fields() {
+        let script = generate_update_todo_script("ABC123", None, None, None, None, None, None);
+        // Should still have the basic structure
+        assert!(script.contains("Things.toDos.byId('ABC123')"));
+        assert!(script.contains("if (!todo.exists()) throw new Error"));
+        // But no property assignments
+        assert!(!script.contains("todo.name ="));
+        assert!(!script.contains("todo.notes ="));
+        assert!(!script.contains("todo.dueDate ="));
+        assert!(!script.contains("todo.tagNames ="));
+        assert!(!script.contains("Things.schedule"));
+        assert!(!script.contains("Things.move"));
+    }
+
+    #[test]
+    fn test_update_todo_script_escapes_special_characters() {
+        let script = generate_update_todo_script(
+            "ABC123",
+            Some("Title with 'quotes'"),
+            Some("Notes with\nnewline"),
+            None,
+            None,
+            None,
+            None,
+        );
+        assert!(script.contains("'Title with \\'quotes\\''"));
+        assert!(script.contains("'Notes with\\nnewline'"));
+    }
+
+    #[test]
+    fn test_update_todo_script_handles_emoji_in_project() {
+        let script = generate_update_todo_script(
+            "ABC123",
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some("🖥️ Under Armour"),
+        );
+        assert!(script.contains("Things.lists.byName('🖥️ Under Armour')"));
     }
 
     // ==================== ListView Tests ====================

@@ -23,7 +23,8 @@ pub enum SessionType {
 
 impl SessionType {
     /// Get the default duration for this session type.
-    pub fn default_duration(&self) -> Duration {
+    #[must_use]
+    pub const fn default_duration(&self) -> Duration {
         match self {
             Self::Pomodoro => Duration::minutes(25),
             Self::ShortBreak => Duration::minutes(5),
@@ -34,19 +35,20 @@ impl SessionType {
     }
 
     /// Parse session type from string.
-    pub fn from_str(s: &str) -> Self {
+    #[must_use]
+    pub fn parse(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "pomodoro" | "pomo" | "p" => Self::Pomodoro,
             "short" | "short-break" | "sb" => Self::ShortBreak,
             "long" | "long-break" | "lb" => Self::LongBreak,
             "focus" | "f" => Self::Focus,
-            "open" | "open-ended" | "o" => Self::OpenEnded,
-            _ => Self::Pomodoro,
+            "open" | "open-ended" | "o" | _ => Self::OpenEnded,
         }
     }
 
     /// Get display name.
-    pub fn display_name(&self) -> &'static str {
+    #[must_use]
+    pub const fn display_name(&self) -> &'static str {
         match self {
             Self::Pomodoro => "Pomodoro",
             Self::ShortBreak => "Short Break",
@@ -57,7 +59,8 @@ impl SessionType {
     }
 
     /// Check if this is a break type.
-    pub fn is_break(&self) -> bool {
+    #[must_use]
+    pub const fn is_break(&self) -> bool {
         matches!(self, Self::ShortBreak | Self::LongBreak)
     }
 }
@@ -124,14 +127,15 @@ pub struct FocusSession {
 
 impl FocusSession {
     /// Create a new focus session.
+    #[must_use]
     pub fn new(
         task_id: Option<String>,
         task_name: Option<String>,
         session_type: SessionType,
         duration_minutes: Option<i64>,
     ) -> Self {
-        let planned_duration = duration_minutes
-            .unwrap_or_else(|| session_type.default_duration().num_minutes());
+        let planned_duration =
+            duration_minutes.unwrap_or_else(|| session_type.default_duration().num_minutes());
 
         Self {
             id: None,
@@ -150,21 +154,25 @@ impl FocusSession {
     }
 
     /// Start a Pomodoro session.
+    #[must_use]
     pub fn pomodoro(task_id: Option<String>, task_name: Option<String>) -> Self {
         Self::new(task_id, task_name, SessionType::Pomodoro, None)
     }
 
     /// Start a short break.
+    #[must_use]
     pub fn short_break() -> Self {
         Self::new(None, None, SessionType::ShortBreak, None)
     }
 
     /// Start a long break.
+    #[must_use]
     pub fn long_break() -> Self {
         Self::new(None, None, SessionType::LongBreak, None)
     }
 
     /// Start an open-ended focus session.
+    #[must_use]
     pub fn open_ended(task_id: Option<String>, task_name: Option<String>) -> Self {
         Self::new(task_id, task_name, SessionType::OpenEnded, Some(0))
     }
@@ -211,21 +219,21 @@ impl FocusSession {
     }
 
     /// Get elapsed time since session started (excluding pauses).
+    #[must_use]
     pub fn elapsed(&self) -> Duration {
         let now = Utc::now();
         let total = now.signed_duration_since(self.started_at);
 
         // Account for current pause
-        let current_pause = if let Some(paused_at) = self.paused_at {
+        let current_pause = self.paused_at.map_or_else(Duration::zero, |paused_at| {
             now.signed_duration_since(paused_at)
-        } else {
-            Duration::zero()
-        };
+        });
 
         total - Duration::minutes(self.pause_duration) - current_pause
     }
 
     /// Get remaining time (for timed sessions).
+    #[must_use]
     pub fn remaining(&self) -> Duration {
         if self.planned_duration == 0 {
             return Duration::zero();
@@ -242,6 +250,7 @@ impl FocusSession {
     }
 
     /// Check if the session timer has completed.
+    #[must_use]
     pub fn is_timer_complete(&self) -> bool {
         if self.planned_duration == 0 {
             false // Open-ended sessions don't complete automatically
@@ -251,23 +260,28 @@ impl FocusSession {
     }
 
     /// Check if the session is active (running or paused).
-    pub fn is_active(&self) -> bool {
+    #[must_use]
+    pub const fn is_active(&self) -> bool {
         matches!(self.state, SessionState::Running | SessionState::Paused)
     }
 
     /// Get progress as a percentage (0.0 - 1.0).
+    #[must_use]
     pub fn progress(&self) -> f64 {
         if self.planned_duration == 0 {
             return 0.0;
         }
 
+        #[allow(clippy::cast_precision_loss)]
         let elapsed = self.elapsed().num_seconds() as f64;
+        #[allow(clippy::cast_precision_loss)]
         let planned = (self.planned_duration * 60) as f64;
 
         (elapsed / planned).min(1.0)
     }
 
     /// Format the session for display.
+    #[must_use]
     pub fn format_status(&self) -> String {
         let elapsed = self.elapsed();
         let elapsed_str = format_duration_short(elapsed);
@@ -275,43 +289,32 @@ impl FocusSession {
         let task_info = self
             .task_name
             .as_ref()
-            .map(|n| format!(" on \"{}\"", n))
-            .unwrap_or_default();
+            .map_or_else(String::new, |n| format!(" on \"{n}\""));
 
-        match self.session_type {
-            SessionType::OpenEnded => {
-                format!(
-                    "{} session{} - {} elapsed ({})",
-                    self.session_type,
-                    task_info,
-                    elapsed_str,
-                    self.state
-                )
-            }
-            _ => {
-                let remaining = self.remaining();
-                let remaining_str = format_duration_short(remaining);
-                let progress = (self.progress() * 100.0) as u8;
+        if self.session_type == SessionType::OpenEnded {
+            let session_type = self.session_type;
+            let state = self.state;
+            format!("{session_type} session{task_info} - {elapsed_str} elapsed ({state})")
+        } else {
+            let remaining = self.remaining();
+            let remaining_str = format_duration_short(remaining);
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let progress = (self.progress() * 100.0) as u8;
+            let session_type = self.session_type;
+            let state = self.state;
 
-                format!(
-                    "{} session{} - {} remaining ({}/{}%) [{}]",
-                    self.session_type,
-                    task_info,
-                    remaining_str,
-                    elapsed_str,
-                    progress,
-                    self.state
-                )
-            }
+            format!("{session_type} session{task_info} - {remaining_str} remaining ({elapsed_str}/{progress}%) [{state}]")
         }
     }
 
     /// Get start time in local timezone.
+    #[must_use]
     pub fn started_at_local(&self) -> DateTime<Local> {
         self.started_at.with_timezone(&Local)
     }
 
     /// Get end time in local timezone.
+    #[must_use]
     pub fn ended_at_local(&self) -> Option<DateTime<Local>> {
         self.ended_at.map(|t| t.with_timezone(&Local))
     }
@@ -324,9 +327,9 @@ fn format_duration_short(d: Duration) -> String {
     let minutes = total_minutes % 60;
 
     if hours > 0 {
-        format!("{}h {}m", hours, minutes)
+        format!("{hours}h {minutes}m")
     } else {
-        format!("{}m", minutes)
+        format!("{minutes}m")
     }
 }
 
@@ -344,12 +347,12 @@ mod tests {
     }
 
     #[test]
-    fn test_session_type_from_str() {
-        assert_eq!(SessionType::from_str("pomodoro"), SessionType::Pomodoro);
-        assert_eq!(SessionType::from_str("pomo"), SessionType::Pomodoro);
-        assert_eq!(SessionType::from_str("short"), SessionType::ShortBreak);
-        assert_eq!(SessionType::from_str("long"), SessionType::LongBreak);
-        assert_eq!(SessionType::from_str("open"), SessionType::OpenEnded);
+    fn test_session_type_parse() {
+        assert_eq!(SessionType::parse("pomodoro"), SessionType::Pomodoro);
+        assert_eq!(SessionType::parse("pomo"), SessionType::Pomodoro);
+        assert_eq!(SessionType::parse("short"), SessionType::ShortBreak);
+        assert_eq!(SessionType::parse("long"), SessionType::LongBreak);
+        assert_eq!(SessionType::parse("open"), SessionType::OpenEnded);
     }
 
     #[test]

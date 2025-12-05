@@ -3,6 +3,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::{FieldValue, Filterable, Schedulable};
 
+/// A todo item from Things 3.
+///
+/// Represents a single task with metadata including title, notes, status,
+/// due date, tags, and organizational hierarchy (project/area).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Todo {
@@ -27,6 +31,7 @@ pub struct Todo {
     pub modification_date: Option<DateTime<Utc>>,
 }
 
+/// A checklist item within a todo.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChecklistItem {
@@ -34,6 +39,7 @@ pub struct ChecklistItem {
     pub completed: bool,
 }
 
+/// The completion status of a todo or project.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Status {
@@ -45,13 +51,17 @@ pub enum Status {
 impl std::fmt::Display for Status {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Status::Open => write!(f, "open"),
-            Status::Completed => write!(f, "completed"),
-            Status::Canceled => write!(f, "canceled"),
+            Self::Open => write!(f, "open"),
+            Self::Completed => write!(f, "completed"),
+            Self::Canceled => write!(f, "canceled"),
         }
     }
 }
 
+/// A project in Things 3.
+///
+/// Projects are containers for related todos, with their own status,
+/// due date, and organizational placement (area).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Project {
@@ -70,6 +80,9 @@ pub struct Project {
     pub creation_date: Option<DateTime<Utc>>,
 }
 
+/// An area of responsibility in Things 3.
+///
+/// Areas are top-level organizational containers that group projects and todos.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Area {
@@ -79,6 +92,7 @@ pub struct Area {
     pub tags: Vec<String>,
 }
 
+/// A tag for categorizing todos and projects.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Tag {
@@ -86,7 +100,7 @@ pub struct Tag {
     pub name: String,
 }
 
-/// Response from creating a new item
+/// Response from creating a new item.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateResponse {
@@ -94,7 +108,7 @@ pub struct CreateResponse {
     pub name: String,
 }
 
-/// Result of a batch operation (e.g., complete_todos_batch)
+/// Result of a batch operation (e.g., `complete_todos_batch`).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BatchResult {
@@ -107,7 +121,7 @@ pub struct BatchResult {
     pub errors: Vec<BatchError>,
 }
 
-/// Error details for a batch operation failure
+/// Error details for a batch operation failure.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BatchError {
@@ -117,7 +131,7 @@ pub struct BatchError {
     pub error: String,
 }
 
-/// Result of get_all_lists - todos from all list views
+/// Result of `get_all_lists` - todos from all list views.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AllListsResult {
@@ -135,7 +149,7 @@ pub struct AllListsResult {
     pub logbook: Vec<Todo>,
 }
 
-/// Result of get_open_lists - todos from open list views (excludes Logbook)
+/// Result of `get_open_lists` - todos from open list views (excludes Logbook).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenListsResult {
@@ -151,40 +165,51 @@ pub struct OpenListsResult {
     pub someday: Vec<Todo>,
 }
 
-/// A list view (Today, Inbox, etc.)
+/// A list view in Things 3.
+///
+/// Represents the built-in smart lists that organize todos by their scheduling state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ListView {
+    /// Unprocessed todos awaiting organization.
     Inbox,
+    /// Todos scheduled for today.
     Today,
+    /// Todos scheduled for future dates.
     Upcoming,
+    /// Todos available anytime (no specific schedule).
     Anytime,
+    /// Todos deferred for someday/maybe.
     Someday,
+    /// Completed todos archive.
     Logbook,
+    /// Deleted todos.
     Trash,
 }
 
 impl ListView {
-    pub fn as_str(&self) -> &'static str {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
         match self {
-            ListView::Inbox => "Inbox",
-            ListView::Today => "Today",
-            ListView::Upcoming => "Upcoming",
-            ListView::Anytime => "Anytime",
-            ListView::Someday => "Someday",
-            ListView::Logbook => "Logbook",
-            ListView::Trash => "Trash",
+            Self::Inbox => "Inbox",
+            Self::Today => "Today",
+            Self::Upcoming => "Upcoming",
+            Self::Anytime => "Anytime",
+            Self::Someday => "Someday",
+            Self::Logbook => "Logbook",
+            Self::Trash => "Trash",
         }
     }
 
-    pub fn jxa_list_name(&self) -> &'static str {
+    #[must_use]
+    pub const fn jxa_list_name(self) -> &'static str {
         match self {
-            ListView::Inbox => "inbox",
-            ListView::Today => "today",
-            ListView::Upcoming => "upcoming",
-            ListView::Anytime => "anytime",
-            ListView::Someday => "someday",
-            ListView::Logbook => "logbook",
-            ListView::Trash => "trash",
+            Self::Inbox => "inbox",
+            Self::Today => "today",
+            Self::Upcoming => "upcoming",
+            Self::Anytime => "anytime",
+            Self::Someday => "someday",
+            Self::Logbook => "logbook",
+            Self::Trash => "trash",
         }
     }
 }
@@ -207,12 +232,12 @@ impl Filterable for Todo {
             "tags" => Some(FieldValue::StringList(self.tags.clone())),
             "project" => Some(FieldValue::OptionalString(self.project.clone())),
             "area" => Some(FieldValue::OptionalString(self.area.clone())),
-            "created" | "creation_date" | "creationdate" => {
-                self.creation_date.map(|dt| FieldValue::Date(dt.date_naive()))
-            }
-            "modified" | "modification_date" | "modificationdate" => {
-                self.modification_date.map(|dt| FieldValue::Date(dt.date_naive()))
-            }
+            "created" | "creation_date" | "creationdate" => self
+                .creation_date
+                .map(|dt| FieldValue::Date(dt.date_naive())),
+            "modified" | "modification_date" | "modificationdate" => self
+                .modification_date
+                .map(|dt| FieldValue::Date(dt.date_naive())),
             _ => None,
         }
     }
@@ -250,9 +275,9 @@ impl Filterable for Project {
             "due" | "due_date" | "duedate" => Some(FieldValue::OptionalDate(self.due_date)),
             "tags" => Some(FieldValue::StringList(self.tags.clone())),
             "area" => Some(FieldValue::OptionalString(self.area.clone())),
-            "created" | "creation_date" | "creationdate" => {
-                self.creation_date.map(|dt| FieldValue::Date(dt.date_naive()))
-            }
+            "created" | "creation_date" | "creationdate" => self
+                .creation_date
+                .map(|dt| FieldValue::Date(dt.date_naive())),
             _ => None,
         }
     }
@@ -393,7 +418,10 @@ mod tests {
         assert_eq!(todo.name, "Full Task");
         assert_eq!(todo.notes, "Some notes here");
         assert_eq!(todo.status, Status::Completed);
-        assert_eq!(todo.due_date, Some(NaiveDate::from_ymd_opt(2024, 12, 15).unwrap()));
+        assert_eq!(
+            todo.due_date,
+            Some(NaiveDate::from_ymd_opt(2024, 12, 15).unwrap())
+        );
         assert_eq!(todo.tags, vec!["work", "urgent"]);
         assert_eq!(todo.project, Some("Project A".to_string()));
         assert_eq!(todo.area, Some("Work".to_string()));
@@ -568,7 +596,10 @@ mod tests {
         let mut todo = make_todo("Task", Status::Open);
         todo.due_date = Some(NaiveDate::from_ymd_opt(2024, 12, 25).unwrap());
 
-        assert_eq!(todo.when_date(), Some(NaiveDate::from_ymd_opt(2024, 12, 25).unwrap()));
+        assert_eq!(
+            todo.when_date(),
+            Some(NaiveDate::from_ymd_opt(2024, 12, 25).unwrap())
+        );
     }
 
     #[test]
@@ -582,7 +613,10 @@ mod tests {
         let mut todo = make_todo("Task", Status::Open);
         todo.due_date = Some(NaiveDate::from_ymd_opt(2024, 12, 25).unwrap());
 
-        assert_eq!(todo.deadline(), Some(NaiveDate::from_ymd_opt(2024, 12, 25).unwrap()));
+        assert_eq!(
+            todo.deadline(),
+            Some(NaiveDate::from_ymd_opt(2024, 12, 25).unwrap())
+        );
     }
 
     // ==================== Project Tests ====================

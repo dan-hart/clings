@@ -82,8 +82,8 @@ pub fn to_json<T: Serialize>(value: &T) -> Result<String, ClingsError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{NaiveDate, Utc};
     use crate::things::{ChecklistItem, Status};
+    use chrono::{NaiveDate, Utc};
 
     fn make_todo(name: &str, status: Status) -> Todo {
         Todo {
@@ -308,11 +308,7 @@ mod tests {
 
     #[test]
     fn test_format_tags_json_multiple_tags() {
-        let tags = vec![
-            make_tag("urgent"),
-            make_tag("work"),
-            make_tag("home"),
-        ];
+        let tags = vec![make_tag("urgent"), make_tag("work"), make_tag("home")];
         let result = format_tags_json(&tags).unwrap();
 
         assert!(result.contains("\"count\": 3"));

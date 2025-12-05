@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum RelativeDate {
-    /// A named date: "today", "tomorrow", "next_week"
+    /// A named date: "today", "tomorrow", "`next_week`"
     Named(String),
 }
 
@@ -38,18 +38,17 @@ impl RelativeDate {
             "next_month" | "nextmonth" => {
                 // Add approximately one month
                 base + Duration::days(30)
-            }
+            },
             _ => {
                 // Try to parse offset format: +Nd, +Nw, +Nm
-                if let Some(offset) = s.strip_prefix('+') {
-                    Self::parse_offset(offset, base)
-                } else if let Some(offset) = s.strip_prefix('-') {
-                    Self::parse_negative_offset(offset, base)
-                } else {
-                    // Default to today if unparseable
-                    base
-                }
-            }
+                s.strip_prefix('+').map_or_else(
+                    || {
+                        s.strip_prefix('-')
+                            .map_or(base, |offset| Self::parse_negative_offset(offset, base))
+                    },
+                    |offset| Self::parse_offset(offset, base),
+                )
+            },
         }
     }
 
@@ -61,14 +60,20 @@ impl RelativeDate {
         }
 
         let unit = offset.chars().last().unwrap_or('d');
-        let num_str: String = offset.chars().take_while(|c| c.is_ascii_digit()).collect();
+        let num_str: String = offset.chars().take_while(char::is_ascii_digit).collect();
         let num: i64 = num_str.parse().unwrap_or(1);
 
         match unit {
-            'd' => base + Duration::days(num),
-            'w' => base + Duration::weeks(num),
-            'm' => base + Duration::days(num * 30),
-            'y' => base + Duration::days(num * 365),
+            'd' | 'w' | 'm' | 'y' => {
+                let days = match unit {
+                    'd' => num,
+                    'w' => num * 7,
+                    'm' => num * 30,
+                    'y' => num * 365,
+                    _ => num,
+                };
+                base + Duration::days(days)
+            },
             _ => base + Duration::days(num),
         }
     }
@@ -81,14 +86,20 @@ impl RelativeDate {
         }
 
         let unit = offset.chars().last().unwrap_or('d');
-        let num_str: String = offset.chars().take_while(|c| c.is_ascii_digit()).collect();
+        let num_str: String = offset.chars().take_while(char::is_ascii_digit).collect();
         let num: i64 = num_str.parse().unwrap_or(1);
 
         match unit {
-            'd' => base - Duration::days(num),
-            'w' => base - Duration::weeks(num),
-            'm' => base - Duration::days(num * 30),
-            'y' => base - Duration::days(num * 365),
+            'd' | 'w' | 'm' | 'y' => {
+                let days = match unit {
+                    'd' => num,
+                    'w' => num * 7,
+                    'm' => num * 30,
+                    'y' => num * 365,
+                    _ => num,
+                };
+                base - Duration::days(days)
+            },
             _ => base - Duration::days(num),
         }
     }
@@ -311,7 +322,12 @@ impl ProjectTemplate {
     }
 
     /// Substitute variables in a string.
-    pub fn substitute(&self, text: &str, vars: &std::collections::HashMap<String, String>) -> String {
+    #[must_use]
+    pub fn substitute(
+        &self,
+        text: &str,
+        vars: &std::collections::HashMap<String, String>,
+    ) -> String {
         let mut result = text.to_string();
 
         // First, substitute provided variables
@@ -424,10 +440,8 @@ mod tests {
         let template = ProjectTemplate::new("Test")
             .with_todos(vec![TemplateTodo::new("Root todo")])
             .with_headings(vec![
-                TemplateHeading::new("H1").with_todos(vec![
-                    TemplateTodo::new("T1"),
-                    TemplateTodo::new("T2"),
-                ]),
+                TemplateHeading::new("H1")
+                    .with_todos(vec![TemplateTodo::new("T1"), TemplateTodo::new("T2")]),
                 TemplateHeading::new("H2").with_todos(vec![TemplateTodo::new("T3")]),
             ]);
 

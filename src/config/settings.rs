@@ -9,7 +9,7 @@ use crate::config::Paths;
 use crate::error::ClingsError;
 
 /// Main configuration structure.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct Config {
     /// General settings.
@@ -99,11 +99,11 @@ pub struct StatsConfig {
 }
 
 // Default value functions for serde
-fn default_output_format() -> OutputFormat {
+const fn default_output_format() -> OutputFormat {
     OutputFormat::Pretty
 }
 
-fn default_color() -> ColorSetting {
+const fn default_color() -> ColorSetting {
     ColorSetting::Auto
 }
 
@@ -141,17 +141,6 @@ const fn default_retention_days() -> u32 {
 
 fn default_dashboard_range() -> String {
     "week".to_string()
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            general: GeneralConfig::default(),
-            focus: FocusConfig::default(),
-            review: ReviewConfig::default(),
-            stats: StatsConfig::default(),
-        }
-    }
 }
 
 impl Default for GeneralConfig {
@@ -221,11 +210,17 @@ impl Config {
         }
 
         let contents = std::fs::read_to_string(path).map_err(|e| {
-            ClingsError::Config(format!("Failed to read config file {:?}: {}", path, e))
+            ClingsError::Config(format!(
+                "Failed to read config file {}: {e}",
+                path.display()
+            ))
         })?;
 
         serde_yaml::from_str(&contents).map_err(|e| {
-            ClingsError::Config(format!("Failed to parse config file {:?}: {}", path, e))
+            ClingsError::Config(format!(
+                "Failed to parse config file {}: {e}",
+                path.display()
+            ))
         })
     }
 
@@ -246,12 +241,14 @@ impl Config {
     ///
     /// Returns an error if the config file cannot be written.
     pub fn save_to_path(&self, path: &std::path::Path) -> Result<(), ClingsError> {
-        let contents = serde_yaml::to_string(self).map_err(|e| {
-            ClingsError::Config(format!("Failed to serialize config: {}", e))
-        })?;
+        let contents = serde_yaml::to_string(self)
+            .map_err(|e| ClingsError::Config(format!("Failed to serialize config: {e}")))?;
 
         std::fs::write(path, contents).map_err(|e| {
-            ClingsError::Config(format!("Failed to write config file {:?}: {}", path, e))
+            ClingsError::Config(format!(
+                "Failed to write config file {}: {e}",
+                path.display()
+            ))
         })
     }
 }

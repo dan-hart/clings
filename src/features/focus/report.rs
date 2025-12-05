@@ -28,6 +28,12 @@ pub enum ReportPeriod {
 
 impl ReportPeriod {
     /// Get the start and end dates for this period.
+    ///
+    /// # Panics
+    ///
+    /// This function will never panic as all date/time values are compile-time known valid values.
+    #[must_use]
+    #[allow(clippy::unwrap_used)] // Safe: All hms values are hardcoded valid (0,0,0 and 23,59,59)
     pub fn date_range(&self) -> (DateTime<Utc>, DateTime<Utc>) {
         let now = Utc::now();
         let today = now.date_naive();
@@ -40,7 +46,7 @@ impl ReportPeriod {
                     DateTime::from_naive_utc_and_offset(start, Utc),
                     DateTime::from_naive_utc_and_offset(end, Utc),
                 )
-            }
+            },
             Self::Week => {
                 let start = (today - Duration::days(6)).and_hms_opt(0, 0, 0).unwrap();
                 let end = today.and_hms_opt(23, 59, 59).unwrap();
@@ -48,7 +54,7 @@ impl ReportPeriod {
                     DateTime::from_naive_utc_and_offset(start, Utc),
                     DateTime::from_naive_utc_and_offset(end, Utc),
                 )
-            }
+            },
             Self::Month => {
                 let start = (today - Duration::days(29)).and_hms_opt(0, 0, 0).unwrap();
                 let end = today.and_hms_opt(23, 59, 59).unwrap();
@@ -56,7 +62,7 @@ impl ReportPeriod {
                     DateTime::from_naive_utc_and_offset(start, Utc),
                     DateTime::from_naive_utc_and_offset(end, Utc),
                 )
-            }
+            },
             Self::AllTime => {
                 let start = NaiveDate::from_ymd_opt(2000, 1, 1)
                     .unwrap()
@@ -67,7 +73,7 @@ impl ReportPeriod {
                     DateTime::from_naive_utc_and_offset(start, Utc),
                     DateTime::from_naive_utc_and_offset(end, Utc),
                 )
-            }
+            },
             Self::Custom(start_date, end_date) => {
                 let start = start_date.and_hms_opt(0, 0, 0).unwrap();
                 let end = end_date.and_hms_opt(23, 59, 59).unwrap();
@@ -75,15 +81,15 @@ impl ReportPeriod {
                     DateTime::from_naive_utc_and_offset(start, Utc),
                     DateTime::from_naive_utc_and_offset(end, Utc),
                 )
-            }
+            },
         }
     }
 
     /// Parse period from string.
-    pub fn from_str(s: &str) -> Self {
+    #[must_use]
+    pub fn parse(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "today" | "t" | "d" => Self::Today,
-            "week" | "w" | "7d" => Self::Week,
             "month" | "m" | "30d" => Self::Month,
             "all" | "alltime" | "all-time" => Self::AllTime,
             _ => Self::Week,
@@ -91,7 +97,8 @@ impl ReportPeriod {
     }
 
     /// Get display name.
-    pub fn display_name(&self) -> &'static str {
+    #[must_use]
+    pub const fn display_name(&self) -> &'static str {
         match self {
             Self::Today => "Today",
             Self::Week => "This Week",
@@ -153,6 +160,10 @@ pub struct DailyFocusTime {
 
 impl FocusReport {
     /// Generate a report for the given period.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the storage query fails.
     pub fn generate(storage: &FocusStorage, period: ReportPeriod) -> Result<Self, ClingsError> {
         let (start, end) = period.date_range();
         let sessions = storage.get_range(start, end)?;
@@ -165,18 +176,20 @@ impl FocusReport {
 
         let completed: Vec<_> = work_sessions
             .iter()
-            .filter(|s| s.state == SessionState::Completed)
-            .collect();
-
-        let abandoned: Vec<_> = work_sessions
-            .iter()
-            .filter(|s| s.state == SessionState::Abandoned)
+            .filter(|&&s| s.state == SessionState::Completed)
+            .copied()
             .collect();
 
         let total_minutes: i64 = completed.iter().map(|s| s.actual_duration).sum();
+        #[allow(clippy::cast_possible_wrap)]
         let completed_count = completed.len() as i64;
-        let abandoned_count = abandoned.len() as i64;
+        #[allow(clippy::cast_possible_wrap)]
+        let abandoned_count = work_sessions
+            .iter()
+            .filter(|&&s| s.state == SessionState::Abandoned)
+            .count() as i64;
 
+        #[allow(clippy::cast_precision_loss)]
         let avg_session_minutes = if completed_count > 0 {
             total_minutes as f64 / completed_count as f64
         } else {
@@ -199,18 +212,16 @@ impl FocusReport {
         // By task
         let mut task_map: HashMap<Option<String>, (String, i64, i64)> = HashMap::new();
         for session in &completed {
-            let entry = task_map
-                .entry(session.task_id.clone())
-                .or_insert_with(|| {
-                    (
-                        session
-                            .task_name
-                            .clone()
-                            .unwrap_or_else(|| "(No Task)".to_string()),
-                        0,
-                        0,
-                    )
-                });
+            let entry = task_map.entry(session.task_id.clone()).or_insert_with(|| {
+                (
+                    session
+                        .task_name
+                        .clone()
+                        .unwrap_or_else(|| "(No Task)".to_string()),
+                    0,
+                    0,
+                )
+            });
             entry.1 += session.actual_duration;
             entry.2 += 1;
         }
@@ -246,7 +257,8 @@ impl FocusReport {
         daily.sort_by(|a, b| b.date.cmp(&a.date));
 
         // Calculate streak
-        let streak_days = calculate_streak(&completed);
+        let completed_refs: Vec<&FocusSession> = completed.clone();
+        let streak_days = calculate_streak(&completed_refs);
 
         Ok(Self {
             period: period.display_name().to_string(),
@@ -263,6 +275,7 @@ impl FocusReport {
     }
 
     /// Format the report for display.
+    #[must_use]
     pub fn format(&self) -> String {
         let mut lines = Vec::new();
 
@@ -301,13 +314,24 @@ impl FocusReport {
             lines.push("By Day of Week".to_string());
             lines.push("─".repeat(40));
             let days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-            let max_day = self.by_day_of_week.iter().max().copied().unwrap_or(1).max(1);
+            let max_day = self
+                .by_day_of_week
+                .iter()
+                .max()
+                .copied()
+                .unwrap_or(1)
+                .max(1);
 
             for (i, day) in days.iter().enumerate() {
                 let minutes = self.by_day_of_week[i];
+                #[allow(
+                    clippy::cast_precision_loss,
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss
+                )]
                 let bar_len = (minutes as f64 / max_day as f64 * 20.0) as usize;
                 let bar = "█".repeat(bar_len);
-                lines.push(format!("  {} {:>4}m {}", day, minutes, bar));
+                lines.push(format!("  {day} {minutes:>4}m {bar}"));
             }
             lines.push(String::new());
         }
@@ -348,13 +372,15 @@ impl FocusReport {
     }
 
     /// Get total hours.
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
     pub fn total_hours(&self) -> f64 {
         self.total_minutes as f64 / 60.0
     }
 }
 
 /// Calculate the current focus streak.
-fn calculate_streak(sessions: &[&&FocusSession]) -> i64 {
+fn calculate_streak(sessions: &[&FocusSession]) -> i64 {
     if sessions.is_empty() {
         return 0;
     }
@@ -362,10 +388,7 @@ fn calculate_streak(sessions: &[&&FocusSession]) -> i64 {
     let today = Local::now().date_naive();
 
     // Get unique dates with focus sessions
-    let mut dates: Vec<NaiveDate> = sessions
-        .iter()
-        .map(|s| s.started_at.date_naive())
-        .collect();
+    let mut dates: Vec<NaiveDate> = sessions.iter().map(|s| s.started_at.date_naive()).collect();
     dates.sort();
     dates.dedup();
 
@@ -407,11 +430,11 @@ mod tests {
     }
 
     #[test]
-    fn test_report_period_from_str() {
-        assert_eq!(ReportPeriod::from_str("today"), ReportPeriod::Today);
-        assert_eq!(ReportPeriod::from_str("week"), ReportPeriod::Week);
-        assert_eq!(ReportPeriod::from_str("month"), ReportPeriod::Month);
-        assert_eq!(ReportPeriod::from_str("all"), ReportPeriod::AllTime);
+    fn test_report_period_parse() {
+        assert_eq!(ReportPeriod::parse("today"), ReportPeriod::Today);
+        assert_eq!(ReportPeriod::parse("week"), ReportPeriod::Week);
+        assert_eq!(ReportPeriod::parse("month"), ReportPeriod::Month);
+        assert_eq!(ReportPeriod::parse("all"), ReportPeriod::AllTime);
     }
 
     #[test]

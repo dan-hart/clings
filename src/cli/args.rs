@@ -113,8 +113,8 @@ pub enum Commands {
     ///   Dates:      today, tomorrow, next monday, dec 15, in 3 days
     ///   Times:      3pm, 15:00, morning, evening
     ///   Tags:       #tag1 #tag2
-    ///   Projects:   for ProjectName
-    ///   Areas:      in AreaName
+    ///   Projects:   for `ProjectName`
+    ///   Areas:      in `AreaName`
     ///   Deadlines:  by friday
     ///   Priority:   !high, !!, !!!
     ///   Notes:      // notes at the end
@@ -224,7 +224,7 @@ pub enum Commands {
     ///
     /// # Examples
     ///
-    ///   clings shell completions bash > ~/.bash_completion.d/clings
+    ///   clings shell completions bash > ~/.`bash_completion.d/clings`
     ///   clings shell completions zsh > ~/.zfunc/_clings
     Shell(ShellArgs),
 
@@ -293,10 +293,40 @@ pub enum TodoCommands {
         id: String,
     },
 
-    /// Delete a todo (move to trash)
+    /// Delete a todo (cancels it; Things 3 API doesn't support true deletion)
     Delete {
-        /// Todo ID to delete
+        /// Todo ID to delete (will be canceled)
         id: String,
+    },
+
+    /// Update a todo's properties
+    Update {
+        /// Todo ID to update
+        id: String,
+
+        /// New title
+        #[arg(long)]
+        title: Option<String>,
+
+        /// New notes
+        #[arg(long)]
+        notes: Option<String>,
+
+        /// Schedule date (when todo appears in Today/Upcoming)
+        #[arg(long, value_name = "DATE")]
+        when: Option<String>,
+
+        /// Due date / deadline
+        #[arg(long, value_name = "DATE")]
+        deadline: Option<String>,
+
+        /// Tags (comma-separated, replaces existing)
+        #[arg(long)]
+        tags: Option<String>,
+
+        /// Move to project
+        #[arg(long)]
+        project: Option<String>,
     },
 }
 
@@ -525,7 +555,8 @@ pub enum ShellCommands {
     },
 }
 
-/// Parse relative date strings like "today", "tomorrow" to ISO format
+/// Parse relative date strings like "today", "tomorrow" to ISO format.
+#[must_use]
 pub fn parse_date(date_str: &str) -> String {
     let today = chrono::Local::now().date_naive();
     match date_str.to_lowercase().as_str() {
@@ -627,9 +658,8 @@ mod tests {
 
     #[test]
     fn test_cli_search_with_filters() {
-        let cli =
-            Cli::try_parse_from(["clings", "search", "--tag", "work", "--project", "Sprint"])
-                .unwrap();
+        let cli = Cli::try_parse_from(["clings", "search", "--tag", "work", "--project", "Sprint"])
+            .unwrap();
         if let Commands::Search(args) = cli.command {
             assert_eq!(args.tag, Some("work".to_string()));
             assert_eq!(args.project, Some("Sprint".to_string()));
@@ -640,8 +670,7 @@ mod tests {
 
     #[test]
     fn test_cli_search_with_advanced_filter() {
-        let cli =
-            Cli::try_parse_from(["clings", "search", "--filter", "status = 'open'"]).unwrap();
+        let cli = Cli::try_parse_from(["clings", "search", "--filter", "status = 'open'"]).unwrap();
         if let Commands::Search(args) = cli.command {
             assert_eq!(args.filter, Some("status = 'open'".to_string()));
         } else {
@@ -651,8 +680,8 @@ mod tests {
 
     #[test]
     fn test_cli_bulk_complete() {
-        let cli =
-            Cli::try_parse_from(["clings", "bulk", "complete", "--where", "status = open"]).unwrap();
+        let cli = Cli::try_parse_from(["clings", "bulk", "complete", "--where", "status = open"])
+            .unwrap();
         if let Commands::Bulk(args) = cli.command {
             if let BulkCommands::Complete { r#where, .. } = args.command {
                 assert_eq!(r#where, "status = open");

@@ -50,7 +50,7 @@ pub struct EngineResult {
 impl EngineResult {
     /// Create an empty result.
     #[must_use]
-    pub fn empty() -> Self {
+    pub const fn empty() -> Self {
         Self {
             rules_evaluated: 0,
             rules_triggered: 0,
@@ -103,7 +103,10 @@ impl<'a> AutomationEngine<'a> {
     /// # Errors
     ///
     /// Returns an error if storage cannot be initialized.
-    pub fn with_config(client: &'a ThingsClient, config: EngineConfig) -> Result<Self, ClingsError> {
+    pub fn with_config(
+        client: &'a ThingsClient,
+        config: EngineConfig,
+    ) -> Result<Self, ClingsError> {
         let storage = RuleStorage::new()?;
         let sync_queue = SyncQueue::new().ok();
 
@@ -137,7 +140,7 @@ impl<'a> AutomationEngine<'a> {
 
             result.rules_triggered += 1;
 
-            let rule_result = self.execute_rule(&rule, context)?;
+            let rule_result = self.execute_rule(&rule, context);
 
             for action_result in &rule_result.action_results {
                 if action_result.success {
@@ -157,18 +160,18 @@ impl<'a> AutomationEngine<'a> {
     ///
     /// # Errors
     ///
-    /// Returns an error if the rule cannot be found or executed.
+    /// Returns an error if the rule cannot be found.
     pub fn run_rule(&self, name: &str, context: &RuleContext) -> Result<RuleResult, ClingsError> {
         let rule = self
             .storage
             .load(name)?
             .ok_or_else(|| ClingsError::NotFound(format!("Rule not found: {name}")))?;
 
-        self.execute_rule(&rule, context)
+        Ok(self.execute_rule(&rule, context))
     }
 
     /// Execute a rule's actions.
-    fn execute_rule(&self, rule: &Rule, context: &RuleContext) -> Result<RuleResult, ClingsError> {
+    fn execute_rule(&self, rule: &Rule, context: &RuleContext) -> RuleResult {
         let mut action_results = Vec::new();
 
         for action in rule.actions.iter().take(self.config.max_actions) {
@@ -177,13 +180,15 @@ impl<'a> AutomationEngine<'a> {
             let result = if self.config.dry_run {
                 ActionResult::success_with_message("Dry run - action skipped")
             } else {
-                self.execute_action(&substituted.action_type, &substituted.params)
+                self.execute_action(substituted.action_type, &substituted.params)
             };
 
             // Queue failed actions for sync if configured
             if !result.success && self.config.queue_on_failure {
                 if let Some(queue) = &self.sync_queue {
-                    if let Some(mut op) = self.action_to_operation(&substituted.action_type, &substituted.params) {
+                    if let Some(mut op) =
+                        Self::action_to_operation(substituted.action_type, &substituted.params)
+                    {
                         let _ = queue.enqueue(&mut op);
                     }
                 }
@@ -192,27 +197,27 @@ impl<'a> AutomationEngine<'a> {
             action_results.push(result);
         }
 
-        Ok(RuleResult {
+        RuleResult {
             rule_name: rule.name.clone(),
             triggered: true,
             action_results,
-        })
+        }
     }
 
     /// Execute a single action.
-    fn execute_action(&self, action_type: &ActionType, params: &ActionParams) -> ActionResult {
+    fn execute_action(&self, action_type: ActionType, params: &ActionParams) -> ActionResult {
         match action_type {
             ActionType::AddTodo => self.execute_add_todo(params),
             ActionType::CompleteTodo => self.execute_complete_todo(params),
             ActionType::CancelTodo => self.execute_cancel_todo(params),
-            ActionType::AddTags => self.execute_add_tags(params),
+            ActionType::AddTags => Self::execute_add_tags(params),
             ActionType::RemoveTags => ActionResult::failure("Remove tags not implemented"),
             ActionType::MoveTodo => ActionResult::failure("Move todo not implemented"),
             ActionType::SetDue => ActionResult::failure("Set due not implemented"),
             ActionType::ClearDue => ActionResult::failure("Clear due not implemented"),
-            ActionType::Log => self.execute_log(params),
-            ActionType::Notify => self.execute_notify(params),
-            ActionType::Shell => self.execute_shell(params),
+            ActionType::Log => Self::execute_log(params),
+            ActionType::Notify => Self::execute_notify(params),
+            ActionType::Shell => Self::execute_shell(params),
             ActionType::OpenUrl => ActionResult::failure("Open URL not implemented"),
             ActionType::StartFocus => ActionResult::failure("Start focus not implemented"),
             ActionType::QueueSync => self.execute_queue_sync(params),
@@ -270,7 +275,7 @@ impl<'a> AutomationEngine<'a> {
         }
     }
 
-    fn execute_add_tags(&self, params: &ActionParams) -> ActionResult {
+    fn execute_add_tags(params: &ActionParams) -> ActionResult {
         if let ActionParams::Tags { id, tags } = params {
             // Tags are added via update, which isn't fully implemented
             ActionResult::failure(format!(
@@ -283,7 +288,7 @@ impl<'a> AutomationEngine<'a> {
         }
     }
 
-    fn execute_log(&self, params: &ActionParams) -> ActionResult {
+    fn execute_log(params: &ActionParams) -> ActionResult {
         if let ActionParams::Message { message } = params {
             println!("[automation] {message}");
             ActionResult::success()
@@ -292,7 +297,7 @@ impl<'a> AutomationEngine<'a> {
         }
     }
 
-    fn execute_notify(&self, params: &ActionParams) -> ActionResult {
+    fn execute_notify(params: &ActionParams) -> ActionResult {
         if let ActionParams::Notification { title, message } = params {
             // Use osascript to show notification
             let script = format!(
@@ -314,7 +319,7 @@ impl<'a> AutomationEngine<'a> {
         }
     }
 
-    fn execute_shell(&self, params: &ActionParams) -> ActionResult {
+    fn execute_shell(params: &ActionParams) -> ActionResult {
         if let ActionParams::Command { command } = params {
             match std::process::Command::new("sh")
                 .arg("-c")
@@ -329,7 +334,7 @@ impl<'a> AutomationEngine<'a> {
                         let stderr = String::from_utf8_lossy(&output.stderr);
                         ActionResult::failure(stderr.trim().to_string())
                     }
-                }
+                },
                 Err(e) => ActionResult::failure(e.to_string()),
             }
         } else {
@@ -338,31 +343,31 @@ impl<'a> AutomationEngine<'a> {
     }
 
     fn execute_queue_sync(&self, params: &ActionParams) -> ActionResult {
-        if let Some(queue) = &self.sync_queue {
-            // Queue a generic operation based on params
-            if let ActionParams::TodoId { id } = params {
-                let mut op = Operation::complete_todo(id.clone());
-                match queue.enqueue(&mut op) {
-                    Ok(()) => ActionResult::success_with_message(format!("Queued: {id}")),
-                    Err(e) => ActionResult::failure(e.to_string()),
-                }
-            } else {
-                ActionResult::failure("Invalid queue parameters")
+        let Some(queue) = &self.sync_queue else {
+            return ActionResult::failure("Sync queue not available");
+        };
+
+        // Queue a generic operation based on params
+        if let ActionParams::TodoId { id } = params {
+            let mut op = Operation::complete_todo(id.clone());
+            match queue.enqueue(&mut op) {
+                Ok(()) => ActionResult::success_with_message(format!("Queued: {id}")),
+                Err(e) => ActionResult::failure(e.to_string()),
             }
         } else {
-            ActionResult::failure("Sync queue not available")
+            ActionResult::failure("Invalid queue parameters")
         }
     }
 
     /// Convert an action to a sync operation.
-    fn action_to_operation(&self, action_type: &ActionType, params: &ActionParams) -> Option<Operation> {
+    fn action_to_operation(action_type: ActionType, params: &ActionParams) -> Option<Operation> {
         match (action_type, params) {
             (ActionType::CompleteTodo, ActionParams::TodoId { id }) => {
                 Some(Operation::complete_todo(id.clone()))
-            }
+            },
             (ActionType::CancelTodo, ActionParams::TodoId { id }) => {
                 Some(Operation::cancel_todo(id.clone()))
-            }
+            },
             _ => None,
         }
     }
@@ -406,6 +411,7 @@ impl<'a> AutomationEngine<'a> {
 }
 
 /// Format engine result for display.
+#[must_use]
 pub fn format_engine_result(result: &EngineResult) -> String {
     let mut lines = Vec::new();
 
@@ -421,11 +427,7 @@ pub fn format_engine_result(result: &EngineResult) -> String {
     }
 
     for rule_result in &result.rule_results {
-        let status = if rule_result
-            .action_results
-            .iter()
-            .all(|r| r.success)
-        {
+        let status = if rule_result.action_results.iter().all(|r| r.success) {
             "✓".green()
         } else {
             "✗".red()

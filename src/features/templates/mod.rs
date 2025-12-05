@@ -8,4 +8,4 @@ mod storage;
 mod types;
 
 pub use storage::TemplateStorage;
-pub use types::{RelativeDate, TemplateTodo, TemplateHeading, ProjectTemplate, TemplateVariable};
+pub use types::{ProjectTemplate, RelativeDate, TemplateHeading, TemplateTodo, TemplateVariable};

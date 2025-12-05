@@ -28,7 +28,8 @@ use crate::things::ThingsClient;
 /// Returns an error if the TUI fails to initialize or run.
 pub fn run(client: &ThingsClient) -> Result<(), ClingsError> {
     // Setup terminal
-    enable_raw_mode().map_err(|e| ClingsError::Config(format!("Failed to enable raw mode: {e}")))?;
+    enable_raw_mode()
+        .map_err(|e| ClingsError::Config(format!("Failed to enable raw mode: {e}")))?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)
         .map_err(|e| ClingsError::Config(format!("Failed to setup terminal: {e}")))?;

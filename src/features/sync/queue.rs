@@ -27,7 +27,7 @@ impl SyncQueue {
 
     /// Create a sync queue with an existing database connection.
     #[must_use]
-    pub fn with_database(db: Database) -> Self {
+    pub const fn with_database(db: Database) -> Self {
         Self { db }
     }
 
@@ -75,9 +75,9 @@ impl SyncQueue {
             )
             .map_err(|e| ClingsError::Database(format!("Failed to prepare query: {e}")))?;
 
-        let rows = stmt
-            .query_map([limit], |row| row_to_operation(row))
-            .map_err(|e| ClingsError::Database(format!("Failed to query pending operations: {e}")))?;
+        let rows = stmt.query_map([limit], row_to_operation).map_err(|e| {
+            ClingsError::Database(format!("Failed to query pending operations: {e}"))
+        })?;
 
         let mut operations = Vec::new();
         for row in rows {
@@ -109,7 +109,7 @@ impl SyncQueue {
             .map_err(|e| ClingsError::Database(format!("Failed to prepare query: {e}")))?;
 
         let rows = stmt
-            .query_map([status.to_string()], |row| row_to_operation(row))
+            .query_map([status.to_string()], row_to_operation)
             .map_err(|e| ClingsError::Database(format!("Failed to query operations: {e}")))?;
 
         let mut operations = Vec::new();
@@ -138,7 +138,7 @@ impl SyncQueue {
             .map_err(|e| ClingsError::Database(format!("Failed to prepare query: {e}")))?;
 
         let result = stmt
-            .query_row([id], |row| row_to_operation(row))
+            .query_row([id], row_to_operation)
             .optional()
             .map_err(|e| ClingsError::Database(format!("Failed to query operation: {e}")))?;
 
@@ -316,7 +316,8 @@ impl SyncQueue {
             pending,
             completed,
             failed,
-            oldest_pending: oldest_pending.and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+            oldest_pending: oldest_pending
+                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                 .map(|t| t.with_timezone(&Utc)),
         })
     }
@@ -368,7 +369,7 @@ pub struct QueueStats {
     pub oldest_pending: Option<DateTime<Utc>>,
 }
 
-fn operation_type_to_string(ot: OperationType) -> &'static str {
+const fn operation_type_to_string(ot: OperationType) -> &'static str {
     match ot {
         OperationType::AddTodo => "add_todo",
         OperationType::CompleteTodo => "complete_todo",
@@ -387,7 +388,6 @@ fn operation_type_to_string(ot: OperationType) -> &'static str {
 
 fn string_to_operation_type(s: &str) -> OperationType {
     match s {
-        "add_todo" => OperationType::AddTodo,
         "complete_todo" => OperationType::CompleteTodo,
         "cancel_todo" => OperationType::CancelTodo,
         "delete_todo" => OperationType::DeleteTodo,
@@ -399,7 +399,7 @@ fn string_to_operation_type(s: &str) -> OperationType {
         "move_todo" => OperationType::MoveTodo,
         "set_due_date" => OperationType::SetDueDate,
         "clear_due_date" => OperationType::ClearDueDate,
-        _ => OperationType::AddTodo,
+        "add_todo" | _ => OperationType::AddTodo,
     }
 }
 
@@ -414,8 +414,7 @@ fn row_to_operation(row: &Row<'_>) -> Result<Operation, rusqlite::Error> {
     let status_str: String = row.get(7)?;
 
     let created_at = DateTime::parse_from_rfc3339(&created_at_str)
-        .map(|t| t.with_timezone(&Utc))
-        .unwrap_or_else(|_| Utc::now());
+        .map_or_else(|_| Utc::now(), |t| t.with_timezone(&Utc));
 
     let last_attempt = last_attempt_str.and_then(|s| {
         DateTime::parse_from_rfc3339(&s)
@@ -431,7 +430,7 @@ fn row_to_operation(row: &Row<'_>) -> Result<Operation, rusqlite::Error> {
         attempts,
         last_attempt,
         last_error,
-        status: OperationStatus::from_str(&status_str),
+        status: OperationStatus::from_string(&status_str),
     })
 }
 
@@ -477,7 +476,7 @@ mod tests {
         let queue = create_test_queue();
 
         // Add operations in different order
-        let mut add = Operation::add_todo(super::super::operation::AddTodoPayload {
+        let mut add = Operation::add_todo(&super::super::operation::AddTodoPayload {
             title: "Test".to_string(),
             notes: None,
             when: None,
@@ -520,7 +519,9 @@ mod tests {
         let mut op = Operation::complete_todo("ABC".to_string());
         queue.enqueue(&mut op).unwrap();
 
-        queue.mark_failed(op.id.unwrap(), "Connection error").unwrap();
+        queue
+            .mark_failed(op.id.unwrap(), "Connection error")
+            .unwrap();
 
         let loaded = queue.get(op.id.unwrap()).unwrap().unwrap();
         assert_eq!(loaded.status, OperationStatus::Failed);

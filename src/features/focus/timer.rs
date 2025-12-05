@@ -31,7 +31,8 @@ pub struct Timer {
 
 impl Timer {
     /// Create a new timer with the given duration.
-    pub fn new(duration: Duration) -> Self {
+    #[must_use]
+    pub const fn new(duration: Duration) -> Self {
         let seconds = duration.num_seconds();
         Self {
             total_seconds: seconds,
@@ -41,7 +42,8 @@ impl Timer {
     }
 
     /// Create a timer from minutes.
-    pub fn from_minutes(minutes: i64) -> Self {
+    #[must_use]
+    pub const fn from_minutes(minutes: i64) -> Self {
         Self::new(Duration::minutes(minutes))
     }
 
@@ -85,16 +87,20 @@ impl Timer {
     }
 
     /// Get remaining time as Duration.
-    pub fn remaining(&self) -> Duration {
+    #[must_use]
+    pub const fn remaining(&self) -> Duration {
         Duration::seconds(self.remaining_seconds)
     }
 
     /// Get elapsed time as Duration.
-    pub fn elapsed(&self) -> Duration {
+    #[must_use]
+    pub const fn elapsed(&self) -> Duration {
         Duration::seconds(self.total_seconds - self.remaining_seconds)
     }
 
     /// Get progress as a percentage (0.0 - 1.0).
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
     pub fn progress(&self) -> f64 {
         if self.total_seconds == 0 {
             return 1.0;
@@ -103,26 +109,31 @@ impl Timer {
     }
 
     /// Check if the timer is running.
+    #[must_use]
     pub fn is_running(&self) -> bool {
         self.state == TimerState::Running
     }
 
     /// Check if the timer is completed.
+    #[must_use]
     pub fn is_completed(&self) -> bool {
         self.state == TimerState::Completed
     }
 
     /// Get the current state.
-    pub fn state(&self) -> TimerState {
+    #[must_use]
+    pub const fn state(&self) -> TimerState {
         self.state
     }
 
     /// Format remaining time as MM:SS.
+    #[must_use]
     pub fn format_remaining(&self) -> String {
         format_duration_mmss(self.remaining())
     }
 
     /// Format elapsed time as MM:SS.
+    #[must_use]
     pub fn format_elapsed(&self) -> String {
         format_duration_mmss(self.elapsed())
     }
@@ -141,14 +152,16 @@ impl Timer {
 }
 
 /// Format a duration as MM:SS.
+#[must_use]
 pub fn format_duration_mmss(d: Duration) -> String {
     let total_seconds = d.num_seconds().abs();
     let minutes = total_seconds / 60;
     let seconds = total_seconds % 60;
-    format!("{:02}:{:02}", minutes, seconds)
+    format!("{minutes:02}:{seconds:02}")
 }
 
 /// Format a duration as a human-readable string.
+#[must_use]
 pub fn format_duration(d: Duration) -> String {
     let total_minutes = d.num_minutes();
 
@@ -173,15 +186,12 @@ pub fn format_duration(d: Duration) -> String {
             format!("{} hour{}", hours, if hours == 1 { "" } else { "s" })
         }
     } else {
-        format!(
-            "{} minute{}",
-            minutes,
-            if minutes == 1 { "" } else { "s" }
-        )
+        format!("{} minute{}", minutes, if minutes == 1 { "" } else { "s" })
     }
 }
 
 /// Parse a duration string like "25m", "1h30m", "90s".
+#[must_use]
 pub fn parse_duration(s: &str) -> Option<Duration> {
     let s = s.trim().to_lowercase();
 
@@ -223,15 +233,17 @@ pub fn parse_duration(s: &str) -> Option<Duration> {
 }
 
 /// Render a progress bar.
+#[must_use]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss
+)]
 pub fn render_progress_bar(progress: f64, width: usize) -> String {
     let filled = (progress * width as f64) as usize;
     let empty = width.saturating_sub(filled);
 
-    format!(
-        "[{}{}]",
-        "█".repeat(filled),
-        "░".repeat(empty)
-    )
+    format!("[{}{}]", "█".repeat(filled), "░".repeat(empty))
 }
 
 #[cfg(test)]

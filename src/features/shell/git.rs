@@ -26,7 +26,8 @@ pub enum GitHookType {
 
 impl GitHookType {
     /// Get the filename for this hook type.
-    pub fn filename(&self) -> &'static str {
+    #[must_use]
+    pub const fn filename(&self) -> &'static str {
         match self {
             Self::PostCommit => "post-commit",
             Self::PrePush => "pre-push",
@@ -36,8 +37,11 @@ impl GitHookType {
     }
 
     /// Parse hook type from string.
+    ///
+    /// Note: This is not the standard `FromStr` trait to avoid conflicts.
+    #[must_use]
     pub fn from_str(s: &str) -> Option<Self> {
-        match s.to_lowercase().replace('-', "").replace('_', "").as_str() {
+        match s.to_lowercase().replace(['-', '_'], "").as_str() {
             "postcommit" => Some(Self::PostCommit),
             "prepush" => Some(Self::PrePush),
             "preparecommitmsg" => Some(Self::PrepareCommitMsg),
@@ -47,6 +51,7 @@ impl GitHookType {
     }
 
     /// Get all hook types.
+    #[must_use]
     pub fn all() -> Vec<Self> {
         vec![
             Self::PostCommit,
@@ -68,12 +73,16 @@ impl GitHookType {
 /// # Returns
 ///
 /// List of installed hook paths.
+///
+/// # Errors
+///
+/// Returns an error if the git hooks directory is not found or if writing hooks fails.
 pub fn install_git_hooks(
     repo_path: Option<&Path>,
     hooks: Option<&[GitHookType]>,
     force: bool,
 ) -> Result<Vec<String>, ClingsError> {
-    let repo = repo_path.unwrap_or(Path::new("."));
+    let repo = repo_path.unwrap_or_else(|| Path::new("."));
     let hooks_dir = repo.join(".git/hooks");
 
     if !hooks_dir.exists() {
@@ -83,7 +92,7 @@ pub fn install_git_hooks(
         )));
     }
 
-    let hooks_to_install = hooks.map(|h| h.to_vec()).unwrap_or_else(GitHookType::all);
+    let hooks_to_install = hooks.map_or_else(GitHookType::all, <[GitHookType]>::to_vec);
     let mut installed = Vec::new();
 
     for hook_type in hooks_to_install {
@@ -130,9 +139,9 @@ fn generate_hook_script(hook_type: GitHookType) -> String {
 /// Process a commit message for todo markers.
 ///
 /// Looks for patterns like:
-/// - TODO: text -> creates a todo
-/// - DONE: id -> completes a todo
-/// - Things: project -> associates with project
+/// - `TODO:` text -> creates a todo
+/// - `DONE:` id -> completes a todo
+/// - `Things:` project -> associates with project
 ///
 /// # Arguments
 ///
@@ -142,6 +151,7 @@ fn generate_hook_script(hook_type: GitHookType) -> String {
 /// # Returns
 ///
 /// List of actions that would be taken.
+#[must_use]
 pub fn commit_todo_hook(message: &str, project: Option<&str>) -> Vec<CommitTodoAction> {
     let mut actions = Vec::new();
 
@@ -149,7 +159,10 @@ pub fn commit_todo_hook(message: &str, project: Option<&str>) -> Vec<CommitTodoA
         let line = line.trim();
 
         // Look for TODO: pattern
-        if let Some(todo_text) = line.strip_prefix("TODO:").or_else(|| line.strip_prefix("todo:")) {
+        if let Some(todo_text) = line
+            .strip_prefix("TODO:")
+            .or_else(|| line.strip_prefix("todo:"))
+        {
             let todo_text = todo_text.trim();
             if !todo_text.is_empty() {
                 actions.push(CommitTodoAction::Create {
@@ -160,17 +173,21 @@ pub fn commit_todo_hook(message: &str, project: Option<&str>) -> Vec<CommitTodoA
         }
 
         // Look for DONE: pattern with ID
-        if let Some(id) = line.strip_prefix("DONE:").or_else(|| line.strip_prefix("done:")) {
+        if let Some(id) = line
+            .strip_prefix("DONE:")
+            .or_else(|| line.strip_prefix("done:"))
+        {
             let id = id.trim();
             if !id.is_empty() {
-                actions.push(CommitTodoAction::Complete {
-                    id: id.to_string(),
-                });
+                actions.push(CommitTodoAction::Complete { id: id.to_string() });
             }
         }
 
         // Look for FIXME: pattern
-        if let Some(fixme_text) = line.strip_prefix("FIXME:").or_else(|| line.strip_prefix("fixme:")) {
+        if let Some(fixme_text) = line
+            .strip_prefix("FIXME:")
+            .or_else(|| line.strip_prefix("fixme:"))
+        {
             let fixme_text = fixme_text.trim();
             if !fixme_text.is_empty() {
                 actions.push(CommitTodoAction::Create {
@@ -188,7 +205,10 @@ pub fn commit_todo_hook(message: &str, project: Option<&str>) -> Vec<CommitTodoA
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommitTodoAction {
     /// Create a new todo
-    Create { title: String, project: Option<String> },
+    Create {
+        title: String,
+        project: Option<String>,
+    },
     /// Complete an existing todo
     Complete { id: String },
 }
@@ -279,11 +299,15 @@ exit 0
 "#;
 
 /// Remove installed git hooks.
+///
+/// # Errors
+///
+/// Returns an error if the git hooks directory is not found or if removing hooks fails.
 pub fn uninstall_git_hooks(
     repo_path: Option<&Path>,
     hooks: Option<&[GitHookType]>,
 ) -> Result<Vec<String>, ClingsError> {
-    let repo = repo_path.unwrap_or(Path::new("."));
+    let repo = repo_path.unwrap_or_else(|| Path::new("."));
     let hooks_dir = repo.join(".git/hooks");
 
     if !hooks_dir.exists() {
@@ -293,7 +317,7 @@ pub fn uninstall_git_hooks(
         )));
     }
 
-    let hooks_to_remove = hooks.map(|h| h.to_vec()).unwrap_or_else(GitHookType::all);
+    let hooks_to_remove = hooks.map_or_else(GitHookType::all, <[GitHookType]>::to_vec);
     let mut removed = Vec::new();
 
     for hook_type in hooks_to_remove {
@@ -320,15 +344,27 @@ mod tests {
     fn test_hook_type_filename() {
         assert_eq!(GitHookType::PostCommit.filename(), "post-commit");
         assert_eq!(GitHookType::PrePush.filename(), "pre-push");
-        assert_eq!(GitHookType::PrepareCommitMsg.filename(), "prepare-commit-msg");
+        assert_eq!(
+            GitHookType::PrepareCommitMsg.filename(),
+            "prepare-commit-msg"
+        );
         assert_eq!(GitHookType::CommitMsg.filename(), "commit-msg");
     }
 
     #[test]
     fn test_hook_type_from_str() {
-        assert_eq!(GitHookType::from_str("post-commit"), Some(GitHookType::PostCommit));
-        assert_eq!(GitHookType::from_str("postcommit"), Some(GitHookType::PostCommit));
-        assert_eq!(GitHookType::from_str("pre-push"), Some(GitHookType::PrePush));
+        assert_eq!(
+            GitHookType::from_str("post-commit"),
+            Some(GitHookType::PostCommit)
+        );
+        assert_eq!(
+            GitHookType::from_str("postcommit"),
+            Some(GitHookType::PostCommit)
+        );
+        assert_eq!(
+            GitHookType::from_str("pre-push"),
+            Some(GitHookType::PrePush)
+        );
         assert_eq!(GitHookType::from_str("unknown"), None);
     }
 
