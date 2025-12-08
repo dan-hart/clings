@@ -245,6 +245,8 @@ impl ThingsClient {
             })
             .unwrap_or_default();
 
+        // Project/list assignment - try lists first, then fall back to projects.whose()
+        // This handles both built-in lists and projects (including names with emoji)
         let list_js = list
             .map(|l| {
                 let list_name = Self::js_string(l);
@@ -253,27 +255,30 @@ impl ThingsClient {
     const targetList = Things.lists.byName({list_name});
     if (targetList.exists()) {{
         Things.move(todo, {{ to: targetList }});
+    }} else {{
+        const targetProject = Things.projects.whose({{ name: {list_name} }})[0];
+        if (targetProject) {{
+            Things.move(todo, {{ to: targetProject }});
+        }}
     }}"
                 )
             })
             .unwrap_or_default();
 
-        // Area assignment - set in props before make() (only if no list/project specified)
-        let area_js = if list.is_none() {
-            area.map(|a| {
+        // Area assignment - set on todo AFTER make() to avoid -1700 type conversion error
+        // Works alongside project assignment (area and project are independent)
+        let area_js = area
+            .map(|a| {
                 let area_name = Self::js_string(a);
                 format!(
                     r"
     const targetArea = Things.areas.byName({area_name});
     if (targetArea.exists()) {{
-        props.area = targetArea;
+        todo.area = targetArea;
     }}"
                 )
             })
-            .unwrap_or_default()
-        } else {
-            String::new()
-        };
+            .unwrap_or_default();
 
         let checklist_js = checklist
             .map(|items| {
@@ -297,8 +302,8 @@ impl ThingsClient {
     {notes_js}
     {deadline_js}
     {tags_js}
-    {area_js}
     const todo = Things.make({{ new: 'toDo', withProperties: props }});
+    {area_js}
     {schedule_js}
     {list_js}
     {checklist_js}
@@ -742,6 +747,7 @@ impl ThingsClient {
         deadline: Option<&str>,
         tags: Option<&str>,
         project: Option<&str>,
+        area: Option<&str>,
     ) -> Result<(), ClingsError> {
         let title_js = title
             .map(|t| format!("todo.name = {};", Self::js_string(t)))
@@ -763,6 +769,7 @@ impl ThingsClient {
             .map(|d| format!("Things.schedule(todo, {{ for: new Date('{d}') }});"))
             .unwrap_or_default();
 
+        // Project/list assignment - try lists first, then fall back to projects.whose()
         let project_js = project
             .map(|p| {
                 let proj_name = Self::js_string(p);
@@ -771,6 +778,25 @@ impl ThingsClient {
     const targetList = Things.lists.byName({proj_name});
     if (targetList.exists()) {{
         Things.move(todo, {{ to: targetList }});
+    }} else {{
+        const targetProject = Things.projects.whose({{ name: {proj_name} }})[0];
+        if (targetProject) {{
+            Things.move(todo, {{ to: targetProject }});
+        }}
+    }}"
+                )
+            })
+            .unwrap_or_default();
+
+        // Area assignment - set directly on todo object
+        let area_js = area
+            .map(|a| {
+                let area_name = Self::js_string(a);
+                format!(
+                    r"
+    const targetArea = Things.areas.byName({area_name});
+    if (targetArea.exists()) {{
+        todo.area = targetArea;
     }}"
                 )
             })
@@ -787,6 +813,7 @@ impl ThingsClient {
     {tags_js}
     {schedule_js}
     {project_js}
+    {area_js}
 }})()"
         );
 
@@ -1602,14 +1629,21 @@ impl ThingsClient {
     // =========================================================================
 
     /// Escape a string for use in JavaScript
+    ///
+    /// Uses JSON encoding to properly handle all Unicode characters including emoji.
     fn js_string(s: &str) -> String {
-        let escaped = s
-            .replace('\\', "\\\\")
-            .replace('\'', "\\'")
-            .replace('\n', "\\n")
-            .replace('\r', "\\r")
-            .replace('\t', "\\t");
-        format!("'{escaped}'")
+        // serde_json::to_string produces properly escaped double-quoted JSON strings
+        // which are valid JavaScript string literals with correct Unicode handling
+        serde_json::to_string(s).unwrap_or_else(|_| {
+            // Fallback to manual escaping if JSON serialization fails (shouldn't happen)
+            let escaped = s
+                .replace('\\', "\\\\")
+                .replace('"', "\\\"")
+                .replace('\n', "\\n")
+                .replace('\r', "\\r")
+                .replace('\t', "\\t");
+            format!("\"{escaped}\"")
+        })
     }
 
     /// Convert a slice of strings to a JavaScript array literal
@@ -1640,37 +1674,46 @@ mod tests {
 
     #[test]
     fn test_js_string_simple() {
-        assert_eq!(ThingsClient::js_string("hello"), "'hello'");
+        assert_eq!(ThingsClient::js_string("hello"), "\"hello\"");
     }
 
     #[test]
     fn test_js_string_with_single_quote() {
-        assert_eq!(ThingsClient::js_string("it's"), "'it\\'s'");
+        // Single quotes don't need escaping in double-quoted JSON strings
+        assert_eq!(ThingsClient::js_string("it's"), "\"it's\"");
+    }
+
+    #[test]
+    fn test_js_string_with_double_quote() {
+        assert_eq!(
+            ThingsClient::js_string("say \"hello\""),
+            "\"say \\\"hello\\\"\""
+        );
     }
 
     #[test]
     fn test_js_string_with_backslash() {
-        assert_eq!(ThingsClient::js_string("back\\slash"), "'back\\\\slash'");
+        assert_eq!(ThingsClient::js_string("back\\slash"), "\"back\\\\slash\"");
     }
 
     #[test]
     fn test_js_string_with_newline() {
-        assert_eq!(ThingsClient::js_string("line1\nline2"), "'line1\\nline2'");
+        assert_eq!(ThingsClient::js_string("line1\nline2"), "\"line1\\nline2\"");
     }
 
     #[test]
     fn test_js_string_with_carriage_return() {
-        assert_eq!(ThingsClient::js_string("line1\rline2"), "'line1\\rline2'");
+        assert_eq!(ThingsClient::js_string("line1\rline2"), "\"line1\\rline2\"");
     }
 
     #[test]
     fn test_js_string_with_tab() {
-        assert_eq!(ThingsClient::js_string("col1\tcol2"), "'col1\\tcol2'");
+        assert_eq!(ThingsClient::js_string("col1\tcol2"), "\"col1\\tcol2\"");
     }
 
     #[test]
     fn test_js_string_empty() {
-        assert_eq!(ThingsClient::js_string(""), "''");
+        assert_eq!(ThingsClient::js_string(""), "\"\"");
     }
 
     #[test]
@@ -1678,14 +1721,24 @@ mod tests {
         // Test multiple escapes in one string
         assert_eq!(
             ThingsClient::js_string("it's a \"test\"\nwith\ttabs"),
-            "'it\\'s a \"test\"\\nwith\\ttabs'"
+            "\"it's a \\\"test\\\"\\nwith\\ttabs\""
         );
     }
 
     #[test]
     fn test_js_string_unicode() {
         // Unicode should pass through unchanged
-        assert_eq!(ThingsClient::js_string("日本語"), "'日本語'");
+        assert_eq!(ThingsClient::js_string("日本語"), "\"日本語\"");
+    }
+
+    #[test]
+    fn test_js_string_emoji() {
+        // Emoji should be properly handled
+        assert_eq!(ThingsClient::js_string("⚠️ Warning"), "\"⚠️ Warning\"");
+        assert_eq!(
+            ThingsClient::js_string("🖥️ Under Armour"),
+            "\"🖥️ Under Armour\""
+        );
     }
 
     // ==================== js_string_array Tests ====================
@@ -1699,7 +1752,7 @@ mod tests {
     #[test]
     fn test_js_string_array_single() {
         let items = vec!["hello".to_string()];
-        assert_eq!(ThingsClient::js_string_array(&items), "['hello']");
+        assert_eq!(ThingsClient::js_string_array(&items), "[\"hello\"]");
     }
 
     #[test]
@@ -1707,7 +1760,7 @@ mod tests {
         let items = vec!["one".to_string(), "two".to_string(), "three".to_string()];
         assert_eq!(
             ThingsClient::js_string_array(&items),
-            "['one', 'two', 'three']"
+            "[\"one\", \"two\", \"three\"]"
         );
     }
 
@@ -1716,7 +1769,7 @@ mod tests {
         let items = vec!["it's".to_string(), "a\ntest".to_string()];
         assert_eq!(
             ThingsClient::js_string_array(&items),
-            "['it\\'s', 'a\\ntest']"
+            "[\"it's\", \"a\\ntest\"]"
         );
     }
 
@@ -1870,6 +1923,7 @@ mod tests {
             })
             .unwrap_or_default();
 
+        // Project/list assignment - try lists first, then fall back to projects.whose()
         let list_js = list
             .map(|l| {
                 format!(
@@ -1877,27 +1931,31 @@ mod tests {
     const targetList = Things.lists.byName({});
     if (targetList.exists()) {{
         Things.move(todo, {{ to: targetList }});
+    }} else {{
+        const targetProject = Things.projects.whose({{ name: {} }})[0];
+        if (targetProject) {{
+            Things.move(todo, {{ to: targetProject }});
+        }}
     }}"#,
+                    ThingsClient::js_string(l),
                     ThingsClient::js_string(l)
                 )
             })
             .unwrap_or_default();
 
-        let area_js = if list.is_none() {
-            area.map(|a| {
+        // Area assignment - set on todo AFTER make() (works alongside project)
+        let area_js = area
+            .map(|a| {
                 format!(
                     r#"
     const targetArea = Things.areas.byName({});
     if (targetArea.exists()) {{
-        props.area = targetArea;
+        todo.area = targetArea;
     }}"#,
                     ThingsClient::js_string(a)
                 )
             })
-            .unwrap_or_default()
-        } else {
-            String::new()
-        };
+            .unwrap_or_default();
 
         let checklist_js = checklist
             .map(|items| {
@@ -1921,8 +1979,8 @@ mod tests {
     {}
     {}
     {}
-    {}
     const todo = Things.make({{ new: 'toDo', withProperties: props }});
+    {}
     {}
     {}
     {}
@@ -1942,7 +2000,7 @@ mod tests {
     #[test]
     fn test_add_todo_script_basic() {
         let script = generate_add_todo_script("Buy milk", None, None, None, None, None, None, None);
-        assert!(script.contains("const props = { name: 'Buy milk' }"));
+        assert!(script.contains("const props = { name: \"Buy milk\" }"));
         assert!(script.contains("Things.make({ new: 'toDo', withProperties: props })"));
     }
 
@@ -1950,7 +2008,7 @@ mod tests {
     fn test_add_todo_script_with_notes() {
         let script =
             generate_add_todo_script("Task", Some("My notes"), None, None, None, None, None, None);
-        assert!(script.contains("props.notes = 'My notes'"));
+        assert!(script.contains("props.notes = \"My notes\""));
     }
 
     #[test]
@@ -2011,7 +2069,7 @@ mod tests {
         let tags = vec!["work".to_string(), "urgent".to_string()];
         let script =
             generate_add_todo_script("Task", None, None, None, Some(&tags), None, None, None);
-        assert!(script.contains("props.tagNames = 'work, urgent'"));
+        assert!(script.contains("props.tagNames = \"work, urgent\""));
     }
 
     #[test]
@@ -2026,7 +2084,7 @@ mod tests {
             None,
             None,
         );
-        assert!(script.contains("Things.lists.byName('My Project')"));
+        assert!(script.contains("Things.lists.byName(\"My Project\")"));
         assert!(script.contains("Things.move(todo, { to: targetList })"));
     }
 
@@ -2034,27 +2092,29 @@ mod tests {
     fn test_add_todo_script_with_area() {
         let script =
             generate_add_todo_script("Task", None, None, None, None, None, Some("Work"), None);
-        assert!(script.contains("Things.areas.byName('Work')"));
-        assert!(script.contains("props.area = targetArea"));
+        assert!(script.contains("Things.areas.byName(\"Work\")"));
+        // Area is now set on todo object AFTER make(), not on props
+        assert!(script.contains("todo.area = targetArea"));
     }
 
     #[test]
-    fn test_add_todo_script_area_ignored_when_project_specified() {
+    fn test_add_todo_script_area_works_with_project() {
+        // Area and project can now be used together
         let script = generate_add_todo_script(
             "Task",
             None,
             None,
             None,
             None,
-            Some("My Project"), // project takes precedence
-            Some("Work"),       // area should be ignored
+            Some("My Project"),
+            Some("Work"),
             None,
         );
         // Project should be set
-        assert!(script.contains("Things.lists.byName('My Project')"));
-        // Area should NOT be set when project is specified
-        assert!(!script.contains("Things.areas.byName"));
-        assert!(!script.contains("props.area"));
+        assert!(script.contains("Things.lists.byName(\"My Project\")"));
+        // Area should also be set (no longer ignored when project is specified)
+        assert!(script.contains("Things.areas.byName(\"Work\")"));
+        assert!(script.contains("todo.area = targetArea"));
     }
 
     #[test]
@@ -2062,7 +2122,7 @@ mod tests {
         let checklist = vec!["Item 1".to_string(), "Item 2".to_string()];
         let script =
             generate_add_todo_script("Task", None, None, None, None, None, None, Some(&checklist));
-        assert!(script.contains("const checklistItems = ['Item 1', 'Item 2']"));
+        assert!(script.contains("const checklistItems = [\"Item 1\", \"Item 2\"]"));
         assert!(script
             .contains("Things.make({ new: 'toDo', withProperties: { name: item }, at: todo })"));
     }
@@ -2078,19 +2138,19 @@ mod tests {
             Some("2024-12-20"),
             Some(&tags),
             Some("Project X"),
-            Some("Work"), // Will be ignored due to project
+            Some("Work"), // Area is now set alongside project
             Some(&checklist),
         );
 
-        assert!(script.contains("const props = { name: 'Complete task' }"));
-        assert!(script.contains("props.notes = 'Important notes'"));
+        assert!(script.contains("const props = { name: \"Complete task\" }"));
+        assert!(script.contains("props.notes = \"Important notes\""));
         assert!(script.contains("props.dueDate = new Date('2024-12-20')"));
-        assert!(script.contains("props.tagNames = 'work'"));
+        assert!(script.contains("props.tagNames = \"work\""));
         assert!(script.contains("Things.schedule(todo, { for: new Date('2024-12-15') })"));
-        assert!(script.contains("Things.lists.byName('Project X')"));
-        // Area should be ignored because project is specified
-        assert!(!script.contains("Things.areas.byName"));
-        assert!(script.contains("const checklistItems = ['Step 1']"));
+        assert!(script.contains("Things.lists.byName(\"Project X\")"));
+        // Area is now set alongside project (not ignored)
+        assert!(script.contains("Things.areas.byName(\"Work\")"));
+        assert!(script.contains("const checklistItems = [\"Step 1\"]"));
     }
 
     #[test]
@@ -2105,8 +2165,9 @@ mod tests {
             None,
             None,
         );
-        assert!(script.contains("'Task with \\'quotes\\' and\\nnewline'"));
-        assert!(script.contains("'Notes with\\ttabs'"));
+        // JSON encoding uses double quotes and escapes properly
+        assert!(script.contains("\"Task with 'quotes' and\\nnewline\""));
+        assert!(script.contains("\"Notes with\\ttabs\""));
     }
 
     // ==================== Update Todo Tests ====================
@@ -2176,7 +2237,7 @@ mod tests {
         let script =
             generate_update_todo_script("ABC123", Some("New Title"), None, None, None, None, None);
         assert!(script.contains("Things.toDos.byId('ABC123')"));
-        assert!(script.contains("todo.name = 'New Title'"));
+        assert!(script.contains("todo.name = \"New Title\""));
         assert!(!script.contains("todo.notes"));
         assert!(!script.contains("todo.dueDate"));
         assert!(!script.contains("todo.tagNames"));
@@ -2195,7 +2256,7 @@ mod tests {
             None,
             None,
         );
-        assert!(script.contains("todo.notes = 'Important notes here'"));
+        assert!(script.contains("todo.notes = \"Important notes here\""));
         assert!(!script.contains("todo.name ="));
     }
 
@@ -2217,7 +2278,7 @@ mod tests {
             Some("work, urgent"),
             None,
         );
-        assert!(script.contains("todo.tagNames = 'work, urgent'"));
+        assert!(script.contains("todo.tagNames = \"work, urgent\""));
     }
 
     #[test]
@@ -2231,7 +2292,7 @@ mod tests {
     fn test_update_todo_script_with_project_only() {
         let script =
             generate_update_todo_script("ABC123", None, None, None, None, None, Some("Project X"));
-        assert!(script.contains("Things.lists.byName('Project X')"));
+        assert!(script.contains("Things.lists.byName(\"Project X\")"));
         assert!(script.contains("Things.move(todo, { to: targetList })"));
     }
 
@@ -2247,12 +2308,12 @@ mod tests {
             Some("Project X"),
         );
         assert!(script.contains("Things.toDos.byId('ABC123')"));
-        assert!(script.contains("todo.name = 'New Title'"));
-        assert!(script.contains("todo.notes = 'New notes'"));
+        assert!(script.contains("todo.name = \"New Title\""));
+        assert!(script.contains("todo.notes = \"New notes\""));
         assert!(script.contains("todo.dueDate = new Date('2024-12-20')"));
-        assert!(script.contains("todo.tagNames = 'work, urgent'"));
+        assert!(script.contains("todo.tagNames = \"work, urgent\""));
         assert!(script.contains("Things.schedule(todo, { for: new Date('2024-12-15') })"));
-        assert!(script.contains("Things.lists.byName('Project X')"));
+        assert!(script.contains("Things.lists.byName(\"Project X\")"));
         assert!(script.contains("Things.move(todo, { to: targetList })"));
     }
 
@@ -2282,8 +2343,9 @@ mod tests {
             None,
             None,
         );
-        assert!(script.contains("'Title with \\'quotes\\''"));
-        assert!(script.contains("'Notes with\\nnewline'"));
+        // JSON encoding preserves single quotes and escapes newlines
+        assert!(script.contains("\"Title with 'quotes'\""));
+        assert!(script.contains("\"Notes with\\nnewline\""));
     }
 
     #[test]
@@ -2297,7 +2359,7 @@ mod tests {
             None,
             Some("🖥️ Under Armour"),
         );
-        assert!(script.contains("Things.lists.byName('🖥️ Under Armour')"));
+        assert!(script.contains("Things.lists.byName(\"🖥️ Under Armour\")"));
     }
 
     // ==================== ListView Tests ====================

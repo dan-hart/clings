@@ -327,6 +327,10 @@ pub enum TodoCommands {
         /// Move to project
         #[arg(long)]
         project: Option<String>,
+
+        /// Move to area
+        #[arg(long)]
+        area: Option<String>,
     },
 }
 

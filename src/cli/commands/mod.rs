@@ -58,6 +58,7 @@ pub fn todo(
             deadline,
             tags,
             project,
+            area,
         } => {
             client.update_todo(
                 &id,
@@ -67,6 +68,7 @@ pub fn todo(
                 deadline.as_deref(),
                 tags.as_deref(),
                 project.as_deref(),
+                area.as_deref(),
             )?;
             Ok(format!("Updated todo: {id}"))
         },
