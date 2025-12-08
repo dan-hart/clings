@@ -165,6 +165,12 @@ clings shell completions zsh --install
 brew install dan-hart/tap/clings
 ```
 
+To upgrade to the latest version:
+
+```bash
+brew update && brew upgrade clings
+```
+
 ### From Source
 
 ```bash
