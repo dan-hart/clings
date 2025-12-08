@@ -151,6 +151,31 @@ clings shell completions fish > ~/.config/fish/completions/clings.fish
 clings shell completions zsh --install
 ```
 
+### 9. Todo Management
+
+Manage individual todos:
+
+```bash
+# Show todo details
+clings todo show <ID>
+
+# Update todo properties
+clings todo update <ID> --title "New title"
+clings todo update <ID> --area "Work"
+clings todo update <ID> --project "Sprint 1"
+clings todo update <ID> --when tomorrow --deadline "dec 31"
+clings todo update <ID> --tags "urgent,priority"
+
+# Mark as complete
+clings todo complete <ID>
+
+# Cancel todo
+clings todo cancel <ID>
+
+# Delete todo
+clings todo delete <ID>
+```
+
 ## Requirements
 
 - **macOS 10.15 (Catalina) or later**
@@ -233,7 +258,7 @@ clings add --help
 | `someday` | `s` | Show someday todos |
 | `logbook` | `l` | Show completed todos |
 | `add` | `a` | Quick add with natural language |
-| `todo` | - | Manage todos (show, complete, cancel, delete) |
+| `todo` | - | Manage todos (show, update, complete, cancel, delete) |
 | `project` | - | Manage projects (list, show, add) |
 | `search` | - | Search todos by text or filters |
 | `open` | - | Open Things 3 to a view or item |
