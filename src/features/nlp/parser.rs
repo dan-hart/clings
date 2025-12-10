@@ -144,10 +144,15 @@ static CHECKLIST_MARKER: Lazy<Regex> = Lazy::new(|| {
 /// assert_eq!(task.project, Some("Family".to_string()));
 /// assert_eq!(task.priority, Priority::High);
 /// ```
+// Placeholder for escaped hash characters - uses null byte to avoid conflicts
+const ESCAPED_HASH_PLACEHOLDER: &str = "\x00HASH\x00";
+
 #[must_use]
 pub fn parse_task(input: &str) -> ParsedTask {
     let mut task = ParsedTask::default();
-    let mut remaining = input.trim().to_string();
+
+    // Replace escaped hash (\#) with placeholder before parsing
+    let mut remaining = input.trim().replace("\\#", ESCAPED_HASH_PLACEHOLDER);
 
     // Extract notes first (// at end)
     if let Some(caps) = NOTES_PATTERN.captures(&remaining) {
@@ -229,7 +234,8 @@ pub fn parse_task(input: &str) -> ParsedTask {
     remaining = extract_datetime(&mut task, &remaining);
 
     // Clean up remaining text to get the title
-    task.title = clean_title(&remaining);
+    // Restore escaped hash placeholders back to literal #
+    task.title = clean_title(&remaining).replace(ESCAPED_HASH_PLACEHOLDER, "#");
 
     task
 }
@@ -375,6 +381,39 @@ mod tests {
     fn test_parse_many_tags() {
         let task = parse_task("task #a #b #c #d #e");
         assert_eq!(task.tags, vec!["a", "b", "c", "d", "e"]);
+    }
+
+    // ====================
+    // Escaped Hash Tests
+    // ====================
+
+    #[test]
+    fn test_escaped_hash_stays_in_title() {
+        let task = parse_task("Review PR \\#267");
+        assert_eq!(task.title, "Review PR #267");
+        assert!(task.tags.is_empty());
+    }
+
+    #[test]
+    fn test_escaped_hash_with_real_tag() {
+        let task = parse_task("Fix issue \\#123 #urgent");
+        assert_eq!(task.title, "Fix issue #123");
+        assert_eq!(task.tags, vec!["urgent"]);
+    }
+
+    #[test]
+    fn test_multiple_escaped_hashes() {
+        let task = parse_task("Issues \\#1, \\#2, and \\#3 need review");
+        assert_eq!(task.title, "Issues #1, #2, and #3 need review");
+        assert!(task.tags.is_empty());
+    }
+
+    #[test]
+    fn test_escaped_hash_mixed_with_tags() {
+        // Note: "for" is parsed as project indicator, so we use different text
+        let task = parse_task("PR \\#42 needs review #work #code-review");
+        assert_eq!(task.title, "PR #42 needs review");
+        assert_eq!(task.tags, vec!["work", "code-review"]);
     }
 
     // ===============
