@@ -1,6 +1,11 @@
-# Rust
-/target/
-**/*.rs.bk
+# Swift
+.build/
+.swiftpm/
+Package.resolved
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+xcuserdata/
 
 # IDE / Editor
 .idea/
@@ -19,7 +24,6 @@
 ._*
 
 # Coverage reports
-tarpaulin-report.html
 coverage/
 *.profraw
 *.profdata
@@ -36,7 +40,7 @@ coverage/
 .envrc
 
 # Testing artifacts
-/tests/fixtures/temp/
+/Tests/fixtures/temp/
 
 # Security - prevent accidental commit of sensitive files
 *secret*
