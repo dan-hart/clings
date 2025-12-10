@@ -18,7 +18,7 @@ struct ShowCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClient()
+        let client = ThingsClientFactory.create()
         let todo = try await client.fetchTodo(id: id)
 
         let formatter: OutputFormatter = output.json
