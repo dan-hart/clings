@@ -25,7 +25,7 @@ protocol ListCommand: AsyncParsableCommand {
 
 extension ListCommand {
     func run() async throws {
-        let client = ThingsClient()
+        let client = ThingsClientFactory.create()
         let todos = try await client.fetchList(listView)
 
         let formatter: OutputFormatter = output.json
@@ -130,7 +130,7 @@ struct ProjectsCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClient()
+        let client = ThingsClientFactory.create()
         let projects = try await client.fetchProjects()
 
         let formatter: OutputFormatter = output.json
@@ -152,7 +152,7 @@ struct AreasCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClient()
+        let client = ThingsClientFactory.create()
         let areas = try await client.fetchAreas()
 
         let formatter: OutputFormatter = output.json
@@ -174,7 +174,7 @@ struct TagsCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClient()
+        let client = ThingsClientFactory.create()
         let tags = try await client.fetchTags()
 
         let formatter: OutputFormatter = output.json

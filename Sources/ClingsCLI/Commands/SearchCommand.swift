@@ -19,7 +19,7 @@ struct SearchCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClient()
+        let client = ThingsClientFactory.create()
         let todos = try await client.search(query: query)
 
         let formatter: OutputFormatter = output.json

@@ -21,7 +21,7 @@ struct CompleteCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClient()
+        let client = ThingsClientFactory.create()
         try await client.completeTodo(id: id)
 
         let formatter: OutputFormatter = output.json
@@ -46,7 +46,7 @@ struct CancelCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClient()
+        let client = ThingsClientFactory.create()
         try await client.cancelTodo(id: id)
 
         let formatter: OutputFormatter = output.json
@@ -75,7 +75,7 @@ struct DeleteCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClient()
+        let client = ThingsClientFactory.create()
         try await client.deleteTodo(id: id)
 
         let formatter: OutputFormatter = output.json
