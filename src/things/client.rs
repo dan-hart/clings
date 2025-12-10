@@ -144,10 +144,11 @@ impl ThingsClient {
 
     /// Get a specific todo by ID using JXA (fallback).
     fn get_todo_jxa(&self, id: &str) -> Result<Todo, ClingsError> {
+        let id_str = Self::js_string(id);
         let script = format!(
             r"(() {{
     const Things = Application('Things3');
-    const t = Things.toDos.byId('{id}');
+    const t = Things.toDos.byId({id_str});
     if (!t.exists()) throw new Error('Can\'t get todo');
 
     let tags = [];
@@ -228,7 +229,10 @@ impl ThingsClient {
 
         // Deadline sets the due date property
         let deadline_js = deadline
-            .map(|d| format!("props.dueDate = new Date('{d}');"))
+            .map(|d| {
+                let date_str = Self::js_string(d);
+                format!("props.dueDate = new Date({date_str});")
+            })
             .unwrap_or_default();
 
         let tags_js = tags
@@ -238,9 +242,10 @@ impl ThingsClient {
         // Schedule command sets when the todo appears in Today/Upcoming
         let schedule_js = when_date
             .map(|d| {
+                let date_str = Self::js_string(d);
                 format!(
                     r"
-    Things.schedule(todo, {{ for: new Date('{d}') }});"
+    Things.schedule(todo, {{ for: new Date({date_str}) }});"
                 )
             })
             .unwrap_or_default();
@@ -320,10 +325,11 @@ impl ThingsClient {
     ///
     /// Returns an error if the todo is not found or cannot be updated.
     pub fn complete_todo(&self, id: &str) -> Result<(), ClingsError> {
+        let id_str = Self::js_string(id);
         let script = format!(
             r"(() => {{
     const Things = Application('Things3');
-    const todo = Things.toDos.byId('{id}');
+    const todo = Things.toDos.byId({id_str});
     if (!todo.exists()) throw new Error('Can\'t get todo');
     todo.status = 'completed';
 }})()"
@@ -338,10 +344,11 @@ impl ThingsClient {
     ///
     /// Returns an error if the todo is not found or cannot be updated.
     pub fn cancel_todo(&self, id: &str) -> Result<(), ClingsError> {
+        let id_str = Self::js_string(id);
         let script = format!(
             r"(() => {{
     const Things = Application('Things3');
-    const todo = Things.toDos.byId('{id}');
+    const todo = Things.toDos.byId({id_str});
     if (!todo.exists()) throw new Error('Can\'t get todo');
     todo.status = 'canceled';
 }})()"
@@ -426,7 +433,10 @@ impl ThingsClient {
             .unwrap_or_default();
 
         let due_js = due_date
-            .map(|d| format!("props.dueDate = new Date('{d}');"))
+            .map(|d| {
+                let date_str = Self::js_string(d);
+                format!("props.dueDate = new Date({date_str});")
+            })
             .unwrap_or_default();
 
         let tags_js = tags
@@ -591,26 +601,27 @@ impl ThingsClient {
         // Check if target is a list name or an ID
         let script = match target.to_lowercase().as_str() {
             "inbox" | "today" | "upcoming" | "anytime" | "someday" | "logbook" | "trash" => {
-                let cap_target = capitalize(target);
+                let cap_target = Self::js_string(&capitalize(target));
                 format!(
                     r"(() => {{
     const Things = Application('Things3');
     Things.activate();
-    Things.show(Things.lists.byName('{cap_target}'));
+    Things.show(Things.lists.byName({cap_target}));
 }})()"
                 )
             },
             _ => {
                 // Assume it's an ID
+                let target_str = Self::js_string(target);
                 format!(
                     r"(() => {{
     const Things = Application('Things3');
     Things.activate();
-    const todo = Things.toDos.byId('{target}');
+    const todo = Things.toDos.byId({target_str});
     if (todo.exists()) {{
         Things.show(todo);
     }} else {{
-        const project = Things.projects.byId('{target}');
+        const project = Things.projects.byId({target_str});
         if (project.exists()) {{
             Things.show(project);
         }} else {{
@@ -681,12 +692,14 @@ impl ThingsClient {
     ///
     /// Returns an error if the todo is not found or cannot be updated.
     pub fn update_todo_due(&self, id: &str, due_date: &str) -> Result<(), ClingsError> {
+        let id_str = Self::js_string(id);
+        let date_str = Self::js_string(due_date);
         let script = format!(
             r"(() => {{
     const Things = Application('Things3');
-    const todo = Things.toDos.byId('{id}');
+    const todo = Things.toDos.byId({id_str});
     if (!todo.exists()) throw new Error('Can\'t get todo');
-    todo.dueDate = new Date('{due_date}');
+    todo.dueDate = new Date({date_str});
 }})()"
         );
 
@@ -699,10 +712,11 @@ impl ThingsClient {
     ///
     /// Returns an error if the todo is not found or cannot be updated.
     pub fn clear_todo_due(&self, id: &str) -> Result<(), ClingsError> {
+        let id_str = Self::js_string(id);
         let script = format!(
             r"(() => {{
     const Things = Application('Things3');
-    const todo = Things.toDos.byId('{id}');
+    const todo = Things.toDos.byId({id_str});
     if (!todo.exists()) throw new Error('Can\'t get todo');
     todo.dueDate = null;
 }})()"
@@ -717,10 +731,11 @@ impl ThingsClient {
     ///
     /// Returns an error if the todo is not found or cannot be moved.
     pub fn move_to_someday(&self, id: &str) -> Result<(), ClingsError> {
+        let id_str = Self::js_string(id);
         let script = format!(
             r"(() => {{
     const Things = Application('Things3');
-    const todo = Things.toDos.byId('{id}');
+    const todo = Things.toDos.byId({id_str});
     if (!todo.exists()) throw new Error('Can\'t get todo');
     const somedayList = Things.lists.byName('Someday');
     Things.move(todo, {{ to: somedayList }});
@@ -749,6 +764,8 @@ impl ThingsClient {
         project: Option<&str>,
         area: Option<&str>,
     ) -> Result<(), ClingsError> {
+        let id_str = Self::js_string(id);
+
         let title_js = title
             .map(|t| format!("todo.name = {};", Self::js_string(t)))
             .unwrap_or_default();
@@ -758,7 +775,10 @@ impl ThingsClient {
             .unwrap_or_default();
 
         let deadline_js = deadline
-            .map(|d| format!("todo.dueDate = new Date('{d}');"))
+            .map(|d| {
+                let date_str = Self::js_string(d);
+                format!("todo.dueDate = new Date({date_str});")
+            })
             .unwrap_or_default();
 
         let tags_js = tags
@@ -766,7 +786,10 @@ impl ThingsClient {
             .unwrap_or_default();
 
         let schedule_js = when_date
-            .map(|d| format!("Things.schedule(todo, {{ for: new Date('{d}') }});"))
+            .map(|d| {
+                let date_str = Self::js_string(d);
+                format!("Things.schedule(todo, {{ for: new Date({date_str}) }});")
+            })
             .unwrap_or_default();
 
         // Project/list assignment - try lists first, then fall back to projects.whose()
@@ -805,7 +828,7 @@ impl ThingsClient {
         let script = format!(
             r"(() => {{
     const Things = Application('Things3');
-    const todo = Things.toDos.byId('{id}');
+    const todo = Things.toDos.byId({id_str});
     if (!todo.exists()) throw new Error('Can\'t get todo');
     {title_js}
     {notes_js}
@@ -1042,11 +1065,12 @@ impl ThingsClient {
         project_id: &str,
         heading_name: &str,
     ) -> Result<(), ClingsError> {
+        let project_id_str = Self::js_string(project_id);
         let heading_str = Self::js_string(heading_name);
         let script = format!(
             r"(() => {{
     const Things = Application('Things3');
-    const project = Things.projects.byId('{project_id}');
+    const project = Things.projects.byId({project_id_str});
     if (!project.exists()) throw new Error('Can\'t find project');
     Things.make({{ new: 'heading', withProperties: {{ name: {heading_str} }}, at: project }});
 }})()"
@@ -1064,12 +1088,16 @@ impl ThingsClient {
         due_date: Option<&str>,
         tags: Option<&[String]>,
     ) -> Result<(), ClingsError> {
+        let project_id_str = Self::js_string(project_id);
         let notes_js = notes
             .map(|n| format!("props.notes = {};", Self::js_string(n)))
             .unwrap_or_default();
 
         let due_js = due_date
-            .map(|d| format!("props.dueDate = new Date('{d}');"))
+            .map(|d| {
+                let date_str = Self::js_string(d);
+                format!("props.dueDate = new Date({date_str});")
+            })
             .unwrap_or_default();
 
         let tags_js = tags
@@ -1080,7 +1108,7 @@ impl ThingsClient {
         let script = format!(
             r"(() => {{
     const Things = Application('Things3');
-    const project = Things.projects.byId('{project_id}');
+    const project = Things.projects.byId({project_id_str});
     if (!project.exists()) throw new Error('Can\'t find project');
     const props = {{ name: {title_str} }};
     {notes_js}
@@ -1103,12 +1131,16 @@ impl ThingsClient {
         due_date: Option<&str>,
         tags: Option<&[String]>,
     ) -> Result<(), ClingsError> {
+        let project_id_str = Self::js_string(project_id);
         let notes_js = notes
             .map(|n| format!("props.notes = {};", Self::js_string(n)))
             .unwrap_or_default();
 
         let due_js = due_date
-            .map(|d| format!("props.dueDate = new Date('{d}');"))
+            .map(|d| {
+                let date_str = Self::js_string(d);
+                format!("props.dueDate = new Date({date_str});")
+            })
             .unwrap_or_default();
 
         let tags_js = tags
@@ -1120,7 +1152,7 @@ impl ThingsClient {
         let script = format!(
             r"(() => {{
     const Things = Application('Things3');
-    const project = Things.projects.byId('{project_id}');
+    const project = Things.projects.byId({project_id_str});
     if (!project.exists()) throw new Error('Can\'t find project');
 
     // Find the heading
@@ -1401,11 +1433,12 @@ impl ThingsClient {
         }
 
         let ids_array = Self::js_string_array(ids);
+        let date_str = Self::js_string(due_date);
         let script = format!(
             r"(() => {{
     const Things = Application('Things3');
     const ids = {ids_array};
-    const dueDate = new Date('{due_date}');
+    const dueDate = new Date({date_str});
     let succeeded = 0;
     let failed = 0;
     const errors = [];
@@ -1738,6 +1771,34 @@ mod tests {
         assert_eq!(
             ThingsClient::js_string("🖥️ Under Armour"),
             "\"🖥️ Under Armour\""
+        );
+    }
+
+    #[test]
+    fn test_js_string_ampersand() {
+        // Ampersand should pass through - it's valid in JSON strings
+        assert_eq!(ThingsClient::js_string("Q&A Guide"), "\"Q&A Guide\"");
+        assert_eq!(
+            ThingsClient::js_string("Lunch & Learn"),
+            "\"Lunch & Learn\""
+        );
+    }
+
+    #[test]
+    fn test_js_string_angle_brackets() {
+        // Angle brackets should pass through unchanged
+        assert_eq!(
+            ThingsClient::js_string("foo < bar > baz"),
+            "\"foo < bar > baz\""
+        );
+    }
+
+    #[test]
+    fn test_js_string_special_chars_combo() {
+        // Complex string with multiple special characters
+        assert_eq!(
+            ThingsClient::js_string("Q&A: \"What?\" <test>"),
+            "\"Q&A: \\\"What?\\\" <test>\""
         );
     }
 

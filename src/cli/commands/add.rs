@@ -41,6 +41,21 @@ pub fn quick_add(
             parse_natural_date(&deadline_str).map(crate::core::DateParseResult::as_deadline);
     }
 
+    // Merge CLI tags with NLP-parsed tags (deduplicated)
+    if let Some(cli_tags) = args.tags {
+        for tag in cli_tags {
+            let trimmed = tag.trim().to_string();
+            if !trimmed.is_empty() && !task.tags.contains(&trimmed) {
+                task.tags.push(trimmed);
+            }
+        }
+    }
+
+    // Override NLP notes with CLI notes if provided
+    if let Some(cli_notes) = args.notes {
+        task.notes = Some(cli_notes);
+    }
+
     // If parse-only mode, just show what would be created
     if args.parse_only {
         return format_parsed_task(&task, format);

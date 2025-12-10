@@ -275,6 +275,33 @@ Commands:
   tui         Launch the terminal UI
 ```
 
+### Add Command Options
+
+The `add` command supports natural language input plus explicit flags:
+
+```bash
+# Natural language parsing
+clings add "buy milk tomorrow #errands"
+clings add "call mom friday 3pm for Family !high"
+
+# Explicit flags override natural language parsing
+clings add "task" --tags "work,urgent" --notes "Details here"
+clings add "task" -t iOS -n "Short note"
+
+# Escape # to keep it literal in title (not parsed as tag)
+clings add "Review PR \#267" --when today      # Title: "Review PR #267"
+clings add "Fix issue \#123 #urgent"           # Title: "Fix issue #123", tag: urgent
+
+# All add flags:
+#   --project, -p    Override detected project
+#   --area, -a       Override detected area
+#   --when, -w       Override detected when date
+#   --deadline, -d   Override detected deadline
+#   --tags, -t       Tags to apply (comma-separated)
+#   --notes, -n      Notes to attach
+#   --parse-only     Show what would be created without creating
+```
+
 ### Design Principles
 
 1. **Intuitive:** Commands match Things 3 terminology

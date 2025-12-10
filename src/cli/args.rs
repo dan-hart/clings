@@ -107,18 +107,21 @@ pub enum Commands {
     ///   clings add "buy milk tomorrow #errands"
     ///   clings add "call mom friday 3pm for Family !high"
     ///   clings add "finish report by dec 15 #work"
+    ///   clings add "task" --tags "work,urgent" --notes "Details here"
+    ///   clings add "Review PR \#267" --when today    (escaped # stays literal)
     ///
     /// # Supported Patterns
     ///
     ///   Dates:      today, tomorrow, next monday, dec 15, in 3 days
     ///   Times:      3pm, 15:00, morning, evening
-    ///   Tags:       #tag1 #tag2
+    ///   Tags:       #tag1 #tag2 (or --tags "tag1,tag2")
     ///   Projects:   for `ProjectName`
-    ///   Areas:      in `AreaName`
+    ///   Areas:      in `AreaName` (or `--area "AreaName"`)
     ///   Deadlines:  by friday
     ///   Priority:   !high, !!, !!!
-    ///   Notes:      // notes at the end
+    ///   Notes:      // notes at the end (or --notes "text")
     ///   Checklist:  - item1 - item2
+    ///   Escape #:   \#123 keeps # literal (not parsed as tag)
     #[command(alias = "a")]
     Add(QuickAddArgs),
 
@@ -265,6 +268,14 @@ pub struct QuickAddArgs {
     /// Override detected deadline (YYYY-MM-DD or natural language)
     #[arg(long, short = 'd')]
     pub deadline: Option<String>,
+
+    /// Tags to apply (comma-separated, e.g., --tags "work,urgent")
+    #[arg(long, short = 't', value_delimiter = ',')]
+    pub tags: Option<Vec<String>>,
+
+    /// Notes to attach to the todo
+    #[arg(long, short = 'n')]
+    pub notes: Option<String>,
 }
 
 #[derive(Args)]
