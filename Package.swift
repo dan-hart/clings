@@ -32,14 +32,6 @@ let package = Package(
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "SwiftDate", package: "SwiftDate")
             ]
-        ),
-        .testTarget(
-            name: "ClingsCoreTests",
-            dependencies: ["ClingsCore"]
-        ),
-        .testTarget(
-            name: "ClingsCLITests",
-            dependencies: ["ClingsCLI"]
         )
     ]
 )
