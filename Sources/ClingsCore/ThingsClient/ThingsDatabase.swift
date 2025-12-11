@@ -78,8 +78,7 @@ public final class ThingsDatabase: Sendable {
                 arguments = []
 
             case .today:
-                let todayStart = Calendar.current.startOfDay(for: Date())
-                let todayInt = Int(todayStart.timeIntervalSinceReferenceDate)
+                let todayDays = daysSinceReferenceDate(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
                            userModificationDate, project, area
@@ -88,11 +87,10 @@ public final class ThingsDatabase: Sendable {
                           AND (start = 1 OR startDate = ?)
                     ORDER BY todayIndex, "index"
                     """
-                arguments = [todayInt]
+                arguments = [todayDays]
 
             case .upcoming:
-                let todayStart = Calendar.current.startOfDay(for: Date())
-                let todayInt = Int(todayStart.timeIntervalSinceReferenceDate)
+                let todayDays = daysSinceReferenceDate(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
                            userModificationDate, project, area
@@ -100,11 +98,10 @@ public final class ThingsDatabase: Sendable {
                     WHERE status = 0 AND trashed = 0 AND type = 0 AND startDate > ?
                     ORDER BY startDate, "index"
                     """
-                arguments = [todayInt]
+                arguments = [todayDays]
 
             case .anytime:
-                let todayStart = Calendar.current.startOfDay(for: Date())
-                let todayInt = Int(todayStart.timeIntervalSinceReferenceDate)
+                let todayDays = daysSinceReferenceDate(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
                            userModificationDate, project, area
@@ -113,7 +110,7 @@ public final class ThingsDatabase: Sendable {
                           AND (startDate IS NULL OR startDate <= ?)
                     ORDER BY "index"
                     """
-                arguments = [todayInt]
+                arguments = [todayDays]
 
             case .someday:
                 sql = """
@@ -384,5 +381,16 @@ public final class ThingsDatabase: Sendable {
         case 3: return .completed
         default: return .open
         }
+    }
+
+    /// Calculate days since Cocoa reference date (January 1, 2001).
+    /// Things 3 stores startDate as days, not seconds.
+    private func daysSinceReferenceDate(_ date: Date) -> Int {
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: date)
+        // Reference date is Jan 1, 2001 00:00:00 UTC
+        let referenceDate = Date(timeIntervalSinceReferenceDate: 0)
+        let components = calendar.dateComponents([.day], from: referenceDate, to: startOfDay)
+        return components.day ?? 0
     }
 }

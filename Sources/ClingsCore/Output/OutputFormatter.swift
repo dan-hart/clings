@@ -8,6 +8,7 @@ import Foundation
 /// Protocol for formatting output.
 public protocol OutputFormatter {
     func format(todos: [Todo]) -> String
+    func format(todos: [Todo], list: String) -> String
     func format(projects: [Project]) -> String
     func format(areas: [Area]) -> String
     func format(tags: [Tag]) -> String
@@ -43,6 +44,11 @@ public struct JSONOutputFormatter: OutputFormatter {
 
     public func format(todos: [Todo]) -> String {
         let response = TodoListResponse(count: todos.count, items: todos)
+        return encode(response)
+    }
+
+    public func format(todos: [Todo], list: String) -> String {
+        let response = TodoListResponse(count: todos.count, items: todos, list: list)
         return encode(response)
     }
 
@@ -101,6 +107,10 @@ public struct TextOutputFormatter: OutputFormatter {
             lines.append(formatTodoLine(todo))
         }
         return lines.joined(separator: "\n")
+    }
+
+    public func format(todos: [Todo], list: String) -> String {
+        format(todos: todos)
     }
 
     public func format(projects: [Project]) -> String {
@@ -274,26 +284,158 @@ public struct TextOutputFormatter: OutputFormatter {
     private func cyan(_ text: String) -> String { color(text, code: "36") }
 }
 
-// MARK: - Response Types for JSON
+// MARK: - Response Types for JSON (Rust-compatible format)
 
 struct TodoListResponse: Encodable {
     let count: Int
-    let items: [Todo]
+    let items: [TodoJSON]
+    let list: String?
+
+    init(count: Int, items: [Todo], list: String? = nil) {
+        self.count = count
+        self.items = items.map { TodoJSON(from: $0) }
+        self.list = list
+    }
+}
+
+/// Rust-compatible JSON representation of a Todo.
+/// Uses custom encoding to always include null values for compatibility.
+struct TodoJSON: Encodable {
+    let id: String
+    let name: String
+    let notes: String
+    let status: String
+    let dueDate: String?
+    let tags: [String]
+    let project: String?
+    let area: String?
+    let checklistItems: [ChecklistItemJSON]
+    let creationDate: String
+    let modificationDate: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, notes, status, dueDate, tags, project, area
+        case checklistItems, creationDate, modificationDate
+    }
+
+    init(from todo: Todo) {
+        let formatter = ISO8601DateFormatter()
+
+        self.id = todo.id
+        self.name = todo.name
+        self.notes = todo.notes ?? ""
+        self.status = todo.status.rawValue
+        self.dueDate = todo.dueDate.map { formatter.string(from: $0) }
+        self.tags = todo.tags.map { $0.name }
+        self.project = todo.project?.name
+        self.area = todo.area?.name
+        self.checklistItems = todo.checklistItems.map { ChecklistItemJSON(from: $0) }
+        self.creationDate = formatter.string(from: todo.creationDate)
+        self.modificationDate = formatter.string(from: todo.modificationDate)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(area, forKey: .area)
+        try container.encode(checklistItems, forKey: .checklistItems)
+        try container.encode(creationDate, forKey: .creationDate)
+        try container.encode(dueDate, forKey: .dueDate)
+        try container.encode(id, forKey: .id)
+        try container.encode(modificationDate, forKey: .modificationDate)
+        try container.encode(name, forKey: .name)
+        try container.encode(notes, forKey: .notes)
+        try container.encode(project, forKey: .project)
+        try container.encode(status, forKey: .status)
+        try container.encode(tags, forKey: .tags)
+    }
+}
+
+struct ChecklistItemJSON: Encodable {
+    let id: String
+    let name: String
+    let completed: Bool
+
+    init(from item: ChecklistItem) {
+        self.id = item.id
+        self.name = item.name
+        self.completed = item.completed
+    }
 }
 
 struct ProjectListResponse: Encodable {
     let count: Int
-    let items: [Project]
+    let items: [ProjectJSON]
+
+    init(count: Int, items: [Project]) {
+        self.count = count
+        self.items = items.map { ProjectJSON(from: $0) }
+    }
+}
+
+struct ProjectJSON: Encodable {
+    let id: String
+    let name: String
+    let notes: String
+    let status: String
+    let area: String?
+    let tags: [String]
+    let dueDate: String?
+    let creationDate: String?
+
+    init(from project: Project) {
+        let formatter = ISO8601DateFormatter()
+
+        self.id = project.id
+        self.name = project.name
+        self.notes = project.notes ?? ""
+        self.status = project.status.rawValue
+        self.area = project.area?.name
+        self.tags = project.tags.map { $0.name }
+        self.dueDate = project.dueDate.map { formatter.string(from: $0) }
+        self.creationDate = project.creationDate.map { formatter.string(from: $0) }
+    }
 }
 
 struct AreaListResponse: Encodable {
     let count: Int
-    let items: [Area]
+    let items: [AreaJSON]
+
+    init(count: Int, items: [Area]) {
+        self.count = count
+        self.items = items.map { AreaJSON(from: $0) }
+    }
+}
+
+struct AreaJSON: Encodable {
+    let id: String
+    let name: String
+    let tags: [String]
+
+    init(from area: Area) {
+        self.id = area.id
+        self.name = area.name
+        self.tags = area.tags.map { $0.name }
+    }
 }
 
 struct TagListResponse: Encodable {
     let count: Int
-    let items: [Tag]
+    let items: [TagJSON]
+
+    init(count: Int, items: [Tag]) {
+        self.count = count
+        self.items = items.map { TagJSON(from: $0) }
+    }
+}
+
+struct TagJSON: Encodable {
+    let id: String
+    let name: String
+
+    init(from tag: Tag) {
+        self.id = tag.id
+        self.name = tag.name
+    }
 }
 
 struct MessageResponse: Encodable {

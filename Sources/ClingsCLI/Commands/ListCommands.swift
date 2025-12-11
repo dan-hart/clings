@@ -32,7 +32,12 @@ extension ListCommand {
             ? JSONOutputFormatter()
             : TextOutputFormatter(useColors: !output.noColor)
 
-        print(formatter.format(todos: todos))
+        // Use list name for JSON output to match Rust format
+        if output.json {
+            print(formatter.format(todos: todos, list: listView.displayName))
+        } else {
+            print(formatter.format(todos: todos))
+        }
     }
 }
 
