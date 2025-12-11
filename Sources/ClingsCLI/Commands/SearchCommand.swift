@@ -10,6 +10,22 @@ struct SearchCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "search",
         abstract: "Search todos by text",
+        discussion: """
+        Searches todos by matching text in the title and notes.
+        The search is case-insensitive.
+
+        For more complex filtering (by status, tags, dates), use
+        the 'filter' command instead.
+
+        EXAMPLES:
+          clings search "meeting"       Find todos containing "meeting"
+          clings find "project report"  Alias for 'search'
+          clings f status               Short alias
+          clings search urgent --json   Output results as JSON
+
+        SEE ALSO:
+          filter, today, show
+        """,
         aliases: ["find", "f"]
     )
 

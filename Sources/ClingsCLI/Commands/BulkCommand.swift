@@ -10,6 +10,23 @@ struct BulkCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "bulk",
         abstract: "Bulk operations on multiple todos",
+        discussion: """
+        Perform operations on multiple todos at once using filters.
+
+        All bulk commands support:
+        - --where EXPR    Filter expression to select todos
+        - --dry-run       Preview changes without applying
+        - -y/--yes        Skip confirmation prompt
+        - --list LIST     List to operate on (default: today)
+
+        EXAMPLES:
+          clings bulk complete --where "tags CONTAINS 'done'"
+          clings bulk cancel --list inbox --dry-run
+          clings bulk move --to "Archive" --where "status = open"
+
+        SEE ALSO:
+          filter, complete, cancel
+        """,
         subcommands: [
             BulkCompleteCommand.self,
             BulkCancelCommand.self,
@@ -39,7 +56,18 @@ struct BulkOptions: ParsableArguments {
 struct BulkCompleteCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "complete",
-        abstract: "Mark multiple todos as completed"
+        abstract: "Mark multiple todos as completed",
+        discussion: """
+        Marks multiple todos as completed based on filter criteria.
+
+        EXAMPLES:
+          clings bulk complete --list today
+          clings bulk complete --where "tags CONTAINS 'quick'"
+          clings bulk complete --where "due < today" --dry-run
+
+        SEE ALSO:
+          complete, bulk cancel
+        """
     )
 
     @OptionGroup var bulkOptions: BulkOptions
@@ -113,7 +141,18 @@ struct BulkCompleteCommand: AsyncParsableCommand {
 struct BulkCancelCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "cancel",
-        abstract: "Cancel multiple todos"
+        abstract: "Cancel multiple todos",
+        discussion: """
+        Cancels multiple todos based on filter criteria.
+
+        EXAMPLES:
+          clings bulk cancel --list inbox
+          clings bulk cancel --where "status = open AND project IS NULL"
+          clings bulk cancel --dry-run
+
+        SEE ALSO:
+          cancel, bulk complete
+        """
     )
 
     @OptionGroup var bulkOptions: BulkOptions
@@ -181,7 +220,21 @@ struct BulkCancelCommand: AsyncParsableCommand {
 struct BulkTagCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "tag",
-        abstract: "Add tags to multiple todos"
+        abstract: "Add tags to multiple todos",
+        discussion: """
+        Adds tags to multiple todos based on filter criteria.
+
+        NOTE: This operation has limited support due to Things 3 API
+        constraints. Some tags may not be added via automation.
+
+        EXAMPLES:
+          clings bulk tag "urgent,review" --list today
+          clings bulk tag "done" --where "status = completed"
+          clings bulk tag "important" --dry-run
+
+        SEE ALSO:
+          tags, add --tags
+        """
     )
 
     @Argument(help: "Tags to add (comma-separated)")
@@ -245,7 +298,18 @@ struct BulkTagCommand: AsyncParsableCommand {
 struct BulkMoveCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "move",
-        abstract: "Move multiple todos to a project"
+        abstract: "Move multiple todos to a project",
+        discussion: """
+        Moves multiple todos to a project based on filter criteria.
+
+        EXAMPLES:
+          clings bulk move --to "Work Project" --list inbox
+          clings bulk move --to "Archive" --where "tags CONTAINS 'done'"
+          clings bulk move --to "Personal" --dry-run
+
+        SEE ALSO:
+          projects, add --project
+        """
     )
 
     @Option(name: .long, help: "Target project name")

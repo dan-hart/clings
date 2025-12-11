@@ -1,10 +1,10 @@
-// swift-tools-version:5.9
+// swift-tools-version:6.0
 import PackageDescription
 
 let package = Package(
     name: "clings",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v14)
     ],
     products: [
         .executable(name: "clings", targets: ["ClingsCLI"]),
@@ -31,6 +31,18 @@ let package = Package(
             dependencies: [
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "SwiftDate", package: "SwiftDate")
+            ]
+        ),
+        .testTarget(
+            name: "ClingsCoreTests",
+            dependencies: ["ClingsCore"]
+        ),
+        .testTarget(
+            name: "ClingsCLITests",
+            dependencies: [
+                "ClingsCLI",
+                "ClingsCore",
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
             ]
         )
     ]

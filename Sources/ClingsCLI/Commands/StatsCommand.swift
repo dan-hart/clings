@@ -319,7 +319,19 @@ struct StatsCollector {
 struct StatsTrendsCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "trends",
-        abstract: "Show completion trends over time"
+        abstract: "Show completion trends over time",
+        discussion: """
+        Shows a weekly breakdown of completed todos as a bar chart.
+        Useful for tracking productivity patterns over time.
+
+        EXAMPLES:
+          clings stats trends           Show 4-week trend
+          clings stats trends --weeks 8 Show 8-week trend
+          clings stats trends --json    Output as JSON
+
+        SEE ALSO:
+          stats, stats heatmap
+        """
     )
 
     @Option(name: .long, help: "Number of weeks to show (default: 4)")
@@ -394,7 +406,20 @@ struct StatsTrendsCommand: AsyncParsableCommand {
 struct StatsHeatmapCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "heatmap",
-        abstract: "Show GitHub-style contribution calendar"
+        abstract: "Show GitHub-style contribution calendar",
+        discussion: """
+        Displays a GitHub-style contribution heatmap showing daily
+        completion intensity. Days with more completions are shown
+        in darker green.
+
+        EXAMPLES:
+          clings stats heatmap            Show 12-week calendar
+          clings stats heatmap --weeks 52 Show full year
+          clings stats heatmap --json     Output as JSON
+
+        SEE ALSO:
+          stats, stats trends
+        """
     )
 
     @Option(name: .long, help: "Number of weeks to show (default: 12)")
