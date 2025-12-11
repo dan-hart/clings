@@ -289,8 +289,12 @@ public final class ThingsDatabase: Sendable {
         let deadline: Date? = (row["deadline"] as Int?).flatMap {
             Date(timeIntervalSinceReferenceDate: TimeInterval($0))
         }
-        let creationDate = Date(timeIntervalSinceReferenceDate: TimeInterval(row["creationDate"] as Int))
-        let modificationDate = Date(timeIntervalSinceReferenceDate: TimeInterval(row["userModificationDate"] as Int))
+        let creationDate: Date = (row["creationDate"] as Double?).flatMap {
+            Date(timeIntervalSinceReferenceDate: $0)
+        } ?? Date()
+        let modificationDate: Date = (row["userModificationDate"] as Double?).flatMap {
+            Date(timeIntervalSinceReferenceDate: $0)
+        } ?? creationDate
 
         return Todo(
             id: uuid,
