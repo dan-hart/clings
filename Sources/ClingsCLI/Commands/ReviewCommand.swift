@@ -41,10 +41,6 @@ struct ReviewStartCommand: AsyncParsableCommand {
     func run() async throws {
         let session = ReviewSession.load() ?? ReviewSession()
 
-        let formatter: OutputFormatter = output.json
-            ? JSONOutputFormatter()
-            : TextOutputFormatter(useColors: !output.noColor)
-
         let useColors = !output.noColor
         let bold = useColors ? "\u{001B}[1m" : ""
         let green = useColors ? "\u{001B}[32m" : ""

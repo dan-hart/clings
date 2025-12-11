@@ -284,7 +284,7 @@ public struct TextOutputFormatter: OutputFormatter {
     private func cyan(_ text: String) -> String { color(text, code: "36") }
 }
 
-// MARK: - Response Types for JSON (Rust-compatible format)
+// MARK: - Response Types for JSON
 
 struct TodoListResponse: Encodable {
     let count: Int
@@ -298,7 +298,7 @@ struct TodoListResponse: Encodable {
     }
 }
 
-/// Rust-compatible JSON representation of a Todo.
+/// JSON representation of a Todo for API output.
 /// Uses custom encoding to always include null values for compatibility.
 struct TodoJSON: Encodable {
     let id: String

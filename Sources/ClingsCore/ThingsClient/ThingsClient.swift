@@ -127,7 +127,7 @@ public actor ThingsClient: ThingsClientProtocol {
         }
 
         // Check if it's an error response
-        if let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+        if (try? JSONDecoder().decode(ErrorResponse.self, from: data)) != nil {
             throw ThingsError.notFound(id)
         }
 
