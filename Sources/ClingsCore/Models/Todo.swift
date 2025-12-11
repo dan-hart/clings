@@ -118,3 +118,34 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
         lhs.id == rhs.id
     }
 }
+
+// MARK: - Filterable Conformance
+
+extension Todo: Filterable {
+    public func fieldValue(_ field: String) -> FieldValue? {
+        switch field.lowercased() {
+        case "id":
+            return .string(id)
+        case "name", "title":
+            return .string(name)
+        case "notes":
+            return .optionalString(notes)
+        case "status":
+            return .string(status.rawValue)
+        case "due", "duedate":
+            return .optionalDate(dueDate)
+        case "tags":
+            return .stringList(tags.map { $0.name })
+        case "project":
+            return .optionalString(project?.name)
+        case "area":
+            return .optionalString(area?.name)
+        case "created", "creationdate":
+            return .date(creationDate)
+        case "modified", "modificationdate":
+            return .date(modificationDate)
+        default:
+            return nil
+        }
+    }
+}

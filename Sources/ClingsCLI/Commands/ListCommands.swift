@@ -14,6 +14,9 @@ struct OutputOptions: ParsableArguments {
 
     @Flag(name: .long, help: "Suppress color output")
     var noColor = false
+
+    @Option(name: .long, help: "Filter expression (e.g., \"tags CONTAINS 'work'\")")
+    var `where`: String?
 }
 
 // MARK: - Base List Command
@@ -26,7 +29,13 @@ protocol ListCommand: AsyncParsableCommand {
 extension ListCommand {
     func run() async throws {
         let client = ThingsClientFactory.create()
-        let todos = try await client.fetchList(listView)
+        var todos = try await client.fetchList(listView)
+
+        // Apply filter if specified
+        if let whereClause = output.where {
+            let filter = try FilterParser.parse(whereClause)
+            todos = todos.filter { filter.matches($0) }
+        }
 
         let formatter: OutputFormatter = output.json
             ? JSONOutputFormatter()
