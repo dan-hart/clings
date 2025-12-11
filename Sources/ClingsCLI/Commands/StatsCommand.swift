@@ -17,7 +17,14 @@ struct StatsCommand: AsyncParsableCommand {
         - Completion rates
         - Overdue items
         - Tag distribution
-        """
+
+        Use 'stats trends' for completion trends over time.
+        Use 'stats heatmap' for a GitHub-style contribution calendar.
+        """,
+        subcommands: [
+            StatsTrendsCommand.self,
+            StatsHeatmapCommand.self,
+        ]
     )
 
     @Option(name: .long, help: "Number of days to analyze (default: 30)")
@@ -274,5 +281,217 @@ struct StatsCollector {
             topTags: topTags,
             byArea: areaCounts
         )
+    }
+
+    /// Collect daily completion counts for trends/heatmap.
+    func collectDailyCompletions(days: Int) throws -> [Date: Int] {
+        let db = try ThingsDatabase()
+        let logbook = try db.fetchList(.logbook)
+
+        let calendar = Calendar.current
+        let periodStart = calendar.date(byAdding: .day, value: -days, to: Date())!
+
+        var dailyCounts: [Date: Int] = [:]
+
+        // Initialize all days to 0
+        for i in 0..<days {
+            if let date = calendar.date(byAdding: .day, value: -i, to: Date()) {
+                let dayStart = calendar.startOfDay(for: date)
+                dailyCounts[dayStart] = 0
+            }
+        }
+
+        // Count completions
+        for todo in logbook where todo.status == .completed {
+            let modDate = todo.modificationDate
+            if modDate >= periodStart {
+                let dayStart = calendar.startOfDay(for: modDate)
+                dailyCounts[dayStart, default: 0] += 1
+            }
+        }
+
+        return dailyCounts
+    }
+}
+
+// MARK: - Stats Trends Command
+
+struct StatsTrendsCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "trends",
+        abstract: "Show completion trends over time"
+    )
+
+    @Option(name: .long, help: "Number of weeks to show (default: 4)")
+    var weeks: Int = 4
+
+    @OptionGroup var output: OutputOptions
+
+    func run() async throws {
+        let days = weeks * 7
+        let dailyCounts = try StatsCollector().collectDailyCompletions(days: days)
+
+        if output.json {
+            // Convert to JSON-friendly format
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withFullDate]
+            var jsonData: [[String: Any]] = []
+            for (date, count) in dailyCounts.sorted(by: { $0.key < $1.key }) {
+                jsonData.append(["date": formatter.string(from: date), "completed": count])
+            }
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try JSONSerialization.data(withJSONObject: jsonData, options: [.prettyPrinted, .sortedKeys])
+            print(String(data: data, encoding: .utf8) ?? "[]")
+        } else {
+            printTrends(dailyCounts, weeks: weeks, useColors: !output.noColor)
+        }
+    }
+
+    private func printTrends(_ dailyCounts: [Date: Int], weeks: Int, useColors: Bool) {
+        let green = useColors ? "\u{001B}[32m" : ""
+        let dim = useColors ? "\u{001B}[2m" : ""
+        let bold = useColors ? "\u{001B}[1m" : ""
+        let reset = useColors ? "\u{001B}[0m" : ""
+
+        let calendar = Calendar.current
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "MMM d"
+
+        print("\(bold)📈 Completion Trends\(reset)")
+        print("\(dim)─────────────────────────────────────\(reset)")
+
+        // Group by week
+        for weekIndex in (0..<weeks).reversed() {
+            let weekStart = calendar.date(byAdding: .weekOfYear, value: -weekIndex, to: Date())!
+            let weekStartDay = calendar.startOfDay(for: calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: weekStart))!)
+
+            var weekTotal = 0
+            for dayOffset in 0..<7 {
+                if let day = calendar.date(byAdding: .day, value: dayOffset, to: weekStartDay) {
+                    let dayStart = calendar.startOfDay(for: day)
+                    weekTotal += dailyCounts[dayStart] ?? 0
+                }
+            }
+
+            let weekLabel = dateFormatter.string(from: weekStartDay)
+            let bar = String(repeating: "█", count: min(weekTotal, 50))
+            let barColor = weekTotal > 0 ? green : dim
+            print("  \(weekLabel): \(barColor)\(bar)\(reset) \(weekTotal)")
+        }
+
+        // Summary
+        let total = dailyCounts.values.reduce(0, +)
+        let avgPerDay = Double(total) / Double(weeks * 7)
+        print("\n  Total: \(green)\(total)\(reset) completed")
+        print("  Average: \(String(format: "%.1f", avgPerDay)) per day")
+        print("")
+    }
+}
+
+// MARK: - Stats Heatmap Command
+
+struct StatsHeatmapCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "heatmap",
+        abstract: "Show GitHub-style contribution calendar"
+    )
+
+    @Option(name: .long, help: "Number of weeks to show (default: 12)")
+    var weeks: Int = 12
+
+    @OptionGroup var output: OutputOptions
+
+    func run() async throws {
+        let days = weeks * 7
+        let dailyCounts = try StatsCollector().collectDailyCompletions(days: days)
+
+        if output.json {
+            // Convert to JSON-friendly format
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withFullDate]
+            var jsonData: [[String: Any]] = []
+            for (date, count) in dailyCounts.sorted(by: { $0.key < $1.key }) {
+                jsonData.append(["date": formatter.string(from: date), "completed": count])
+            }
+            let data = try JSONSerialization.data(withJSONObject: jsonData, options: [.prettyPrinted, .sortedKeys])
+            print(String(data: data, encoding: .utf8) ?? "[]")
+        } else {
+            printHeatmap(dailyCounts, weeks: weeks, useColors: !output.noColor)
+        }
+    }
+
+    private func printHeatmap(_ dailyCounts: [Date: Int], weeks: Int, useColors: Bool) {
+        let bold = useColors ? "\u{001B}[1m" : ""
+        let dim = useColors ? "\u{001B}[2m" : ""
+        let reset = useColors ? "\u{001B}[0m" : ""
+
+        let calendar = Calendar.current
+
+        print("\(bold)🗓  Completion Heatmap\(reset)")
+        print("\(dim)─────────────────────────────────────\(reset)")
+
+        // Day labels
+        let dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+        // Find max for scaling
+        let maxCount = dailyCounts.values.max() ?? 1
+
+        // Print each day of week as a row
+        for dayIndex in 0..<7 {
+            var row = "  \(dayLabels[dayIndex]) "
+
+            for weekOffset in (0..<weeks).reversed() {
+                let weekStart = calendar.date(byAdding: .weekOfYear, value: -weekOffset, to: Date())!
+                let weekStartDay = calendar.startOfDay(for: calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: weekStart))!)
+
+                if let day = calendar.date(byAdding: .day, value: dayIndex, to: weekStartDay) {
+                    let dayStart = calendar.startOfDay(for: day)
+                    let count = dailyCounts[dayStart] ?? 0
+
+                    // Use intensity levels
+                    let block = heatmapBlock(count: count, max: maxCount, useColors: useColors)
+                    row += block
+                }
+            }
+
+            print(row)
+        }
+
+        // Legend
+        print("\n  \(dim)Less\(reset) ", terminator: "")
+        print(heatmapBlock(count: 0, max: maxCount, useColors: useColors), terminator: "")
+        print(heatmapBlock(count: maxCount / 4, max: maxCount, useColors: useColors), terminator: "")
+        print(heatmapBlock(count: maxCount / 2, max: maxCount, useColors: useColors), terminator: "")
+        print(heatmapBlock(count: 3 * maxCount / 4, max: maxCount, useColors: useColors), terminator: "")
+        print(heatmapBlock(count: maxCount, max: maxCount, useColors: useColors), terminator: "")
+        print(" \(dim)More\(reset)")
+        print("")
+    }
+
+    private func heatmapBlock(count: Int, max: Int, useColors: Bool) -> String {
+        if !useColors {
+            if count == 0 { return "·" }
+            if count <= max / 4 { return "░" }
+            if count <= max / 2 { return "▒" }
+            if count <= 3 * max / 4 { return "▓" }
+            return "█"
+        }
+
+        // Use green color scale
+        let reset = "\u{001B}[0m"
+        if count == 0 {
+            return "\u{001B}[90m·\(reset)"  // Gray
+        }
+        if count <= max / 4 {
+            return "\u{001B}[38;5;22m█\(reset)"  // Dark green
+        }
+        if count <= max / 2 {
+            return "\u{001B}[38;5;28m█\(reset)"  // Medium green
+        }
+        if count <= 3 * max / 4 {
+            return "\u{001B}[38;5;34m█\(reset)"  // Light green
+        }
+        return "\u{001B}[38;5;46m█\(reset)"  // Bright green
     }
 }

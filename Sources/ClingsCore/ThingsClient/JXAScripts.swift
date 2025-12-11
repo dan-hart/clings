@@ -239,6 +239,70 @@ public enum JXAScripts {
         """
     }
 
+    /// Move a todo to a project.
+    public static func moveTodo(id: String, toProject projectName: String) -> String {
+        """
+        (() => {
+            const app = Application('Things3');
+            const todo = app.toDos.byId('\(id.jxaEscaped)');
+
+            if (!todo.exists()) {
+                return JSON.stringify({ success: false, error: 'Todo not found' });
+            }
+
+            const project = app.projects.byName('\(projectName.jxaEscaped)');
+            if (!project.exists()) {
+                return JSON.stringify({ success: false, error: 'Project not found: \(projectName.jxaEscaped)' });
+            }
+
+            todo.project = project;
+            return JSON.stringify({ success: true, id: '\(id.jxaEscaped)' });
+        })()
+        """
+    }
+
+    /// Update a todo's properties.
+    public static func updateTodo(
+        id: String,
+        name: String? = nil,
+        notes: String? = nil,
+        dueDate: Date? = nil,
+        tags: [String]? = nil
+    ) -> String {
+        let dueDateISO = dueDate.map { ISO8601DateFormatter().string(from: $0) }
+
+        return """
+        (() => {
+            const app = Application('Things3');
+            const todo = app.toDos.byId('\(id.jxaEscaped)');
+
+            if (!todo.exists()) {
+                return JSON.stringify({ success: false, error: 'Todo not found' });
+            }
+
+            \(name != nil ? "todo.name = '\(name!.jxaEscaped)';" : "")
+            \(notes != nil ? "todo.notes = '\(notes!.jxaEscaped)';" : "")
+            \(dueDateISO != nil ? "todo.dueDate = new Date('\(dueDateISO!)');" : "")
+
+            \(tags != nil ? """
+            // Update tags
+            const newTagNames = [\(tags!.map { "'\($0.jxaEscaped)'" }.joined(separator: ", "))];
+            // Clear existing tags would require removing them, which JXA doesn't easily support
+            // Instead, we add new tags
+            newTagNames.forEach(tagName => {
+                let tag = app.tags.byName(tagName);
+                if (!tag.exists()) {
+                    tag = app.make({ new: 'tag', withProperties: { name: tagName }});
+                }
+                try { todo.tags.push(tag); } catch (e) {}
+            });
+            """ : "")
+
+            return JSON.stringify({ success: true, id: '\(id.jxaEscaped)' });
+        })()
+        """
+    }
+
     /// Create a new todo with the given properties.
     public static func createTodo(
         name: String,

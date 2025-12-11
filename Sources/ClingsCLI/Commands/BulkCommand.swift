@@ -14,6 +14,7 @@ struct BulkCommand: AsyncParsableCommand {
             BulkCompleteCommand.self,
             BulkCancelCommand.self,
             BulkTagCommand.self,
+            BulkMoveCommand.self,
         ]
     )
 }
@@ -239,52 +240,81 @@ struct BulkTagCommand: AsyncParsableCommand {
     }
 }
 
+// MARK: - Bulk Move Command
+
+struct BulkMoveCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "move",
+        abstract: "Move multiple todos to a project"
+    )
+
+    @Option(name: .long, help: "Target project name")
+    var to: String
+
+    @OptionGroup var bulkOptions: BulkOptions
+
+    @Option(name: .long, help: "List to operate on (today, inbox, etc.)")
+    var list: String = "today"
+
+    func run() async throws {
+        let client = ThingsClientFactory.create()
+
+        guard let listView = ListView(rawValue: list.lowercased()) else {
+            throw ThingsError.invalidState("Unknown list: \(list)")
+        }
+
+        var todos = try await client.fetchList(listView)
+
+        if let whereClause = bulkOptions.where {
+            todos = try filterTodos(todos, with: whereClause)
+        }
+
+        let formatter: OutputFormatter = bulkOptions.output.json
+            ? JSONOutputFormatter()
+            : TextOutputFormatter(useColors: !bulkOptions.output.noColor)
+
+        if todos.isEmpty {
+            print(formatter.format(message: "No todos match the criteria"))
+            return
+        }
+
+        print("Will move \(todos.count) todo(s) to project '\(to)':")
+        for todo in todos {
+            print("  - \(todo.name)")
+        }
+
+        if bulkOptions.dryRun {
+            print(formatter.format(message: "[DRY RUN] No changes made"))
+            return
+        }
+
+        if !bulkOptions.yes {
+            print("\nProceed? (y/N): ", terminator: "")
+            guard let response = readLine(), response.lowercased() == "y" else {
+                print(formatter.format(message: "Aborted"))
+                return
+            }
+        }
+
+        var moved = 0
+        var failed = 0
+        for todo in todos {
+            do {
+                try await client.moveTodo(id: todo.id, toProject: to)
+                moved += 1
+            } catch {
+                failed += 1
+            }
+        }
+
+        print(formatter.format(message: "Moved: \(moved), Failed: \(failed)"))
+    }
+}
+
 // MARK: - Filter Helper
 
-/// Simple filter evaluator for --where clauses.
+/// Filter todos using the full DSL parser.
 func filterTodos(_ todos: [Todo], with clause: String) throws -> [Todo] {
-    // Parse simple expressions like:
-    // - "tags CONTAINS 'work'"
-    // - "name LIKE '%report%'"
-    // - "status = 'open'"
-
-    let clause = clause.trimmingCharacters(in: .whitespaces)
-
-    // Handle "tags CONTAINS 'value'"
-    if let match = clause.range(of: #"tags\s+CONTAINS\s+'([^']+)'"#, options: .regularExpression) {
-        let tagName = String(clause[match]).replacingOccurrences(of: #"tags\s+CONTAINS\s+'"#, with: "", options: .regularExpression).dropLast()
-        return todos.filter { todo in
-            todo.tags.contains { $0.name.lowercased() == tagName.lowercased() }
-        }
-    }
-
-    // Handle "name LIKE '%value%'"
-    if let match = clause.range(of: #"name\s+LIKE\s+'%([^%]+)%'"#, options: .regularExpression) {
-        let pattern = String(clause[match])
-            .replacingOccurrences(of: #"name\s+LIKE\s+'%"#, with: "", options: .regularExpression)
-            .dropLast(2)
-        return todos.filter { $0.name.lowercased().contains(pattern.lowercased()) }
-    }
-
-    // Handle "project = 'value'" or "project IS NOT NULL"
-    if clause.lowercased().contains("project is not null") {
-        return todos.filter { $0.project != nil }
-    }
-    if clause.lowercased().contains("project is null") {
-        return todos.filter { $0.project == nil }
-    }
-
-    // Handle "due < today" or "due IS NOT NULL"
-    if clause.lowercased().contains("due is not null") || clause.lowercased().contains("deadline is not null") {
-        return todos.filter { $0.dueDate != nil }
-    }
-    if clause.lowercased().contains("due < today") || clause.lowercased().contains("deadline < today") {
-        let today = Calendar.current.startOfDay(for: Date())
-        return todos.filter { todo in
-            guard let due = todo.dueDate else { return false }
-            return due < today
-        }
-    }
-
-    throw ThingsError.invalidState("Unsupported filter: \(clause)")
+    let filter = try FilterParser.parse(clause)
+    return todos.filter { filter.matches($0) }
 }
