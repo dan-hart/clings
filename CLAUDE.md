@@ -4,244 +4,197 @@
 
 ## Project Overview
 
-**clings** is a fast, feature-rich command-line interface for [Things 3](https://culturedcode.com/things/) on macOS, written in Rust.
+**clings** is a fast, feature-rich command-line interface for [Things 3](https://culturedcode.com/things/) on macOS, written in Swift.
 
 - **License:** GNU General Public License v3.0 (GPLv3)
 - **Platform:** macOS only (requires Things 3 installed)
-- **Technology:** Rust + JavaScript for Automation (JXA) via `osascript`
+- **Technology:** Swift + SQLite (reads) + JavaScript for Automation (JXA) via `osascript` (writes)
+- **Version:** 0.2.0
 
 ## Build & Run
 
 ```bash
 # Build
-cargo build
+swift build
 
 # Run
-cargo run -- today
-cargo run -- --help
+swift run clings today
+swift run clings --help
 
 # Test
-cargo test
+swift test
 
-# Lint
-cargo clippy
-
-# Format
-cargo fmt
+# Build release
+swift build -c release
 ```
 
 ## Architecture
 
+### Hybrid Read/Write Approach
+
+clings uses a **hybrid architecture** for optimal performance and safety:
+
+- **Reads:** Direct SQLite access to the Things 3 database (~30ms response time)
+- **Writes:** JXA/AppleScript through the official Things 3 automation API
+
+This approach provides:
+- Near-instant reads without launching Things 3
+- Safe writes through the official API
+- Compatibility with Things 3 updates
+
 ### Module Structure
 
 ```
-src/
-├── main.rs           # Entry point - CLI parsing and orchestration only
-├── lib.rs            # Library exports - all business logic lives here
-├── error.rs          # Custom error types with thiserror
-├── cli/
-│   ├── mod.rs        # CLI module exports
-│   ├── args.rs       # Clap argument definitions
-│   └── commands/     # Command implementations
-│       └── mod.rs
-├── things/
-│   ├── mod.rs        # Things module exports
-│   ├── client.rs     # ThingsClient - JXA script execution
-│   └── types.rs      # Data types (Todo, Project, Area, Tag, etc.)
-└── output/
-    ├── mod.rs        # Output module exports
-    ├── pretty.rs     # Human-readable colored output
-    └── json.rs       # JSON output formatting
+Sources/
+├── clings/
+│   └── main.swift           # Entry point
+├── ClingsCore/
+│   ├── CLI/
+│   │   ├── Commands/        # Command implementations
+│   │   └── CLIApp.swift     # ArgumentParser setup
+│   ├── Database/
+│   │   └── ThingsDatabase.swift  # SQLite access
+│   ├── JXA/
+│   │   └── ThingsJXA.swift  # JXA script execution
+│   ├── Models/
+│   │   └── Todo.swift       # Data types
+│   ├── NLP/
+│   │   └── TaskParser.swift # Natural language parsing
+│   └── Output/
+│       ├── PrettyPrinter.swift
+│       └── JSONOutput.swift
 ```
 
 ### Design Principles
 
-1. **Separation of Concerns:** Keep `main.rs` thin - it should only parse CLI args and call into library code
-2. **Testability:** All business logic in `lib.rs` crate, enabling unit tests
-3. **Abstraction:** `ThingsClient` abstracts JXA interaction; output formatters abstract presentation
-4. **Error Propagation:** Use `?` operator throughout; handle errors at boundaries
+1. **Separation of Concerns:** CLI layer thin, business logic in ClingsCore
+2. **Testability:** All business logic in library target
+3. **Swift Best Practices:** Use Swift's type safety, optionals, and error handling
+4. **Performance:** SQLite for reads, batch operations where possible
 
 ## Code Quality Standards
 
 ### Error Handling
 
-```rust
-// Use thiserror for library error types
-#[derive(Error, Debug)]
-pub enum ClingsError {
-    #[error("Things 3 is not running")]
-    ThingsNotRunning,
+```swift
+// Use typed errors
+enum ClingsError: LocalizedError {
+    case thingsNotRunning
+    case permissionDenied
+    case notFound(String)
+    case databaseError(String)
 
-    #[error("Automation permission required.\n\n\
-             Grant access in System Settings > Privacy & Security > Automation")]
-    PermissionDenied,
-
-    #[error("Item not found: {0}")]
-    NotFound(String),
+    var errorDescription: String? {
+        switch self {
+        case .thingsNotRunning:
+            return "Things 3 is not running"
+        case .permissionDenied:
+            return "Automation permission required.\n\nGrant access in System Settings > Privacy & Security > Automation"
+        case .notFound(let item):
+            return "Item not found: \(item)"
+        case .databaseError(let message):
+            return "Database error: \(message)"
+        }
+    }
 }
 ```
 
 **Rules:**
-- Use `thiserror` for custom error types
-- Use `anyhow::Context` for adding context to errors in application code
-- NEVER use `.unwrap()` or `.expect()` in production code
+- Use Swift's `Error` protocol for custom error types
+- Use `throws` and `try` for error propagation
+- NEVER use force unwrapping (`!`) in production code
 - All error messages must be user-friendly with actionable guidance
-- Detect and handle macOS automation permission errors gracefully
+- Handle macOS automation permission errors gracefully
 
-### Strict Linting
+### Swift Concurrency
 
-Add to `lib.rs` and `main.rs`:
+Use async/await for I/O operations:
 
-```rust
-#![deny(unsafe_code)]
-#![deny(clippy::unwrap_used)]
-#![deny(clippy::expect_used)]
-#![warn(clippy::pedantic)]
-#![warn(clippy::nursery)]
-#![allow(clippy::module_name_repetitions)]
+```swift
+func fetchTodos() async throws -> [Todo] {
+    try await withCheckedThrowingContinuation { continuation in
+        // Database or JXA operation
+    }
+}
 ```
-
-**Rationale:**
-- `unsafe_code`: No unsafe code in this project
-- `unwrap_used`/`expect_used`: All fallible operations must use proper error handling
-- `pedantic`/`nursery`: Catch subtle issues and follow best practices
 
 ### Formatting
 
-Use `rustfmt` with project defaults. Import organization:
+Use SwiftFormat with project defaults. Import organization:
 
-```rust
-// 1. Standard library
-use std::process::Command;
+```swift
+// 1. Foundation/Standard library
+import Foundation
 
-// 2. External crates
-use clap::Parser;
-use serde::{Deserialize, Serialize};
+// 2. External packages
+import ArgumentParser
+import GRDB
 
 // 3. Internal modules
-use crate::error::ClingsError;
-use crate::things::ThingsClient;
+import ClingsCore
 ```
 
 ## Testing Requirements
 
 ### Test Categories
 
-**Unit Tests** - Same file as implementation:
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
+**Unit Tests** - Test individual functions:
+```swift
+import XCTest
+@testable import ClingsCore
 
-    #[test]
-    fn test_parse_date_today_returns_current_date() {
-        // Test implementation
+final class TaskParserTests: XCTestCase {
+    func testParseDateTodayReturnsCurrentDate() {
+        let result = TaskParser.parseDate("today")
+        XCTAssertEqual(result, Date().formatted(date: .numeric, time: .omitted))
     }
 }
 ```
 
-**Integration Tests** - `tests/` directory:
-```rust
-use assert_cmd::Command;
-use predicates::prelude::*;
+**Integration Tests** - Test CLI commands:
+```swift
+import XCTest
 
-#[test]
-fn test_help_flag_shows_usage() {
-    let mut cmd = Command::cargo_bin("clings").unwrap();
-    cmd.arg("--help")
-       .assert()
-       .success()
-       .stdout(predicate::str::contains("Things 3 CLI"));
+final class CLIIntegrationTests: XCTestCase {
+    func testHelpFlagShowsUsage() throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: ".build/debug/clings")
+        process.arguments = ["--help"]
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        try process.run()
+        process.waitUntilExit()
+
+        let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)
+        XCTAssertTrue(output?.contains("Things 3") == true)
+    }
 }
 ```
-
-**Doc Tests** - In documentation:
-```rust
-/// Parses a date string into a formatted date.
-///
-/// # Examples
-///
-/// ```
-/// use clings::cli::args::parse_date;
-/// assert_eq!(parse_date("today"), chrono::Local::now().format("%Y-%m-%d").to_string());
-/// ```
-pub fn parse_date(input: &str) -> String {
-    // Implementation
-}
-```
-
-### Testing Tools
-
-- `assert_cmd` - Execute and test CLI binary
-- `predicates` - Flexible assertions (contains, regex, etc.)
-- `proptest` - Property-based testing for edge cases
-- `mockall` - Mocking for unit tests (if needed)
 
 ### Coverage Requirements
 
 - **Minimum:** 80% overall code coverage
 - **Critical Paths:** 95%+ coverage for:
-  - Error handling (`src/error.rs`)
-  - Things client (`src/things/client.rs`)
-  - CLI argument parsing (`src/cli/args.rs`)
+  - Error handling
+  - Database access
+  - CLI argument parsing
 
-Run coverage with:
-```bash
-cargo install cargo-tarpaulin
-cargo tarpaulin --out Html
+## Dependencies (Package.swift)
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
+    .package(url: "https://github.com/groue/GRDB.swift", from: "6.24.0"),
+    .package(url: "https://github.com/malcommac/SwiftDate", from: "7.0.0"),
+]
 ```
 
-## Documentation Standards
-
-### Code Documentation
-
-Every public item requires documentation:
-
-```rust
-//! Things 3 client module.
-//!
-//! This module provides the `ThingsClient` struct for interacting with
-//! Things 3 via JavaScript for Automation (JXA).
-
-/// A client for interacting with Things 3 via JXA scripts.
-///
-/// # Examples
-///
-/// ```no_run
-/// use clings::things::ThingsClient;
-///
-/// let client = ThingsClient::new();
-/// let todos = client.get_list(ListView::Today)?;
-/// ```
-pub struct ThingsClient;
-
-impl ThingsClient {
-    /// Retrieves todos from the specified list view.
-    ///
-    /// # Arguments
-    ///
-    /// * `view` - The Things 3 list view to query
-    ///
-    /// # Errors
-    ///
-    /// Returns `ClingsError::ThingsNotRunning` if Things 3 is not open.
-    /// Returns `ClingsError::PermissionDenied` if automation permission is denied.
-    pub fn get_list(&self, view: ListView) -> Result<Vec<Todo>, ClingsError> {
-        // Implementation
-    }
-}
-```
-
-### README Requirements
-
-The README.md must include:
-- Project description and features
-- Installation instructions (cargo install, homebrew if available)
-- Quick start guide with examples
-- Full command reference
-- Configuration options
-- Contributing guidelines
-- License information
+| Package | Purpose |
+|---------|---------|
+| swift-argument-parser | CLI argument parsing |
+| GRDB.swift | SQLite database access |
+| SwiftDate | Date/time parsing and formatting |
 
 ## CLI Design Guidelines
 
@@ -251,55 +204,34 @@ The README.md must include:
 clings [OPTIONS] <COMMAND>
 
 Options:
-  -o, --output <FORMAT>    Output format [pretty|json] (default: pretty)
-  -h, --help               Show help
-  -V, --version            Show version
+  --json                 Output as JSON (for scripting)
+  --no-color             Suppress color output
+  -h, --help             Show help
+  --version              Show version
 
 Commands:
-  list        List todos from a view (today, inbox, upcoming, etc.)
-  today       Show today's todos (alias for 'list today')
-  inbox       Show inbox todos (alias for 'list inbox')
-  upcoming    Show upcoming todos (alias for 'list upcoming')
-  anytime     Show anytime todos (alias for 'list anytime')
-  someday     Show someday todos (alias for 'list someday')
-  logbook     Show completed todos (alias for 'list logbook')
-  add         Quick add with natural language
-  todo        Manage todos (show, complete, cancel, delete)
-  project     Manage projects (list, show, add)
-  search      Search todos by text or filters
-  open        Open Things to a specific view or item
-  bulk        Bulk operations on multiple todos
-  stats       View productivity statistics
-  review      Interactive weekly review workflow
-  shell       Shell integration (completions)
-  tui         Launch the terminal UI
-```
-
-### Add Command Options
-
-The `add` command supports natural language input plus explicit flags:
-
-```bash
-# Natural language parsing
-clings add "buy milk tomorrow #errands"
-clings add "call mom friday 3pm for Family !high"
-
-# Explicit flags override natural language parsing
-clings add "task" --tags "work,urgent" --notes "Details here"
-clings add "task" -t iOS -n "Short note"
-
-# Escape # to keep it literal in title (not parsed as tag)
-clings add "Review PR \#267" --when today      # Title: "Review PR #267"
-clings add "Fix issue \#123 #urgent"           # Title: "Fix issue #123", tag: urgent
-
-# All add flags:
-#   --project, -p    Override detected project
-#   --area, -a       Override detected area
-#   --when, -w       Override detected when date
-#   --deadline, -d   Override detected deadline
-#   --tags, -t       Tags to apply (comma-separated)
-#   --notes, -n      Notes to attach
-#   --parse-only     Show what would be created without creating
+  today, t (default)     Show today's todos
+  inbox, i               Show inbox todos
+  upcoming, u            Show upcoming todos
+  anytime                Show anytime todos
+  someday, s             Show someday todos
+  logbook, l             Show completed todos
+  projects               List all projects
+  areas                  List all areas
+  tags                   List all tags
+  show                   Show details of a todo by ID
+  add                    Quick add with natural language
+  complete, done         Mark a todo as completed
+  cancel                 Cancel a todo
+  delete, rm             Delete a todo
+  update                 Update a todo's properties
+  search, find, f        Search todos by text
+  bulk                   Bulk operations on multiple todos
+  filter                 Filter todos using a query
+  open                   Open a todo or list in Things 3
+  stats                  View productivity statistics
+  review                 Interactive weekly review workflow
+  completions            Generate shell completions
 ```
 
 ### Design Principles
@@ -308,70 +240,16 @@ clings add "Fix issue \#123 #urgent"           # Title: "Fix issue #123", tag: u
 2. **Scriptable:** JSON output for piping and automation
 3. **Informative:** Exit codes indicate success (0), user error (1), system error (2)
 4. **Complete:** Shell completions for bash, zsh, fish
-5. **POSIX-compliant:** Follow standard argument conventions
-
-### Output Examples
-
-**Pretty (default):**
-```
-Today (3 items)
-──────────────────────────────────────────────
-[ ] Review PR #123        Development   Dec 15   #work
-[ ] Buy groceries         -             -        #personal
-[x] Call dentist          Health        Dec 10   -
-```
-
-**JSON:**
-```json
-{
-  "list": "today",
-  "count": 3,
-  "items": [...]
-}
-```
-
-## Performance Requirements
-
-- **Startup time:** < 100ms
-- **Command execution:** Minimize JXA calls; batch where possible
-- **Memory:** No unnecessary allocations; efficient JSON parsing
-- **Binary size:** Use `lto = true` and `strip = true` for release builds
-
-## Dependencies Policy
-
-Every dependency must be:
-1. **Necessary:** No redundant functionality
-2. **Well-maintained:** Active development, responsive maintainers
-3. **Secure:** Regular `cargo audit` checks
-4. **Documented:** Purpose noted in Cargo.toml comments
-
-### Current Dependencies
-
-```toml
-[dependencies]
-clap = { version = "4", features = ["derive", "env"] }  # CLI argument parsing
-serde = { version = "1", features = ["derive"] }         # Serialization
-serde_json = "1"                                          # JSON handling
-chrono = { version = "0.4", features = ["serde"] }       # Date/time handling
-colored = "2"                                             # Terminal colors
-thiserror = "2"                                           # Error types
-anyhow = "1"                                              # Error context
-
-[dev-dependencies]
-assert_cmd = "2"      # CLI testing
-predicates = "3"      # Test assertions
-proptest = "1"        # Property-based testing
-```
+5. **Fast:** SQLite reads complete in ~30ms
 
 ## CI/CD Requirements
 
 ### GitHub Actions Workflow
 
 Every PR must pass:
-1. `cargo fmt --check` - Code formatting
-2. `cargo clippy -- -D warnings` - Linting
-3. `cargo test` - All tests
-4. `cargo build --release` - Release build
+1. `swift build` - Build succeeds
+2. `swift test` - All tests pass
+3. `swift build -c release` - Release build succeeds
 
 ### Release Process
 
@@ -379,11 +257,11 @@ On tag push:
 1. Build release binaries (macOS ARM64, macOS x86_64)
 2. Generate shell completions
 3. Create GitHub release with artifacts
-4. Update Homebrew formula (see below)
+4. Update Homebrew formula
 
 ### Updating Homebrew Formula
 
-When releasing a new version, the Homebrew formula must be updated:
+When releasing a new version:
 
 1. **Get the SHA256 checksum** for the new release tarball:
    ```bash
@@ -396,20 +274,11 @@ When releasing a new version, the Homebrew formula must be updated:
    - Update the `url` to point to the new version tag
    - Update the `sha256` with the new checksum
 
-3. **Commit and push** the formula changes:
-   ```bash
-   cd /path/to/homebrew-tap
-   git add Formula/clings.rb
-   git commit -m "Update clings to v<VERSION>"
-   git push
-   ```
+3. **Commit and push** the formula changes
 
 4. **Verify** the update works:
    ```bash
-   brew update
-   brew upgrade clings
-   # or for fresh install:
-   brew install dan-hart/tap/clings
+   brew update && brew upgrade clings
    ```
 
 ## Contributing
@@ -418,7 +287,7 @@ When releasing a new version, the Homebrew formula must be updated:
 2. Create a feature branch: `git checkout -b feature/my-feature`
 3. Make changes following these guidelines
 4. Add tests for new functionality
-5. Ensure all checks pass: `cargo fmt && cargo clippy && cargo test`
+5. Ensure all checks pass: `swift build && swift test`
 6. Submit a pull request
 
 ## License
@@ -429,8 +298,8 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 
 - Never add Claude as a co-author on commits
 - **Always update the Homebrew tap when releasing a new version:**
-  1. Bump version in `Cargo.toml`
-  2. Commit, tag (e.g., `v0.1.5`), and push to all remotes
+  1. Update version in code
+  2. Commit, tag (e.g., `v0.2.1`), and push to all remotes
   3. Get SHA256: `curl -sL https://github.com/dan-hart/clings/archive/refs/tags/v<VERSION>.tar.gz | shasum -a 256`
   4. Update `~/Developer/homebrew-tap/Formula/clings.rb` with new version and SHA256
   5. Commit and push homebrew-tap

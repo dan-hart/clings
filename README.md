@@ -5,7 +5,7 @@
 > **Disclaimer:** This project is not affiliated with, endorsed by, or sponsored by [Cultured Code](https://culturedcode.com/). Things 3 is a registered trademark of Cultured Code GmbH & Co. KG. clings is an independent, open-source project that provides a command-line interface wrapper for the Things 3 application.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Built with Rust](https://img.shields.io/badge/built%20with-Rust-orange.svg)](https://www.rust-lang.org/)
+[![Built with Swift](https://img.shields.io/badge/built%20with-Swift-FA7343.svg)](https://swift.org/)
 [![macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos/)
 
 **clings** brings the power of [Things 3](https://culturedcode.com/things/) to your terminal. Manage tasks, projects, and workflows with natural language, bulk operations, and powerful search - all without leaving the command line.
@@ -204,13 +204,10 @@ git clone https://github.com/dan-hart/clings
 cd clings
 
 # Build release binary
-cargo build --release
+swift build -c release
 
 # Install to /usr/local/bin
-cp target/release/clings /usr/local/bin/
-
-# Or install using cargo
-cargo install --path .
+cp .build/release/clings /usr/local/bin/
 ```
 
 ## Quick Start
@@ -241,9 +238,10 @@ clings add --help
 ### Global Options
 
 ```
--o, --output <FORMAT>    Output format [pretty|json] (default: pretty)
+--json                   Output as JSON (for scripting)
+--no-color               Suppress color output
 -h, --help               Show help
--V, --version            Show version
+--version                Show version
 ```
 
 ### Commands
@@ -287,7 +285,7 @@ Today (3 items)
 Machine-readable JSON for scripting:
 
 ```bash
-clings today -o json | jq '.items[] | select(.tags | contains(["work"]))'
+clings today --json | jq '.items[] | select(.tags | contains(["work"]))'
 ```
 
 ## Data Safety
@@ -319,11 +317,9 @@ Things 3 must be running for clings to communicate with it via AppleScript/JXA.
 ## Development
 
 ```bash
-cargo build           # Build
-cargo run -- today    # Run in debug mode
-cargo test            # Run tests
-cargo clippy          # Run linter
-cargo fmt             # Format code
+swift build              # Build
+swift run clings today   # Run in debug mode
+swift test               # Run tests
 ```
 
 See [CLAUDE.md](CLAUDE.md) for detailed development guidelines.
@@ -336,7 +332,7 @@ Contributions are welcome! Please:
 2. Create a feature branch
 3. Make changes following code quality standards
 4. Add tests for new functionality
-5. Ensure all checks pass: `cargo fmt && cargo clippy && cargo test`
+5. Ensure all checks pass: `swift build && swift test`
 6. Submit a pull request
 
 ## License

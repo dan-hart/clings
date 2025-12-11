@@ -43,10 +43,10 @@ This security policy applies to:
 
 This project implements several security measures:
 
-- **No unsafe Rust code**: Compiler flag `-D unsafe_code` enforced
+- **Swift memory safety**: Swift's type system and ARC prevent common memory vulnerabilities
 - **Pre-commit hooks**: git-secrets scans for accidental credential commits
 - **Input sanitization**: All JXA script parameters are properly escaped
-- **Dependency auditing**: Regular `cargo audit` checks
+- **Read-only database access**: SQLite reads use read-only connections
 - **Minimal permissions**: Only requests necessary macOS permissions for Things 3 access
 
 ## Security Best Practices for Users
