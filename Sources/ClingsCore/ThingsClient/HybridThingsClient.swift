@@ -68,6 +68,22 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         }
     }
 
+    public func moveTodo(id: String, toProject projectName: String) async throws {
+        let script = JXAScripts.moveTodo(id: id, toProject: projectName)
+        let result = try await jxaBridge.executeJSON(script, as: MutationResult.self)
+        if !result.success {
+            throw ThingsError.operationFailed(result.error ?? "Unknown error")
+        }
+    }
+
+    public func updateTodo(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?) async throws {
+        let script = JXAScripts.updateTodo(id: id, name: name, notes: notes, dueDate: dueDate, tags: tags)
+        let result = try await jxaBridge.executeJSON(script, as: MutationResult.self)
+        if !result.success {
+            throw ThingsError.operationFailed(result.error ?? "Unknown error")
+        }
+    }
+
     // MARK: - URL Scheme Operations
 
     public nonisolated func openInThings(id: String) throws {

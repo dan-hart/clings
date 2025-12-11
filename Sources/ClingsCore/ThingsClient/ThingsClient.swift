@@ -44,6 +44,8 @@ public protocol ThingsClientProtocol: Sendable {
     func completeTodo(id: String) async throws
     func cancelTodo(id: String) async throws
     func deleteTodo(id: String) async throws
+    func moveTodo(id: String, toProject: String) async throws
+    func updateTodo(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?) async throws
 
     // Search
     func search(query: String) async throws -> [Todo]
@@ -159,6 +161,22 @@ public actor ThingsClient: ThingsClientProtocol {
 
     public func deleteTodo(id: String) async throws {
         let script = JXAScripts.deleteTodo(id: id)
+        let result = try await bridge.executeJSON(script, as: MutationResult.self)
+        if !result.success {
+            throw ThingsError.operationFailed(result.error ?? "Unknown error")
+        }
+    }
+
+    public func moveTodo(id: String, toProject projectName: String) async throws {
+        let script = JXAScripts.moveTodo(id: id, toProject: projectName)
+        let result = try await bridge.executeJSON(script, as: MutationResult.self)
+        if !result.success {
+            throw ThingsError.operationFailed(result.error ?? "Unknown error")
+        }
+    }
+
+    public func updateTodo(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?) async throws {
+        let script = JXAScripts.updateTodo(id: id, name: name, notes: notes, dueDate: dueDate, tags: tags)
         let result = try await bridge.executeJSON(script, as: MutationResult.self)
         if !result.success {
             throw ThingsError.operationFailed(result.error ?? "Unknown error")

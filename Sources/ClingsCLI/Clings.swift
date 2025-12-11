@@ -48,6 +48,7 @@ struct Clings: AsyncParsableCommand {
             CompleteCommand.self,
             CancelCommand.self,
             DeleteCommand.self,
+            UpdateCommand.self,
             SearchCommand.self,
 
             // Bulk operations
@@ -61,9 +62,6 @@ struct Clings: AsyncParsableCommand {
             StatsCommand.self,
             ReviewCommand.self,
             CompletionsCommand.self,
-
-            // Todo operations (to be added)
-            // UpdateCommand.self,
         ],
         defaultSubcommand: TodayCommand.self
     )

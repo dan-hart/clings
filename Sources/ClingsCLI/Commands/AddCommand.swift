@@ -43,6 +43,9 @@ struct AddCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Add to an area")
     var area: String?
 
+    @Flag(name: .long, help: "Show parsed result without creating todo")
+    var parseOnly = false
+
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
@@ -67,6 +70,12 @@ struct AddCommand: AsyncParsableCommand {
         }
         if let deadline = deadline {
             parsed.dueDate = parseSimpleDate(deadline)
+        }
+
+        // Handle parse-only mode
+        if parseOnly {
+            printParsedResult(parsed)
+            return
         }
 
         // Format dates for JXA
@@ -132,5 +141,81 @@ struct AddCommand: AsyncParsableCommand {
             return calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
         }
         return nil
+    }
+
+    private func printParsedResult(_ parsed: ParsedTask) {
+        let dateFormatter = ISO8601DateFormatter()
+
+        if output.json {
+            var jsonDict: [String: Any] = [
+                "title": parsed.title,
+            ]
+            if let notes = parsed.notes {
+                jsonDict["notes"] = notes
+            }
+            if !parsed.tags.isEmpty {
+                jsonDict["tags"] = parsed.tags
+            }
+            if let project = parsed.project {
+                jsonDict["project"] = project
+            }
+            if let area = parsed.area {
+                jsonDict["area"] = area
+            }
+            if let whenDate = parsed.whenDate {
+                jsonDict["when"] = dateFormatter.string(from: whenDate)
+            }
+            if let dueDate = parsed.dueDate {
+                jsonDict["deadline"] = dateFormatter.string(from: dueDate)
+            }
+            if !parsed.checklistItems.isEmpty {
+                jsonDict["checklistItems"] = parsed.checklistItems
+            }
+
+            if let data = try? JSONSerialization.data(withJSONObject: jsonDict, options: [.prettyPrinted, .sortedKeys]),
+               let str = String(data: data, encoding: .utf8) {
+                print(str)
+            }
+        } else {
+            let useColors = !output.noColor
+            let bold = useColors ? "\u{001B}[1m" : ""
+            let cyan = useColors ? "\u{001B}[36m" : ""
+            let dim = useColors ? "\u{001B}[2m" : ""
+            let reset = useColors ? "\u{001B}[0m" : ""
+
+            print("\(bold)Parsed Task\(reset)")
+            print("\(dim)─────────────────────────────────────\(reset)")
+            print("  Title:    \(parsed.title)")
+
+            if let notes = parsed.notes {
+                print("  Notes:    \(notes)")
+            }
+            if !parsed.tags.isEmpty {
+                print("  Tags:     \(cyan)\(parsed.tags.map { "#\($0)" }.joined(separator: " "))\(reset)")
+            }
+            if let project = parsed.project {
+                print("  Project:  \(project)")
+            }
+            if let area = parsed.area {
+                print("  Area:     \(area)")
+            }
+            if let whenDate = parsed.whenDate {
+                let formatter = DateFormatter()
+                formatter.dateStyle = .medium
+                print("  When:     \(formatter.string(from: whenDate))")
+            }
+            if let dueDate = parsed.dueDate {
+                let formatter = DateFormatter()
+                formatter.dateStyle = .medium
+                print("  Deadline: \(formatter.string(from: dueDate))")
+            }
+            if !parsed.checklistItems.isEmpty {
+                print("  Checklist:")
+                for item in parsed.checklistItems {
+                    print("    - \(item)")
+                }
+            }
+            print("")
+        }
     }
 }
