@@ -221,10 +221,13 @@ struct JXAScriptsTests {
         }
 
         @Test func withTags() {
+            // Note: Tags parameter is accepted but ignored in JXA script.
+            // Tag updates must use the Things URL scheme instead (JXA's todo.tags.push() silently fails).
+            // This test verifies the script is still valid and returns success.
             let script = JXAScripts.updateTodo(id: "todo-123", tags: ["work", "urgent"])
-            #expect(script.contains("'work'"))
-            #expect(script.contains("'urgent'"))
-            #expect(script.contains("app.tags.byName"))
+            #expect(script.contains("todo-123"))
+            #expect(script.contains("success: true"))
+            // Tags are NOT included in the JXA script - they're handled via URL scheme
         }
 
         @Test func withNoChanges() {

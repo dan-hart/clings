@@ -77,17 +77,63 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
     }
 
     public func updateTodo(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?) async throws {
-        let script = JXAScripts.updateTodo(id: id, name: name, notes: notes, dueDate: dueDate, tags: tags)
-        let result = try await jxaBridge.executeJSON(script, as: MutationResult.self)
-        if !result.success {
-            throw ThingsError.operationFailed(result.error ?? "Unknown error")
+        // Handle non-tag updates via JXA (name, notes, dueDate work fine)
+        if name != nil || notes != nil || dueDate != nil {
+            let script = JXAScripts.updateTodo(id: id, name: name, notes: notes, dueDate: dueDate, tags: nil)
+            let result = try await jxaBridge.executeJSON(script, as: MutationResult.self)
+            if !result.success {
+                throw ThingsError.operationFailed(result.error ?? "Unknown error")
+            }
+        }
+
+        // Handle tags via URL scheme (JXA's todo.tags.push() silently fails)
+        // See: https://culturedcode.com/things/support/articles/2803573/
+        if let tags = tags {
+            let idParam = id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? id
+            let tagsParam = tags.joined(separator: ",")
+                .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            guard let url = URL(string: "things:///update?id=\(idParam)&tags=\(tagsParam)") else {
+                throw ThingsError.invalidState("Invalid URL for tag update")
+            }
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    // MARK: - Tag Management
+
+    public func createTag(name: String) async throws -> Tag {
+        let script = JXAScripts.createTagAppleScript(name: name)
+        do {
+            let tagId = try await jxaBridge.executeAppleScript(script)
+            return Tag(id: tagId, name: name)
+        } catch let error as JXAError {
+            throw ThingsError.jxaError(error)
+        }
+    }
+
+    public func deleteTag(name: String) async throws {
+        let script = JXAScripts.deleteTagAppleScript(name: name)
+        do {
+            _ = try await jxaBridge.executeAppleScript(script)
+        } catch let error as JXAError {
+            throw ThingsError.jxaError(error)
+        }
+    }
+
+    public func renameTag(oldName: String, newName: String) async throws {
+        let script = JXAScripts.renameTagAppleScript(oldName: oldName, newName: newName)
+        do {
+            _ = try await jxaBridge.executeAppleScript(script)
+        } catch let error as JXAError {
+            throw ThingsError.jxaError(error)
         }
     }
 
     // MARK: - URL Scheme Operations
 
     public nonisolated func openInThings(id: String) throws {
-        guard let url = URL(string: "things:///show?id=\(id)") else {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? id
+        guard let url = URL(string: "things:///show?id=\(encodedId)") else {
             throw ThingsError.invalidState("Invalid URL for id: \(id)")
         }
         NSWorkspace.shared.open(url)

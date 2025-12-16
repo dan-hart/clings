@@ -158,6 +158,68 @@ public actor JXABridge {
         }
     }
 
+    // MARK: - AppleScript Execution
+
+    /// Execute an AppleScript (not JXA) and return the raw output.
+    ///
+    /// This is used for tag CRUD operations which work better with native AppleScript
+    /// than JXA. The script is executed without the `-l JavaScript` flag.
+    ///
+    /// - Parameter script: The AppleScript code to execute.
+    /// - Returns: The script's stdout output as a string.
+    /// - Throws: `JXAError` if execution fails.
+    public func executeAppleScript(_ script: String) async throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", script]  // No -l JavaScript flag
+
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+
+        return try await withThrowingTaskGroup(of: String.self) { group in
+            // Task to run the process
+            group.addTask {
+                do {
+                    try process.run()
+                } catch {
+                    throw JXAError.executionFailed(error.localizedDescription)
+                }
+
+                process.waitUntilExit()
+
+                let outputData = stdout.fileHandleForReading.readDataToEndOfFile()
+                let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
+
+                let outputString = String(data: outputData, encoding: .utf8) ?? ""
+                let errorString = String(data: errorData, encoding: .utf8) ?? ""
+
+                if process.terminationStatus != 0 {
+                    // Check for common errors
+                    if errorString.contains("not running") || errorString.contains("Connection is invalid") {
+                        throw JXAError.thingsNotRunning
+                    }
+                    throw JXAError.processError(process.terminationStatus, errorString)
+                }
+
+                return outputString.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+
+            // Task for timeout
+            group.addTask {
+                try await Task.sleep(for: .seconds(self.timeout))
+                process.terminate()
+                throw JXAError.timeout
+            }
+
+            // Return first completed result (either success or timeout)
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
+        }
+    }
+
     /// Check if Things 3 is running.
     /// - Returns: `true` if Things 3 is running.
     public func isThingsRunning() async -> Bool {

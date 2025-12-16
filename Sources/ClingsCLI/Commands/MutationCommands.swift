@@ -13,37 +13,78 @@ struct CompleteCommand: AsyncParsableCommand {
         commandName: "complete",
         abstract: "Mark a todo as completed",
         discussion: """
-        Marks a todo as completed by its ID. The todo will be moved
-        to the Logbook in Things 3.
+        Marks a todo as completed by its ID or title search. The todo will
+        be moved to the Logbook in Things 3.
+
+        You can complete by ID (exact) or by title search (fuzzy):
+          clings complete ABC123           By exact ID
+          clings complete --title "milk"   By title search
 
         To find a todo's ID, use the show command or --json output:
           clings today --json | jq '.[].id'
 
         EXAMPLES:
-          clings complete ABC123        Complete a specific todo
-          clings done ABC123            Alias for 'complete'
-          clings complete ABC123 --json Output result as JSON
+          clings complete ABC123             Complete by ID
+          clings done ABC123                 Alias for 'complete'
+          clings complete -t "buy groceries" Complete by title search
+          clings complete --title "milk"     Same as above
+          clings complete ABC123 --json      Output result as JSON
 
         SEE ALSO:
-          cancel, bulk complete, show
+          cancel, bulk complete, show, search
         """,
         aliases: ["done"]
     )
 
-    @Argument(help: "The ID of the todo to complete")
-    var id: String
+    @Argument(help: "The ID of the todo to complete (optional if using --title)")
+    var id: String?
+
+    @Option(name: [.short, .long], help: "Complete todo by searching its title")
+    var title: String?
 
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
         let client = ThingsClientFactory.create()
-        try await client.completeTodo(id: id)
 
         let formatter: OutputFormatter = output.json
             ? JSONOutputFormatter()
             : TextOutputFormatter(useColors: !output.noColor)
 
-        print(formatter.format(message: "Completed todo: \(id)"))
+        // Determine which mode to use
+        if let searchTitle = title {
+            // Search for todo by title
+            let results = try await client.search(query: searchTitle)
+            let openTodos = results.filter { $0.status == .open }
+
+            switch openTodos.count {
+            case 0:
+                throw ThingsError.notFound("No open todos matching '\(searchTitle)'")
+
+            case 1:
+                // Exactly one match - complete it
+                let todo = openTodos[0]
+                try await client.completeTodo(id: todo.id)
+                print(formatter.format(message: "Completed: \(todo.name)"))
+
+            default:
+                // Multiple matches - show list with IDs
+                print("Multiple todos match '\(searchTitle)':")
+                for (index, todo) in openTodos.prefix(10).enumerated() {
+                    print("  \(index + 1). \(todo.name)")
+                }
+                print("\nUse the exact ID to complete:")
+                for todo in openTodos.prefix(5) {
+                    print("  clings complete \(todo.id)")
+                }
+            }
+        } else if let todoId = id {
+            // Original ID-based completion
+            try await client.completeTodo(id: todoId)
+            print(formatter.format(message: "Completed todo: \(todoId)"))
+        } else {
+            throw ValidationError("Provide either a todo ID or --title flag")
+        }
     }
 }
 
