@@ -262,6 +262,10 @@ public enum JXAScripts {
     }
 
     /// Update a todo's properties.
+    ///
+    /// Note: Tags are NOT handled here - JXA's `todo.tags.push()` silently fails.
+    /// Tag updates must use the Things URL scheme instead:
+    /// `things:///update?id=X&tags=Y`
     public static func updateTodo(
         id: String,
         name: String? = nil,
@@ -270,6 +274,9 @@ public enum JXAScripts {
         tags: [String]? = nil
     ) -> String {
         let dueDateISO = dueDate.map { ISO8601DateFormatter().string(from: $0) }
+
+        // Note: tags parameter is ignored here - must be handled via URL scheme
+        _ = tags  // Silence unused parameter warning
 
         return """
         (() => {
@@ -284,26 +291,17 @@ public enum JXAScripts {
             \(notes != nil ? "todo.notes = '\(notes!.jxaEscaped)';" : "")
             \(dueDateISO != nil ? "todo.dueDate = new Date('\(dueDateISO!)');" : "")
 
-            \(tags != nil ? """
-            // Update tags
-            const newTagNames = [\(tags!.map { "'\($0.jxaEscaped)'" }.joined(separator: ", "))];
-            // Clear existing tags would require removing them, which JXA doesn't easily support
-            // Instead, we add new tags
-            newTagNames.forEach(tagName => {
-                let tag = app.tags.byName(tagName);
-                if (!tag.exists()) {
-                    tag = app.make({ new: 'tag', withProperties: { name: tagName }});
-                }
-                try { todo.tags.push(tag); } catch (e) {}
-            });
-            """ : "")
-
             return JSON.stringify({ success: true, id: '\(id.jxaEscaped)' });
         })()
         """
     }
 
     /// Create a new todo with the given properties.
+    ///
+    /// WARNING: Tag assignment via JXA (`todo.tags.push()`) silently fails.
+    /// Use the Things URL scheme for reliable tag assignment:
+    /// `things:///add?title=X&tags=Y`
+    /// The AddCommand already uses URL scheme and bypasses this function.
     public static func createTodo(
         name: String,
         notes: String? = nil,
@@ -420,6 +418,56 @@ public enum JXAScripts {
         })()
         """
     }
+
+    // MARK: - Tag Management (AppleScript)
+
+    /// Create a new tag via AppleScript.
+    /// Returns the ID of the created tag.
+    public static func createTagAppleScript(name: String) -> String {
+        """
+        tell application "Things3"
+            set newTag to make new tag with properties {name:"\(name.appleScriptEscaped)"}
+            return id of newTag
+        end tell
+        """
+    }
+
+    /// Delete a tag by name via AppleScript.
+    public static func deleteTagAppleScript(name: String) -> String {
+        """
+        tell application "Things3"
+            if exists (tag whose name is "\(name.appleScriptEscaped)") then
+                delete (first tag whose name is "\(name.appleScriptEscaped)")
+                return "deleted"
+            else
+                error "Tag not found: \(name.appleScriptEscaped)"
+            end if
+        end tell
+        """
+    }
+
+    /// Rename a tag via AppleScript.
+    public static func renameTagAppleScript(oldName: String, newName: String) -> String {
+        """
+        tell application "Things3"
+            if exists (tag whose name is "\(oldName.appleScriptEscaped)") then
+                set name of (first tag whose name is "\(oldName.appleScriptEscaped)") to "\(newName.appleScriptEscaped)"
+                return "renamed"
+            else
+                error "Tag not found: \(oldName.appleScriptEscaped)"
+            end if
+        end tell
+        """
+    }
+
+    /// Check if a tag exists via AppleScript.
+    public static func tagExistsAppleScript(name: String) -> String {
+        """
+        tell application "Things3"
+            exists (tag whose name is "\(name.appleScriptEscaped)")
+        end tell
+        """
+    }
 }
 
 // MARK: - String Extension for JXA Escaping
@@ -432,5 +480,11 @@ extension String {
             .replacingOccurrences(of: "\n", with: "\\n")
             .replacingOccurrences(of: "\r", with: "\\r")
             .replacingOccurrences(of: "\t", with: "\\t")
+    }
+
+    /// Escape a string for safe use in AppleScript double-quoted strings.
+    var appleScriptEscaped: String {
+        self.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
     }
 }

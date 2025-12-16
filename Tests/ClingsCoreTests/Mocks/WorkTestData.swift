@@ -1,4 +1,4 @@
-// UATestData.swift
+// WorkTestData.swift
 // clings - A powerful CLI for Things 3
 // Copyright (C) 2024 Dan Hart
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -6,10 +6,10 @@
 import Foundation
 @testable import ClingsCore
 
-/// Test fixtures for ua-conductor real-world integration tests.
+/// Test fixtures for real-world integration tests.
 /// These test patterns used in production for Things 3 automation.
-enum UATestData {
-    // MARK: - Tags (matching ua-conductor patterns)
+enum WorkTestData {
+    // MARK: - Tags (matching automation patterns)
 
     static let meetingActionTag = Tag(id: "tag-meeting-action", name: "meeting-action")
     static let jiraTag = Tag(id: "tag-jira", name: "jira")
@@ -18,11 +18,11 @@ enum UATestData {
 
     static let allTags = [meetingActionTag, jiraTag, urgentTag, reviewTag]
 
-    // MARK: - Areas (with emoji prefixes as used in ua-conductor)
+    // MARK: - Areas (with emoji prefixes)
 
-    static let underArmourArea = Area(
-        id: "area-ua",
-        name: "🖥️ Under Armour",
+    static let workArea = Area(
+        id: "area-work",
+        name: "🖥️ Work",
         tags: [jiraTag]
     )
 
@@ -38,7 +38,7 @@ enum UATestData {
         tags: []
     )
 
-    static let allAreas = [underArmourArea, personalArea, healthArea]
+    static let allAreas = [workArea, personalArea, healthArea]
 
     // MARK: - Projects
 
@@ -47,13 +47,13 @@ enum UATestData {
         name: "Mobile App",
         notes: "iOS and Android development",
         status: .open,
-        area: underArmourArea,
+        area: workArea,
         tags: [jiraTag],
         dueDate: nil,
         creationDate: Date().addingTimeInterval(-86400 * 30)
     )
 
-    // MARK: - Todos (matching ua-conductor use cases)
+    // MARK: - Todos (matching automation use cases)
 
     /// Meeting action item - created from sync-action-items.sh
     static let meetingAction = Todo(
@@ -64,7 +64,7 @@ enum UATestData {
         dueDate: Date().addingTimeInterval(86400 * 2),
         tags: [meetingActionTag],
         project: mobileProject,
-        area: underArmourArea,
+        area: workArea,
         checklistItems: [],
         creationDate: Date().addingTimeInterval(-3600),
         modificationDate: Date()
@@ -73,13 +73,13 @@ enum UATestData {
     /// JIRA ticket task - created with ticket reference
     static let jiraTask = Todo(
         id: "todo-jira-1",
-        name: "Review SHOP-1234 implementation",
+        name: "Review PROJ-1234 implementation",
         notes: "PR needs review before merge",
         status: .open,
         dueDate: Date().addingTimeInterval(86400),
         tags: [jiraTag, reviewTag],
         project: mobileProject,
-        area: underArmourArea,
+        area: workArea,
         checklistItems: [],
         creationDate: Date().addingTimeInterval(-86400),
         modificationDate: Date()
@@ -87,14 +87,14 @@ enum UATestData {
 
     /// Completed task (for logbook tests)
     static let completedTask = Todo(
-        id: "todo-completed-ua",
+        id: "todo-completed-work",
         name: "Merge PR #267",
         notes: "Feature branch merged",
         status: .completed,
         dueDate: nil,
         tags: [jiraTag],
         project: mobileProject,
-        area: underArmourArea,
+        area: workArea,
         checklistItems: [],
         creationDate: Date().addingTimeInterval(-86400 * 3),
         modificationDate: Date().addingTimeInterval(-3600)
@@ -109,7 +109,7 @@ enum UATestData {
         dueDate: nil,
         tags: [],
         project: mobileProject,
-        area: underArmourArea,
+        area: workArea,
         checklistItems: [],
         creationDate: Date(),
         modificationDate: Date()
@@ -124,7 +124,7 @@ enum UATestData {
         dueDate: nil,
         tags: [urgentTag, reviewTag],
         project: nil,
-        area: underArmourArea,
+        area: workArea,
         checklistItems: [],
         creationDate: Date(),
         modificationDate: Date()
@@ -157,6 +157,6 @@ enum UATestData {
     ]
 
     static let openTodos = allTodos.filter { $0.status == .open }
-    static let uaTodos = allTodos.filter { $0.area?.name == "🖥️ Under Armour" }
+    static let workTodos = allTodos.filter { $0.area?.name == "🖥️ Work" }
     static let taggedMeetingAction = allTodos.filter { $0.tags.contains { $0.name == "meeting-action" } }
 }

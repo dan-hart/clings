@@ -134,6 +134,33 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
         openedLists.append(list)
     }
 
+    // MARK: - Tag Management
+
+    /// Track created tags.
+    private(set) var createdTags: [String] = []
+
+    /// Track deleted tags.
+    private(set) var deletedTags: [String] = []
+
+    /// Track rename operations (oldName, newName).
+    private(set) var renamedTags: [(String, String)] = []
+
+    func createTag(name: String) async throws -> Tag {
+        if let error = errorToThrow { throw error }
+        createdTags.append(name)
+        return Tag(id: "mock-tag-\(UUID().uuidString.prefix(8))", name: name)
+    }
+
+    func deleteTag(name: String) async throws {
+        if let error = errorToThrow { throw error }
+        deletedTags.append(name)
+    }
+
+    func renameTag(oldName: String, newName: String) async throws {
+        if let error = errorToThrow { throw error }
+        renamedTags.append((oldName, newName))
+    }
+
     // MARK: - Convenience Setup
 
     /// Reset all tracking arrays.
@@ -147,6 +174,9 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
         searchQueries = []
         openedIds = []
         openedLists = []
+        createdTags = []
+        deletedTags = []
+        renamedTags = []
         errorToThrow = nil
     }
 

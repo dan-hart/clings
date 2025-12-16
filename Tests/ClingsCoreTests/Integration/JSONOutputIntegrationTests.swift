@@ -7,8 +7,8 @@ import Foundation
 import Testing
 @testable import ClingsCore
 
-/// Tests for JSON output format compatibility with ua-conductor scripts.
-/// ua-conductor uses jq to parse JSON output from clings for automation workflows.
+/// Tests for JSON output format compatibility with automation scripts.
+/// Uses jq to parse JSON output from clings for automation workflows.
 @Suite("JSON Output Integration")
 struct JSONOutputIntegrationTests {
     let formatter = JSONOutputFormatter(prettyPrint: false)
@@ -18,14 +18,14 @@ struct JSONOutputIntegrationTests {
         let formatter = JSONOutputFormatter(prettyPrint: false)
 
         @Test func todayJSONContainsExpectedFields() throws {
-            let todos = UATestData.openTodos
+            let todos = WorkTestData.openTodos
             let output = formatter.format(todos: todos)
 
-            // Parse JSON to verify structure used by ua-conductor
+            // Parse JSON to verify structure used by automation
             let data = output.data(using: .utf8)!
             let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
 
-            // ua-conductor expects .items[] array structure for jq
+            // Expects .items[] array structure for jq
             #expect(json["count"] != nil)
             #expect(json["items"] != nil)
 
@@ -44,7 +44,7 @@ struct JSONOutputIntegrationTests {
         }
 
         @Test func itemsArrayIsDirectlyAccessible() throws {
-            let todos = [UATestData.meetingAction]
+            let todos = [WorkTestData.meetingAction]
             let output = formatter.format(todos: todos)
 
             let data = output.data(using: .utf8)!
@@ -61,18 +61,18 @@ struct JSONOutputIntegrationTests {
         let formatter = JSONOutputFormatter(prettyPrint: false)
 
         @Test func areaFieldPreservesEmoji() throws {
-            let todos = [UATestData.meetingAction]
+            let todos = [WorkTestData.meetingAction]
             let output = formatter.format(todos: todos)
 
             // Area names with emoji must be preserved exactly
-            #expect(output.contains("🖥️ Under Armour"))
+            #expect(output.contains("🖥️ Work"))
 
             let data = output.data(using: .utf8)!
             let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
             let items = json["items"] as! [[String: Any]]
             let area = items[0]["area"] as? String
 
-            #expect(area == "🖥️ Under Armour", "Emoji prefix must be preserved in area name")
+            #expect(area == "🖥️ Work", "Emoji prefix must be preserved in area name")
         }
 
         @Test func areaFieldIsNullWhenMissing() throws {
@@ -99,7 +99,7 @@ struct JSONOutputIntegrationTests {
         let formatter = JSONOutputFormatter(prettyPrint: false)
 
         @Test func statusIsStringValue() throws {
-            let todos = [UATestData.meetingAction, UATestData.completedTask]
+            let todos = [WorkTestData.meetingAction, WorkTestData.completedTask]
             let output = formatter.format(todos: todos)
 
             let data = output.data(using: .utf8)!
@@ -120,7 +120,7 @@ struct JSONOutputIntegrationTests {
         let formatter = JSONOutputFormatter(prettyPrint: false)
 
         @Test func tagsAreStringArray() throws {
-            let todos = [UATestData.jiraTask]
+            let todos = [WorkTestData.jiraTask]
             let output = formatter.format(todos: todos)
 
             let data = output.data(using: .utf8)!
@@ -157,7 +157,7 @@ struct JSONOutputIntegrationTests {
         let formatter = JSONOutputFormatter(prettyPrint: false)
 
         @Test func datesAreISO8601Format() throws {
-            let todos = [UATestData.meetingAction]
+            let todos = [WorkTestData.meetingAction]
             let output = formatter.format(todos: todos)
 
             // Check for ISO8601 date pattern
@@ -187,7 +187,7 @@ struct JSONOutputIntegrationTests {
         let formatter = JSONOutputFormatter(prettyPrint: false)
 
         @Test func listNameIncludedWhenProvided() throws {
-            let todos = [UATestData.meetingAction]
+            let todos = [WorkTestData.meetingAction]
             let output = formatter.format(todos: todos, list: "Today")
 
             let data = output.data(using: .utf8)!
@@ -197,7 +197,7 @@ struct JSONOutputIntegrationTests {
         }
 
         @Test func listNameOmittedWhenNotProvided() throws {
-            let todos = [UATestData.meetingAction]
+            let todos = [WorkTestData.meetingAction]
             let output = formatter.format(todos: todos)
 
             let data = output.data(using: .utf8)!
@@ -214,7 +214,7 @@ struct JSONOutputIntegrationTests {
 
         @Test func idFieldIsStable() throws {
             // Same todo formatted twice should have same ID
-            let todos = [UATestData.completedTask]
+            let todos = [WorkTestData.completedTask]
 
             let output1 = formatter.format(todos: todos)
             let output2 = formatter.format(todos: todos)

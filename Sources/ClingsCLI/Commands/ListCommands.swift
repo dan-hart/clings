@@ -279,40 +279,4 @@ struct AreasCommand: AsyncParsableCommand {
     }
 }
 
-// MARK: - Tags Command
-
-struct TagsCommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "tags",
-        abstract: "List all tags",
-        discussion: """
-        Displays all tags from Things 3.
-
-        Tags allow cross-cutting organization across projects and areas.
-        Common uses include:
-        - Context (e.g., @phone, @computer, @errands)
-        - Priority (e.g., urgent, important)
-        - Time needed (e.g., 5min, 30min)
-
-        EXAMPLES:
-          clings tags                   List all tags
-          clings tags --json            Output as JSON
-
-        SEE ALSO:
-          add --tags, filter, bulk tag
-        """
-    )
-
-    @OptionGroup var output: OutputOptions
-
-    func run() async throws {
-        let client = ThingsClientFactory.create()
-        let tags = try await client.fetchTags()
-
-        let formatter: OutputFormatter = output.json
-            ? JSONOutputFormatter()
-            : TextOutputFormatter(useColors: !output.noColor)
-
-        print(formatter.format(tags: tags))
-    }
-}
+// Note: TagsCommand moved to TagCommands.swift to support subcommands (add, delete, rename)

@@ -36,10 +36,13 @@ struct ArgumentParsingTests {
 
     @Suite("Complete Command")
     struct CompleteCommandParsing {
-        @Test func requiresId() {
-            #expect(throws: Error.self) {
-                try CompleteCommand.parse([])
-            }
+        // Note: ID is now optional when using --title flag.
+        // Runtime validation ensures at least one of id or --title is provided.
+        @Test func parsesWithNoArgs() throws {
+            // Parsing succeeds, but run() will throw ValidationError
+            let command = try CompleteCommand.parse([])
+            #expect(command.id == nil)
+            #expect(command.title == nil)
         }
 
         @Test func acceptsId() throws {
@@ -47,9 +50,33 @@ struct ArgumentParsingTests {
             #expect(command.id == "ABC123")
         }
 
+        @Test func acceptsTitle() throws {
+            let command = try CompleteCommand.parse(["--title", "buy milk"])
+            #expect(command.title == "buy milk")
+            #expect(command.id == nil)
+        }
+
+        @Test func acceptsTitleShort() throws {
+            let command = try CompleteCommand.parse(["-t", "groceries"])
+            #expect(command.title == "groceries")
+        }
+
+        @Test func acceptsBothIdAndTitle() throws {
+            // When both are provided, title takes precedence (by implementation)
+            let command = try CompleteCommand.parse(["ABC123", "--title", "search"])
+            #expect(command.id == "ABC123")
+            #expect(command.title == "search")
+        }
+
         @Test func withJsonOutput() throws {
             let command = try CompleteCommand.parse(["ABC123", "--json"])
             #expect(command.id == "ABC123")
+            #expect(command.output.json)
+        }
+
+        @Test func titleWithJsonOutput() throws {
+            let command = try CompleteCommand.parse(["--title", "task", "--json"])
+            #expect(command.title == "task")
             #expect(command.output.json)
         }
     }

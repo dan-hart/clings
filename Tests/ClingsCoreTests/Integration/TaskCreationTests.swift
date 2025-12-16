@@ -6,8 +6,8 @@
 import Testing
 @testable import ClingsCore
 
-/// Tests for task creation parsing as used in ua-conductor scripts.
-/// ua-conductor creates tasks with clings add using various flags and NLP.
+/// Tests for task creation parsing used in automation scripts.
+/// Creates tasks with clings add using various flags and NLP.
 @Suite("Task Creation")
 struct TaskCreationTests {
     let parser = TaskParser()
@@ -26,7 +26,7 @@ struct TaskCreationTests {
         }
 
         @Test func parseMultipleTags() {
-            // ua-conductor pattern for meeting actions (using underscore since parser uses \w+)
+            // Pattern for meeting actions (using underscore since parser uses \w+)
             let result = parser.parse("Review API spec #meeting_action #jira")
 
             #expect(result.tags.count == 2)
@@ -131,13 +131,13 @@ struct TaskCreationTests {
     struct CombinedParsing {
         let parser = TaskParser()
 
-        @Test func uaConductorStyleTask() {
-            // Full ua-conductor style task creation
+        @Test func automationStyleTask() {
+            // Full automation style task creation
             let result = parser.parse(
-                "Review SHOP-1234 API changes #jira #review by friday // Check auth flow"
+                "Review PROJ-1234 API changes #jira #review by friday // Check auth flow"
             )
 
-            #expect(result.title.contains("Review") || result.title.contains("SHOP-1234"))
+            #expect(result.title.contains("Review") || result.title.contains("PROJ-1234"))
             #expect(result.tags.contains("jira"))
             #expect(result.tags.contains("review"))
             #expect(result.dueDate != nil)
