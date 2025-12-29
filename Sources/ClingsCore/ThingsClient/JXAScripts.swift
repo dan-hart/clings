@@ -508,11 +508,12 @@ public enum JXAScripts {
                     make new tag with properties {name: tagName}
                 end if
             end repeat
+            set tagNamesStr to tagNames as string
             set theTodo to to do id "\(id.appleScriptEscaped)"
             if not (exists theTodo) then
                 error "Todo not found: \(id.appleScriptEscaped)"
             end if
-            set tag names of theTodo to tagNames
+            set tag names of theTodo to tagNamesStr
             return "ok"
         end tell
         """
@@ -530,11 +531,12 @@ public enum JXAScripts {
                     make new tag with properties {name: tagName}
                 end if
             end repeat
+            set tagNamesStr to tagNames as string
             set theProject to project id "\(id.appleScriptEscaped)"
             if not (exists theProject) then
                 error "Project not found: \(id.appleScriptEscaped)"
             end if
-            set tag names of theProject to tagNames
+            set tag names of theProject to tagNamesStr
             return "ok"
         end tell
         """
