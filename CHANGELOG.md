@@ -5,6 +5,18 @@ All notable changes to clings will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.8] - 2025-12-29
+
+### Fixed
+
+- **JXA crash on null modificationDate**: JXA list/search/fetch now safely handles missing modification dates (falls back to creationDate), fixing crashes in `clings filter` and list commands.
+
+### Changed
+
+- **No URL scheme usage**: Removed all Things URL scheme usage across add/update/open/project flows. Tag updates now use AppleScript, and creation uses JXA + AppleScript.
+- **Open command disabled**: `clings open` now reports a clear error when invoked because URL schemes are disabled.
+- **Bulk tag add**: Bulk tag operations now apply tags via update instead of printing a URL scheme warning.
+
 ## [0.2.7] - 2025-12-16
 
 ### Added

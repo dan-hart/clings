@@ -53,6 +53,12 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
     /// Track update operations.
     private(set) var updateOperations: [(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?)] = []
 
+    /// Track created todos (name, id).
+    private(set) var createdTodos: [(String, String)] = []
+
+    /// Track created projects (name, id).
+    private(set) var createdProjects: [(String, String)] = []
+
     /// Track search queries.
     private(set) var searchQueries: [String] = []
 
@@ -91,6 +97,36 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
             throw ThingsError.notFound(id)
         }
         return todo
+    }
+
+    func createTodo(
+        name: String,
+        notes: String?,
+        when: Date?,
+        deadline: Date?,
+        tags: [String],
+        project: String?,
+        area: String?,
+        checklistItems: [String]
+    ) async throws -> String {
+        if let error = errorToThrow { throw error }
+        let id = "mock-todo-\(UUID().uuidString.prefix(8))"
+        createdTodos.append((name, id))
+        return id
+    }
+
+    func createProject(
+        name: String,
+        notes: String?,
+        when: Date?,
+        deadline: Date?,
+        tags: [String],
+        area: String?
+    ) async throws -> String {
+        if let error = errorToThrow { throw error }
+        let id = "mock-project-\(UUID().uuidString.prefix(8))"
+        createdProjects.append((name, id))
+        return id
     }
 
     func completeTodo(id: String) async throws {
@@ -174,6 +210,8 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
         searchQueries = []
         openedIds = []
         openedLists = []
+        createdTodos = []
+        createdProjects = []
         createdTags = []
         deletedTags = []
         renamedTags = []

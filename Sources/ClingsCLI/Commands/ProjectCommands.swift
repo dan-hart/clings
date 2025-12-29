@@ -3,7 +3,6 @@
 // Copyright (C) 2024 Dan Hart
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import AppKit
 import ArgumentParser
 import ClingsCore
 import Foundation
@@ -66,7 +65,7 @@ struct ProjectAddCommand: AsyncParsableCommand {
         commandName: "add",
         abstract: "Create a new project",
         discussion: """
-        Creates a new project in Things 3 using the URL scheme.
+        Creates a new project in Things 3.
 
         EXAMPLES:
           clings project add "Q1 Planning"
@@ -102,43 +101,21 @@ struct ProjectAddCommand: AsyncParsableCommand {
             throw ThingsError.invalidState("Project title cannot be empty")
         }
 
-        // Build URL scheme for project creation
-        // things:///add-project?title=X&notes=Y&area=Z&when=W&deadline=D&tags=T
-        var components = URLComponents()
-        components.scheme = "things"
-        components.host = ""
-        components.path = "/add-project"
+        let client = ThingsClientFactory.create()
+        let parsedWhen = try when.map { try parseWhenDate($0) }
+        let parsedDeadline = try deadline.map { try parseWhenDate($0) }
+        let tagList = tags?
+            .split(separator: ",")
+            .map { String($0).trimmingCharacters(in: .whitespaces) } ?? []
 
-        var queryItems: [URLQueryItem] = [
-            URLQueryItem(name: "title", value: trimmedTitle),
-            URLQueryItem(name: "show-quick-entry", value: "false"),
-        ]
-
-        if let notes = notes {
-            queryItems.append(URLQueryItem(name: "notes", value: notes))
-        }
-        if let area = area {
-            queryItems.append(URLQueryItem(name: "area", value: area))
-        }
-        if let when = when {
-            // Parse relative dates
-            let whenValue = parseWhenDate(when)
-            queryItems.append(URLQueryItem(name: "when", value: whenValue))
-        }
-        if let deadline = deadline {
-            queryItems.append(URLQueryItem(name: "deadline", value: deadline))
-        }
-        if let tags = tags {
-            queryItems.append(URLQueryItem(name: "tags", value: tags))
-        }
-
-        components.queryItems = queryItems
-
-        guard let url = components.url else {
-            throw ThingsError.operationFailed("Failed to build Things URL")
-        }
-
-        NSWorkspace.shared.open(url)
+        _ = try await client.createProject(
+            name: trimmedTitle,
+            notes: notes,
+            when: parsedWhen,
+            deadline: parsedDeadline,
+            tags: tagList,
+            area: area
+        )
 
         let formatter: OutputFormatter = output.json
             ? JSONOutputFormatter()
@@ -147,22 +124,24 @@ struct ProjectAddCommand: AsyncParsableCommand {
         print(formatter.format(message: "Created project: \(trimmedTitle)"))
     }
 
-    private func parseWhenDate(_ str: String) -> String {
+    private func parseWhenDate(_ str: String) throws -> Date {
         let lower = str.lowercased()
         let calendar = Calendar.current
         let now = Date()
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withFullDate]
 
         if lower == "today" {
-            return formatter.string(from: calendar.startOfDay(for: now))
+            return calendar.startOfDay(for: now)
         }
         if lower == "tomorrow" {
             if let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) {
-                return formatter.string(from: tomorrow)
+                return tomorrow
             }
         }
-        // Return as-is (assume YYYY-MM-DD format)
-        return str
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate]
+        if let date = formatter.date(from: str) {
+            return date
+        }
+        throw ThingsError.invalidState("Invalid date format: \(str). Use YYYY-MM-DD, 'today', or 'tomorrow'.")
     }
 }

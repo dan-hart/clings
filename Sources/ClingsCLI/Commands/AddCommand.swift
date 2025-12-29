@@ -3,7 +3,6 @@
 // Copyright (C) 2024 Dan Hart
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import AppKit
 import ArgumentParser
 import ClingsCore
 import Foundation
@@ -78,49 +77,17 @@ struct AddCommand: AsyncParsableCommand {
             return
         }
 
-        // Format dates for JXA
-        let formatter = ISO8601DateFormatter()
-        let whenStr = parsed.whenDate.map { formatter.string(from: $0) }
-        let deadlineStr = parsed.dueDate.map { formatter.string(from: $0) }
-
-        // Build Things URL scheme
-        var components = URLComponents()
-        components.scheme = "things"
-        components.host = ""
-        components.path = "/add"
-
-        var queryItems: [URLQueryItem] = [
-            URLQueryItem(name: "title", value: parsed.title),
-            URLQueryItem(name: "show-quick-entry", value: "false"),
-        ]
-
-        if let notes = parsed.notes {
-            queryItems.append(URLQueryItem(name: "notes", value: notes))
-        }
-        if let whenDate = whenStr {
-            queryItems.append(URLQueryItem(name: "when", value: whenDate))
-        }
-        if let deadline = deadlineStr {
-            queryItems.append(URLQueryItem(name: "deadline", value: deadline))
-        }
-        if !parsed.tags.isEmpty {
-            queryItems.append(URLQueryItem(name: "tags", value: parsed.tags.joined(separator: ",")))
-        }
-        if let list = parsed.project ?? parsed.area {
-            queryItems.append(URLQueryItem(name: "list", value: list))
-        }
-        if !parsed.checklistItems.isEmpty {
-            let checklistStr = parsed.checklistItems.joined(separator: "\n")
-            queryItems.append(URLQueryItem(name: "checklist-items", value: checklistStr))
-        }
-
-        components.queryItems = queryItems
-
-        guard let url = components.url else {
-            throw ThingsError.operationFailed("Failed to build Things URL")
-        }
-
-        NSWorkspace.shared.open(url)
+        let client = ThingsClientFactory.create()
+        _ = try await client.createTodo(
+            name: parsed.title,
+            notes: parsed.notes,
+            when: parsed.whenDate,
+            deadline: parsed.dueDate,
+            tags: parsed.tags,
+            project: parsed.project,
+            area: parsed.area,
+            checklistItems: parsed.checklistItems
+        )
 
         let outputFormatter: OutputFormatter = output.json
             ? JSONOutputFormatter()

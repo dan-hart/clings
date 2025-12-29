@@ -12,7 +12,7 @@ struct OpenCommand: AsyncParsableCommand {
         abstract: "Open a todo or list in Things 3",
         discussion: """
         Opens Things 3 and navigates to a specific todo or list.
-        Useful for quickly jumping to items from the command line.
+        This command is currently disabled because URL schemes are not allowed.
 
         LISTS:
           today, inbox, upcoming, anytime, someday, logbook
@@ -23,8 +23,8 @@ struct OpenCommand: AsyncParsableCommand {
           clings open ABC123            Open a specific todo by ID
 
         NOTE:
-          Things 3 must be installed. This command uses the Things
-          URL scheme to navigate.
+          URL schemes are disabled, so this command is a no-op.
+          Open Things 3 manually instead.
 
         SEE ALSO:
           show, today, inbox
@@ -35,14 +35,7 @@ struct OpenCommand: AsyncParsableCommand {
     var target: String
 
     func run() async throws {
-        let client = ThingsClient()
-
-        // Check if it's a list name
-        if let listView = ListView(rawValue: target.lowercased()) {
-            try client.openInThings(list: listView)
-        } else {
-            // Assume it's a todo ID
-            try client.openInThings(id: target)
-        }
+        _ = target
+        throw ThingsError.invalidState("Open command is disabled: URL schemes are not allowed.")
     }
 }

@@ -3,10 +3,9 @@
 // Copyright (C) 2024 Dan Hart
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import AppKit
 import Foundation
 
-/// Hybrid Things client that uses SQLite for fast reads and JXA/URL scheme for writes.
+/// Hybrid Things client that uses SQLite for fast reads and JXA/AppleScript for writes.
 public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable {
     private let database: ThingsDatabase
     private let jxaBridge: JXABridge
@@ -43,6 +42,87 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
     }
 
     // MARK: - Writes (via JXA - safe)
+
+    public func createTodo(
+        name: String,
+        notes: String?,
+        when: Date?,
+        deadline: Date?,
+        tags: [String],
+        project: String?,
+        area: String?,
+        checklistItems: [String]
+    ) async throws -> String {
+        let formatter = ISO8601DateFormatter()
+        let whenStr = when.map { formatter.string(from: $0) }
+        let deadlineStr = deadline.map { formatter.string(from: $0) }
+
+        let script = JXAScripts.createTodo(
+            name: name,
+            notes: notes,
+            when: whenStr,
+            deadline: deadlineStr,
+            tags: [],
+            project: project,
+            area: area,
+            checklistItems: checklistItems
+        )
+
+        let result = try await jxaBridge.executeJSON(script, as: CreationResult.self)
+        if !result.success {
+            throw ThingsError.operationFailed(result.error ?? "Unknown error")
+        }
+        guard let id = result.id else {
+            throw ThingsError.operationFailed("Missing created todo ID")
+        }
+
+        if !tags.isEmpty {
+            let tagScript = JXAScripts.setTodoTagsAppleScript(id: id, tags: tags)
+            do {
+                _ = try await jxaBridge.executeAppleScript(tagScript)
+            } catch let error as JXAError {
+                throw ThingsError.jxaError(error)
+            }
+        }
+
+        return id
+    }
+
+    public func createProject(
+        name: String,
+        notes: String?,
+        when: Date?,
+        deadline: Date?,
+        tags: [String],
+        area: String?
+    ) async throws -> String {
+        let script = JXAScripts.createProject(
+            name: name,
+            notes: notes,
+            when: when,
+            deadline: deadline,
+            area: area
+        )
+
+        let result = try await jxaBridge.executeJSON(script, as: CreationResult.self)
+        if !result.success {
+            throw ThingsError.operationFailed(result.error ?? "Unknown error")
+        }
+        guard let id = result.id else {
+            throw ThingsError.operationFailed("Missing created project ID")
+        }
+
+        if !tags.isEmpty {
+            let tagScript = JXAScripts.setProjectTagsAppleScript(id: id, tags: tags)
+            do {
+                _ = try await jxaBridge.executeAppleScript(tagScript)
+            } catch let error as JXAError {
+                throw ThingsError.jxaError(error)
+            }
+        }
+
+        return id
+    }
 
     public func completeTodo(id: String) async throws {
         let script = JXAScripts.completeTodo(id: id)
@@ -86,16 +166,13 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
             }
         }
 
-        // Handle tags via URL scheme (JXA's todo.tags.push() silently fails)
-        // See: https://culturedcode.com/things/support/articles/2803573/
         if let tags = tags {
-            let idParam = id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? id
-            let tagsParam = tags.joined(separator: ",")
-                .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-            guard let url = URL(string: "things:///update?id=\(idParam)&tags=\(tagsParam)") else {
-                throw ThingsError.invalidState("Invalid URL for tag update")
+            let tagScript = JXAScripts.setTodoTagsAppleScript(id: id, tags: tags)
+            do {
+                _ = try await jxaBridge.executeAppleScript(tagScript)
+            } catch let error as JXAError {
+                throw ThingsError.jxaError(error)
             }
-            NSWorkspace.shared.open(url)
         }
     }
 
@@ -129,21 +206,14 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         }
     }
 
-    // MARK: - URL Scheme Operations
+    // MARK: - Open (disabled)
 
     public nonisolated func openInThings(id: String) throws {
-        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? id
-        guard let url = URL(string: "things:///show?id=\(encodedId)") else {
-            throw ThingsError.invalidState("Invalid URL for id: \(id)")
-        }
-        NSWorkspace.shared.open(url)
+        throw ThingsError.invalidState("Open command is disabled: URL schemes are not allowed.")
     }
 
     public nonisolated func openInThings(list: ListView) throws {
-        guard let url = URL(string: "things:///show?id=\(list.rawValue)") else {
-            throw ThingsError.invalidState("Invalid URL for list: \(list)")
-        }
-        NSWorkspace.shared.open(url)
+        throw ThingsError.invalidState("Open command is disabled: URL schemes are not allowed.")
     }
 }
 

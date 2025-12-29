@@ -48,6 +48,9 @@ public enum JXAScripts {
                     }
                 } catch (e) {}
 
+                const creationDate = todo.creationDate();
+                const modificationDate = todo.modificationDate();
+
                 return {
                     id: todo.id(),
                     name: todo.name(),
@@ -58,8 +61,8 @@ public enum JXAScripts {
                     project: proj,
                     area: ar,
                     checklistItems: checklist,
-                    creationDate: todo.creationDate().toISOString(),
-                    modificationDate: todo.modificationDate().toISOString()
+                    creationDate: creationDate.toISOString(),
+                    modificationDate: (modificationDate ? modificationDate.toISOString() : creationDate.toISOString())
                 };
             }));
         })()
@@ -106,6 +109,9 @@ public enum JXAScripts {
                 }
             } catch (e) {}
 
+            const creationDate = todo.creationDate();
+            const modificationDate = todo.modificationDate();
+
             return JSON.stringify({
                 id: todo.id(),
                 name: todo.name(),
@@ -116,8 +122,8 @@ public enum JXAScripts {
                 project: proj,
                 area: ar,
                 checklistItems: checklist,
-                creationDate: todo.creationDate().toISOString(),
-                modificationDate: todo.modificationDate().toISOString()
+                creationDate: creationDate.toISOString(),
+                modificationDate: (modificationDate ? modificationDate.toISOString() : creationDate.toISOString())
             });
         })()
         """
@@ -262,10 +268,6 @@ public enum JXAScripts {
     }
 
     /// Update a todo's properties.
-    ///
-    /// Note: Tags are NOT handled here - JXA's `todo.tags.push()` silently fails.
-    /// Tag updates must use the Things URL scheme instead:
-    /// `things:///update?id=X&tags=Y`
     public static func updateTodo(
         id: String,
         name: String? = nil,
@@ -275,8 +277,8 @@ public enum JXAScripts {
     ) -> String {
         let dueDateISO = dueDate.map { ISO8601DateFormatter().string(from: $0) }
 
-        // Note: tags parameter is ignored here - must be handled via URL scheme
-        _ = tags  // Silence unused parameter warning
+        // Tags are handled via AppleScript for reliability.
+        _ = tags  // Tags are applied separately.
 
         return """
         (() => {
@@ -297,11 +299,6 @@ public enum JXAScripts {
     }
 
     /// Create a new todo with the given properties.
-    ///
-    /// WARNING: Tag assignment via JXA (`todo.tags.push()`) silently fails.
-    /// Use the Things URL scheme for reliable tag assignment:
-    /// `things:///add?title=X&tags=Y`
-    /// The AddCommand already uses URL scheme and bypasses this function.
     public static func createTodo(
         name: String,
         notes: String? = nil,
@@ -312,7 +309,7 @@ public enum JXAScripts {
         area: String? = nil,
         checklistItems: [String] = []
     ) -> String {
-        let tagsArray = tags.map { "'\($0.jxaEscaped)'" }.joined(separator: ", ")
+        _ = tags  // Tags are applied separately via AppleScript.
         let checklistArray = checklistItems.map { "'\($0.jxaEscaped)'" }.joined(separator: ", ")
 
         var propsCode = "name: '\(name.jxaEscaped)'"
@@ -332,16 +329,6 @@ public enum JXAScripts {
 
             // Set deadline
             \(deadline != nil ? "todo.dueDate = new Date('\(deadline!.jxaEscaped)');" : "")
-
-            // Add tags
-            const tagNames = [\(tagsArray)];
-            tagNames.forEach(tagName => {
-                let tag = app.tags.byName(tagName);
-                if (!tag.exists()) {
-                    tag = app.make({ new: 'tag', withProperties: { name: tagName }});
-                }
-                todo.tags.push(tag);
-            });
 
             // Add to project
             \(project != nil ? """
@@ -378,6 +365,52 @@ public enum JXAScripts {
         """
     }
 
+    /// Create a new project with the given properties.
+    public static func createProject(
+        name: String,
+        notes: String? = nil,
+        when: Date? = nil,
+        deadline: Date? = nil,
+        area: String? = nil
+    ) -> String {
+        let whenISO = when.map { ISO8601DateFormatter().string(from: $0) }
+        let deadlineISO = deadline.map { ISO8601DateFormatter().string(from: $0) }
+
+        var propsCode = "name: '\(name.jxaEscaped)'"
+        if let notes = notes, !notes.isEmpty {
+            propsCode += ", notes: '\(notes.jxaEscaped)'"
+        }
+
+        return """
+        (() => {
+            const app = Application('Things3');
+
+            const props = { \(propsCode) };
+            const project = app.make({ new: 'project', withProperties: props });
+
+            // Set when date
+            \(whenISO != nil ? "project.activationDate = new Date('\(whenISO!)');" : "")
+
+            // Set deadline
+            \(deadlineISO != nil ? "project.dueDate = new Date('\(deadlineISO!)');" : "")
+
+            // Add to area
+            \(area != nil ? """
+            const area = app.areas.byName('\(area!.jxaEscaped)');
+            if (area.exists()) {
+                project.area = area;
+            }
+            """ : "")
+
+            return JSON.stringify({
+                success: true,
+                id: project.id(),
+                name: project.name()
+            });
+        })()
+        """
+    }
+
     // MARK: - Search
 
     /// Search todos by query text.
@@ -403,6 +436,9 @@ public enum JXAScripts {
                     }
                 } catch (e) {}
 
+                const creationDate = todo.creationDate();
+                const modificationDate = todo.modificationDate();
+
                 return {
                     id: todo.id(),
                     name: todo.name(),
@@ -411,8 +447,8 @@ public enum JXAScripts {
                     dueDate: todo.dueDate() ? todo.dueDate().toISOString() : null,
                     tags: todo.tags().map(t => ({ id: t.id(), name: t.name() })),
                     project: proj,
-                    creationDate: todo.creationDate().toISOString(),
-                    modificationDate: todo.modificationDate().toISOString()
+                    creationDate: creationDate.toISOString(),
+                    modificationDate: (modificationDate ? modificationDate.toISOString() : creationDate.toISOString())
                 };
             }));
         })()
@@ -456,6 +492,50 @@ public enum JXAScripts {
             else
                 error "Tag not found: \(oldName.appleScriptEscaped)"
             end if
+        end tell
+        """
+    }
+
+    /// Set tag names for a todo via AppleScript.
+    public static func setTodoTagsAppleScript(id: String, tags: [String]) -> String {
+        let tagList = tags.map { "\"\($0.appleScriptEscaped)\"" }.joined(separator: ", ")
+
+        return """
+        tell application "Things3"
+            set tagNames to {\(tagList)}
+            repeat with tagName in tagNames
+                if not (exists (tag whose name is tagName)) then
+                    make new tag with properties {name: tagName}
+                end if
+            end repeat
+            set theTodo to to do id "\(id.appleScriptEscaped)"
+            if not (exists theTodo) then
+                error "Todo not found: \(id.appleScriptEscaped)"
+            end if
+            set tag names of theTodo to tagNames
+            return "ok"
+        end tell
+        """
+    }
+
+    /// Set tag names for a project via AppleScript.
+    public static func setProjectTagsAppleScript(id: String, tags: [String]) -> String {
+        let tagList = tags.map { "\"\($0.appleScriptEscaped)\"" }.joined(separator: ", ")
+
+        return """
+        tell application "Things3"
+            set tagNames to {\(tagList)}
+            repeat with tagName in tagNames
+                if not (exists (tag whose name is tagName)) then
+                    make new tag with properties {name: tagName}
+                end if
+            end repeat
+            set theProject to project id "\(id.appleScriptEscaped)"
+            if not (exists theProject) then
+                error "Project not found: \(id.appleScriptEscaped)"
+            end if
+            set tag names of theProject to tagNames
+            return "ok"
         end tell
         """
     }

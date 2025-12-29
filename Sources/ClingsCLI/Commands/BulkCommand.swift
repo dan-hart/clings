@@ -287,9 +287,16 @@ struct BulkTagCommand: AsyncParsableCommand {
             }
         }
 
-        // Note: Things 3 JXA doesn't easily support adding tags
-        // For now, we'll use URL scheme which is limited
-        print(formatter.format(message: "Bulk tag operations require Things URL scheme (limited support)"))
+        for todo in todos {
+            let existing = todo.tags.map { $0.name }
+            var merged = existing
+            for tag in tagList where !merged.contains(tag) {
+                merged.append(tag)
+            }
+            try await client.updateTodo(id: todo.id, name: nil, notes: nil, dueDate: nil, tags: merged)
+        }
+
+        print(formatter.format(message: "Updated \(todos.count) todo(s)"))
     }
 }
 
