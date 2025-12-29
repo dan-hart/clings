@@ -5,6 +5,13 @@ All notable changes to clings will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.10] - 2025-12-29
+
+### Fixed
+
+- **Todo creation via AppleScript**: Avoids JXA "Can't make class" failures and schedules `when` dates using the Things `schedule` command.
+- **Tag automation reliability**: Corrected tag existence checks so tag add/update/delete/rename and multi-tag updates work again.
+
 ## [0.2.9] - 2025-12-29
 
 ### Fixed

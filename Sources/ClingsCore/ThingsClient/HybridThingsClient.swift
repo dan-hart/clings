@@ -53,9 +53,8 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         area: String?,
         checklistItems: [String]
     ) async throws -> String {
-        let formatter = ISO8601DateFormatter()
-        let whenStr = when.map { formatter.string(from: $0) }
-        let deadlineStr = deadline.map { formatter.string(from: $0) }
+        let whenStr = when.map { appleScriptDateString($0) }
+        let deadlineStr = deadline.map { appleScriptDateString($0) }
 
         let script = JXAScripts.createTodo(
             name: name,
@@ -68,11 +67,8 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
             checklistItems: checklistItems
         )
 
-        let result = try await jxaBridge.executeJSON(script, as: CreationResult.self)
-        if !result.success {
-            throw ThingsError.operationFailed(result.error ?? "Unknown error")
-        }
-        guard let id = result.id else {
+        let id = try await jxaBridge.executeAppleScript(script)
+        guard !id.isEmpty else {
             throw ThingsError.operationFailed("Missing created todo ID")
         }
 
@@ -214,6 +210,14 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
 
     public nonisolated func openInThings(list: ListView) throws {
         throw ThingsError.invalidState("Open command is disabled: URL schemes are not allowed.")
+    }
+
+    private func appleScriptDateString(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone.current
+        formatter.dateFormat = "MMMM d, yyyy HH:mm:ss"
+        return formatter.string(from: date)
     }
 }
 

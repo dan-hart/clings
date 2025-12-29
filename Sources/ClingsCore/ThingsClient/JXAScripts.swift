@@ -298,7 +298,7 @@ public enum JXAScripts {
         """
     }
 
-    /// Create a new todo with the given properties.
+    /// Create a new todo with the given properties via AppleScript.
     public static func createTodo(
         name: String,
         notes: String? = nil,
@@ -310,58 +310,39 @@ public enum JXAScripts {
         checklistItems: [String] = []
     ) -> String {
         _ = tags  // Tags are applied separately via AppleScript.
-        let checklistArray = checklistItems.map { "'\($0.jxaEscaped)'" }.joined(separator: ", ")
+        let checklistArray = checklistItems.map { "\"\($0.appleScriptEscaped)\"" }.joined(separator: ", ")
 
-        var propsCode = "name: '\(name.jxaEscaped)'"
+        var propsCode = "name: \"\(name.appleScriptEscaped)\""
         if let notes = notes, !notes.isEmpty {
-            propsCode += ", notes: '\(notes.jxaEscaped)'"
+            propsCode += ", notes: \"\(notes.appleScriptEscaped)\""
         }
 
         return """
-        (() => {
-            const app = Application('Things3');
+        tell application "Things3"
+            set newTodo to make new to do with properties {\(propsCode)}
 
-            const props = { \(propsCode) };
-            const todo = app.make({ new: 'to do', withProperties: props });
-
-            // Set when date
-            \(when != nil ? "todo.activationDate = new Date('\(when!.jxaEscaped)');" : "")
-
-            // Set deadline
-            \(deadline != nil ? "todo.dueDate = new Date('\(deadline!.jxaEscaped)');" : "")
-
-            // Add to project
             \(project != nil ? """
-            const project = app.projects.byName('\(project!.jxaEscaped)');
-            if (project.exists()) {
-                todo.project = project;
-            }
+            if exists project "\(project!.appleScriptEscaped)" then
+                set project of newTodo to project "\(project!.appleScriptEscaped)"
+            end if
             """ : "")
 
-            // Add to area
             \(area != nil ? """
-            const area = app.areas.byName('\(area!.jxaEscaped)');
-            if (area.exists()) {
-                todo.area = area;
-            }
+            if exists area "\(area!.appleScriptEscaped)" then
+                set area of newTodo to area "\(area!.appleScriptEscaped)"
+            end if
             """ : "")
 
-            // Add checklist items
-            const checklistItems = [\(checklistArray)];
-            checklistItems.forEach(itemName => {
-                app.make({
-                    new: 'to do',
-                    withProperties: { name: itemName },
-                    at: todo
-                });
-            });
+            \(when != nil ? "schedule newTodo for date \"\(when!.appleScriptEscaped)\"" : "")
+            \(deadline != nil ? "set due date of newTodo to date \"\(deadline!.appleScriptEscaped)\"" : "")
 
-            return JSON.stringify({
-                success: true,
-                id: todo.id(),
-                name: todo.name()
-            });
-        })()
+            set checklistItems to {\(checklistArray)}
+            repeat with itemName in checklistItems
+                make new to do with properties {name:itemName} at newTodo
+            end repeat
+
+            return id of newTodo
+        end tell
         """
     }
 
@@ -472,8 +453,8 @@ public enum JXAScripts {
     public static func deleteTagAppleScript(name: String) -> String {
         """
         tell application "Things3"
-            if exists (tag whose name is "\(name.appleScriptEscaped)") then
-                delete (first tag whose name is "\(name.appleScriptEscaped)")
+            if exists tag "\(name.appleScriptEscaped)" then
+                delete tag "\(name.appleScriptEscaped)"
                 return "deleted"
             else
                 error "Tag not found: \(name.appleScriptEscaped)"
@@ -486,8 +467,8 @@ public enum JXAScripts {
     public static func renameTagAppleScript(oldName: String, newName: String) -> String {
         """
         tell application "Things3"
-            if exists (tag whose name is "\(oldName.appleScriptEscaped)") then
-                set name of (first tag whose name is "\(oldName.appleScriptEscaped)") to "\(newName.appleScriptEscaped)"
+            if exists tag "\(oldName.appleScriptEscaped)" then
+                set name of tag "\(oldName.appleScriptEscaped)" to "\(newName.appleScriptEscaped)"
                 return "renamed"
             else
                 error "Tag not found: \(oldName.appleScriptEscaped)"
@@ -504,7 +485,7 @@ public enum JXAScripts {
         tell application "Things3"
             set tagNames to {\(tagList)}
             repeat with tagName in tagNames
-                if not (exists (tag whose name is tagName)) then
+                if not (exists tag tagName) then
                     make new tag with properties {name: tagName}
                 end if
             end repeat
@@ -527,7 +508,7 @@ public enum JXAScripts {
         tell application "Things3"
             set tagNames to {\(tagList)}
             repeat with tagName in tagNames
-                if not (exists (tag whose name is tagName)) then
+                if not (exists tag tagName) then
                     make new tag with properties {name: tagName}
                 end if
             end repeat
@@ -546,7 +527,7 @@ public enum JXAScripts {
     public static func tagExistsAppleScript(name: String) -> String {
         """
         tell application "Things3"
-            exists (tag whose name is "\(name.appleScriptEscaped)")
+            exists tag "\(name.appleScriptEscaped)"
         end tell
         """
     }
