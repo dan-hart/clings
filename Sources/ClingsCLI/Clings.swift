@@ -63,6 +63,7 @@ struct Clings: AsyncParsableCommand {
             StatsCommand.self,
             ReviewCommand.self,
             CompletionsCommand.self,
+            ConfigCommand.self,
         ],
         defaultSubcommand: TodayCommand.self
     )

@@ -243,6 +243,9 @@ struct JXAScriptsTests {
             #expect(script.contains("It\\'s done"))
             #expect(script.contains("Line1\\nLine2"))
         }
+
+        // Note: --when uses Things URL scheme (activationDate is read-only in JXA).
+        // URL scheme tests would require integration testing with Things 3.
     }
 
     @Suite("Create Todo Script")
