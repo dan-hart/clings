@@ -12,24 +12,23 @@
 
 ## Features
 
-### 1. List Commands
+### 1. View Commands
 
-Access all your Things 3 lists with a single command:
+Access all your Things 3 lists directly:
 
 ```bash
-clings list              # Show today's todos (default)
-clings list inbox        # Show inbox
-clings list upcoming     # Show upcoming todos
-clings list areas        # List all areas
-clings list tags         # List all tags
-clings list projects     # List all projects
-
-# Shortcuts for common views
-clings today             # or: clings t
+clings today             # or: clings t (default command)
 clings inbox             # or: clings i
 clings upcoming          # or: clings u
+clings anytime
 clings someday           # or: clings s
 clings logbook           # or: clings l
+
+# Organization
+clings projects          # List all projects
+clings areas             # List all areas
+clings tags list         # List all tags
+clings show <ID>         # Show details of a specific todo
 ```
 
 ### 2. Natural Language Task Entry
@@ -54,28 +53,66 @@ clings add "review PR // needs careful testing - check auth - verify tests"
 # - Checklist: - item1 - item2
 ```
 
-### 3. Search with Filters
-
-Search your todos with simple flags or advanced SQL-like expressions:
+You can also use explicit flags:
 
 ```bash
-# Text search
-clings search "meeting"
+clings add "Task title" \
+  --when tomorrow \
+  --deadline "2024-12-31" \
+  --tags work urgent \
+  --project "Sprint 1" \
+  --area "Work" \
+  --notes "Additional context"
 
-# Filter by tag, project, or due date
-clings search --tag work
-clings search --project "Sprint 1"
-clings search --due today
-
-# Advanced filter (SQL-like syntax)
-clings search --filter "status = 'open' AND due < today"
-clings search --filter "tags CONTAINS 'urgent' OR project = 'Important'"
+# Preview without creating
+clings add "Test task tomorrow #work" --parse-only
 ```
 
-**Filter operators:** `=`, `!=`, `<`, `>`, `LIKE`, `CONTAINS`, `IS NULL`, `IS NOT NULL`, `IN`
-**Logic:** `AND`, `OR`, `NOT`, parentheses
+### 3. Search and Filter
 
-### 4. Bulk Operations
+Search todos by text, or use the powerful filter command for advanced queries:
+
+```bash
+# Text search (case-insensitive, searches title and notes)
+clings search "meeting"
+clings find "project report"     # alias for search
+clings f "status"                # short alias
+
+# Advanced filtering (SQL-like query language)
+clings filter "status = open"
+clings filter "due < today AND status = open"
+clings filter "tags CONTAINS 'urgent'"
+clings filter "name LIKE '%report%'"
+clings filter "project IS NOT NULL"
+```
+
+**Filter operators:** `=`, `!=`, `<`, `>`, `<=`, `>=`, `LIKE`, `CONTAINS`, `IS NULL`, `IS NOT NULL`, `IN`
+**Logic:** `AND`, `OR`
+**Fields:** `status`, `due`, `tags`, `project`, `area`, `name`, `notes`, `created`
+
+### 4. Todo Management
+
+Manage individual todos:
+
+```bash
+# Show details
+clings show <ID>
+
+# Update properties
+clings update <ID> --name "New title"
+clings update <ID> --notes "Updated notes"
+clings update <ID> --due 2024-12-25
+clings update <ID> --tags work urgent
+
+# Complete, cancel, or delete
+clings complete <ID>             # or: clings done <ID>
+clings complete --title "milk"   # complete by title search
+clings cancel <ID>
+clings delete <ID>               # or: clings rm <ID>
+clings delete <ID> --force       # skip confirmation
+```
+
+### 5. Bulk Operations
 
 Perform operations on multiple tasks using powerful filters.
 
@@ -100,80 +137,39 @@ clings bulk move --where "tags CONTAINS 'work'" --to "Work Project"
 
 **Safety options:**
 - `--dry-run` - Preview changes without applying them
-- `--limit N` - Maximum items to process (default: 50)
 - `--yes` - Skip confirmation prompts (use with caution)
+- `--list` - Specify which list to operate on (default: today)
 
-### 5. Statistics Dashboard
+### 6. Statistics Dashboard
 
 Track your productivity:
 
 ```bash
 clings stats              # Show dashboard
-clings stats --trends     # Completion trends over time
-clings stats --heatmap    # Activity heatmap calendar
+clings stats trends       # Completion trends over time
+clings stats heatmap      # Activity heatmap calendar
+clings stats --days 7     # Limit to last 7 days
 ```
 
-### 6. Weekly Review
+### 7. Weekly Review
 
 Guide yourself through a GTD-style weekly review:
 
 ```bash
-clings review              # Start a new review
-clings review --resume     # Resume paused review
-clings review --status     # Check progress
+clings review             # Start a new review (default)
+clings review start       # Same as above
+clings review status      # Show last review session info
+clings review clear       # Clear review session
 ```
 
-### 7. Terminal UI
-
-Launch the interactive terminal interface:
-
-```bash
-clings tui
-
-# Keybindings:
-# j/k or arrows  Navigate
-# c              Complete todo
-# x              Cancel todo
-# Enter          Open in Things
-# q/Esc          Quit
-```
-
-### 8. Shell Integration
+### 8. Shell Completions
 
 Generate shell completions:
 
 ```bash
-clings shell completions bash > ~/.bash_completion.d/clings
-clings shell completions zsh > ~/.zsh/completions/_clings
-clings shell completions fish > ~/.config/fish/completions/clings.fish
-
-# Show installation instructions
-clings shell completions zsh --install
-```
-
-### 9. Todo Management
-
-Manage individual todos:
-
-```bash
-# Show todo details
-clings todo show <ID>
-
-# Update todo properties
-clings todo update <ID> --title "New title"
-clings todo update <ID> --area "Work"
-clings todo update <ID> --project "Sprint 1"
-clings todo update <ID> --when tomorrow --deadline "dec 31"
-clings todo update <ID> --tags "urgent,priority"
-
-# Mark as complete
-clings todo complete <ID>
-
-# Cancel todo
-clings todo cancel <ID>
-
-# Delete todo
-clings todo delete <ID>
+clings completions bash > ~/.bash_completion.d/clings
+clings completions zsh > ~/.zfunc/_clings
+clings completions fish > ~/.config/fish/completions/clings.fish
 ```
 
 ## Requirements
@@ -225,6 +221,9 @@ clings inbox
 # Search for tasks
 clings search "project"
 
+# Filter by status and date
+clings filter "due < today AND status = open"
+
 # Get productivity stats
 clings stats
 
@@ -248,23 +247,29 @@ clings add --help
 
 | Command | Alias | Description |
 |---------|-------|-------------|
-| `list [VIEW]` | - | List todos from a view (today, inbox, upcoming, etc.) |
-| `today` | `t` | Show today's todos |
+| `today` | `t` | Show today's todos (default) |
 | `inbox` | `i` | Show inbox todos |
 | `upcoming` | `u` | Show upcoming todos |
 | `anytime` | - | Show anytime todos |
 | `someday` | `s` | Show someday todos |
 | `logbook` | `l` | Show completed todos |
-| `add` | `a` | Quick add with natural language |
-| `todo` | - | Manage todos (show, update, complete, cancel, delete) |
-| `project` | - | Manage projects (list, show, add) |
-| `search` | - | Search todos by text or filters |
+| `projects` | - | List all projects |
+| `areas` | - | List all areas |
+| `tags` | - | Manage tags |
+| `show` | - | Show details of a todo by ID |
+| `add` | - | Add a new todo with natural language |
+| `update` | - | Update a todo's properties |
+| `complete` | `done` | Mark a todo as completed |
+| `cancel` | - | Cancel a todo |
+| `delete` | `rm` | Delete a todo (moves to trash) |
+| `search` | `find`, `f` | Search todos by text |
+| `filter` | - | Filter todos using SQL-like expressions |
 | `open` | - | Open Things 3 to a view or item |
-| `bulk` | `b` | Bulk operations on multiple todos |
+| `bulk` | - | Bulk operations on multiple todos |
 | `stats` | - | View productivity statistics |
-| `review` | `r` | Interactive weekly review workflow |
-| `shell` | - | Shell integration (completions) |
-| `tui` | - | Launch the terminal UI |
+| `review` | - | GTD weekly review workflow (start, status, clear) |
+| `config` | - | Configure clings settings |
+| `completions` | - | Generate shell completions |
 
 ## Output Formats
 
