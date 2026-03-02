@@ -69,7 +69,8 @@ public final class ThingsDatabase: Sendable {
             case .inbox:
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, area, startDate,
+                           rt1_repeatingTemplate
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0
                           AND start = 0 AND project IS NULL AND startDate IS NULL
@@ -81,7 +82,8 @@ public final class ThingsDatabase: Sendable {
                 let todayPacked = ThingsDateConverter.encodeDate(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, area, startDate,
+                           rt1_repeatingTemplate
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0
                           AND (start = 1 OR startDate = ?)
@@ -93,7 +95,8 @@ public final class ThingsDatabase: Sendable {
                 let todayPacked = ThingsDateConverter.encodeDate(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, area, startDate,
+                           rt1_repeatingTemplate
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0 AND startDate > ?
                     ORDER BY startDate, "index"
@@ -104,7 +107,8 @@ public final class ThingsDatabase: Sendable {
                 let todayPacked = ThingsDateConverter.encodeDate(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, area, startDate,
+                           rt1_repeatingTemplate
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0 AND start = 1
                           AND (startDate IS NULL OR startDate <= ?)
@@ -115,7 +119,8 @@ public final class ThingsDatabase: Sendable {
             case .someday:
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, area, startDate,
+                           rt1_repeatingTemplate
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0 AND start = 2
                     ORDER BY "index"
@@ -125,7 +130,8 @@ public final class ThingsDatabase: Sendable {
             case .logbook:
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, area, startDate,
+                           rt1_repeatingTemplate
                     FROM TMTask
                     WHERE status = 3 AND trashed = 0 AND type = 0
                     ORDER BY stopDate DESC
@@ -136,7 +142,8 @@ public final class ThingsDatabase: Sendable {
             case .trash:
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, area, startDate,
+                           rt1_repeatingTemplate
                     FROM TMTask
                     WHERE trashed = 1 AND type = 0
                     ORDER BY "index"
@@ -288,6 +295,10 @@ public final class ThingsDatabase: Sendable {
         let deadline: Date? = (row["deadline"] as Int?).flatMap {
             ThingsDateConverter.decodeToDate($0)
         }
+        let startDate: Date? = (row["startDate"] as Int?).flatMap {
+            ThingsDateConverter.decodeToDate($0)
+        }
+        let repeatingTemplate: String? = row["rt1_repeatingTemplate"]
         let creationDate: Date = (row["creationDate"] as Double?).flatMap {
             Date(timeIntervalSince1970: $0)
         } ?? Date()
@@ -305,26 +316,32 @@ public final class ThingsDatabase: Sendable {
             project: project,
             area: area,
             checklistItems: checklistItems,
+            startDate: startDate,
+            repeatingTemplate: repeatingTemplate,
             creationDate: creationDate,
             modificationDate: modificationDate
         )
     }
 
     private func fetchProjectBasic(uuid: String, db: Database) throws -> Project? {
-        let sql = "SELECT title, status FROM TMTask WHERE uuid = ? AND type = 1"
+        let sql = "SELECT title, status, area FROM TMTask WHERE uuid = ? AND type = 1"
         guard let row = try Row.fetchOne(db, sql: sql, arguments: [uuid]) else {
             return nil
         }
+
+        let areaUuid: String? = row["area"]
+        let area: Area? = try areaUuid.flatMap { try self.fetchArea(uuid: $0, db: db) }
+        let tags = try self.fetchTagsForTask(uuid: uuid, db: db)
 
         return Project(
             id: uuid,
             name: row["title"],
             notes: nil,
             status: statusFromInt(row["status"]),
-            area: nil,
-            tags: [],
+            area: area,
+            tags: tags,
             dueDate: nil,
-            creationDate: Date()
+            creationDate: nil
         )
     }
 

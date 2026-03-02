@@ -19,6 +19,8 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
     public var project: Project?
     public var area: Area?
     public var checklistItems: [ChecklistItem]
+    public var startDate: Date?
+    public var repeatingTemplate: String?
     public var creationDate: Date
     public var modificationDate: Date
 
@@ -32,6 +34,8 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
         project: Project? = nil,
         area: Area? = nil,
         checklistItems: [ChecklistItem] = [],
+        startDate: Date? = nil,
+        repeatingTemplate: String? = nil,
         creationDate: Date = Date(),
         modificationDate: Date = Date()
     ) {
@@ -44,6 +48,8 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
         self.project = project
         self.area = area
         self.checklistItems = checklistItems
+        self.startDate = startDate
+        self.repeatingTemplate = repeatingTemplate
         self.creationDate = creationDate
         self.modificationDate = modificationDate
     }
@@ -58,6 +64,8 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
         case project
         case area
         case checklistItems
+        case startDate
+        case repeatingTemplate
         case creationDate
         case modificationDate
     }
@@ -80,6 +88,8 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
         project = try container.decodeIfPresent(Project.self, forKey: .project)
         area = try container.decodeIfPresent(Area.self, forKey: .area)
         checklistItems = try container.decodeIfPresent([ChecklistItem].self, forKey: .checklistItems) ?? []
+        startDate = try container.decodeIfPresent(Date.self, forKey: .startDate)
+        repeatingTemplate = try container.decodeIfPresent(String.self, forKey: .repeatingTemplate)
         creationDate = try container.decodeIfPresent(Date.self, forKey: .creationDate) ?? Date()
         modificationDate = try container.decodeIfPresent(Date.self, forKey: .modificationDate) ?? Date()
     }
@@ -89,6 +99,7 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
     public var isCompleted: Bool { status == .completed }
     public var isCanceled: Bool { status == .canceled }
     public var isOpen: Bool { status == .open }
+    public var isRecurring: Bool { repeatingTemplate != nil }
 
     /// Whether the task is overdue (has a due date in the past and is still open).
     public var isOverdue: Bool {
@@ -134,6 +145,10 @@ extension Todo: Filterable {
             return .string(status.rawValue)
         case "due", "duedate":
             return .optionalDate(dueDate)
+        case "startdate":
+            return .optionalDate(startDate)
+        case "recurring":
+            return .string(isRecurring ? "true" : "false")
         case "tags":
             return .stringList(tags.map { $0.name })
         case "project":

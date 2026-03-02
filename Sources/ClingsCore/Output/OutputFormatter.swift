@@ -161,6 +161,14 @@ public struct TextOutputFormatter: OutputFormatter {
             formatter.dateStyle = .medium
             metaLine += "  Due: \(formatter.string(from: dueDate))"
         }
+        if let startDate = todo.startDate {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            metaLine += "  When: \(formatter.string(from: startDate))"
+        }
+        if todo.isRecurring {
+            metaLine += "  " + dim("↻ Recurring")
+        }
         lines.append(metaLine)
 
         // Project/Area
@@ -306,6 +314,8 @@ struct TodoJSON: Encodable {
     let notes: String
     let status: String
     let dueDate: String?
+    let startDate: String?
+    let isRecurring: Bool
     let tags: [String]
     let project: String?
     let area: String?
@@ -314,7 +324,7 @@ struct TodoJSON: Encodable {
     let modificationDate: String
 
     enum CodingKeys: String, CodingKey {
-        case id, name, notes, status, dueDate, tags, project, area
+        case id, name, notes, status, dueDate, startDate, isRecurring, tags, project, area
         case checklistItems, creationDate, modificationDate
     }
 
@@ -326,6 +336,8 @@ struct TodoJSON: Encodable {
         self.notes = todo.notes ?? ""
         self.status = todo.status.rawValue
         self.dueDate = todo.dueDate.map { formatter.string(from: $0) }
+        self.startDate = todo.startDate.map { formatter.string(from: $0) }
+        self.isRecurring = todo.isRecurring
         self.tags = todo.tags.map { $0.name }
         self.project = todo.project?.name
         self.area = todo.area?.name
@@ -341,10 +353,12 @@ struct TodoJSON: Encodable {
         try container.encode(creationDate, forKey: .creationDate)
         try container.encode(dueDate, forKey: .dueDate)
         try container.encode(id, forKey: .id)
+        try container.encode(isRecurring, forKey: .isRecurring)
         try container.encode(modificationDate, forKey: .modificationDate)
         try container.encode(name, forKey: .name)
         try container.encode(notes, forKey: .notes)
         try container.encode(project, forKey: .project)
+        try container.encode(startDate, forKey: .startDate)
         try container.encode(status, forKey: .status)
         try container.encode(tags, forKey: .tags)
     }
