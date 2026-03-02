@@ -148,7 +148,7 @@ extension Todo: Filterable {
         case "startdate":
             return .optionalDate(startDate)
         case "recurring":
-            return .string(isRecurring ? "true" : "false")
+            return .bool(isRecurring)
         case "tags":
             return .stringList(tags.map { $0.name })
         case "project":

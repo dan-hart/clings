@@ -347,16 +347,16 @@ struct TodoTests {
             let recurring = Todo(id: "t1", name: "R", repeatingTemplate: "tmpl-uuid")
             let nonRecurring = Todo(id: "t2", name: "NR")
 
-            if case .string(let val) = recurring.fieldValue("recurring") {
-                #expect(val == "true")
+            if case .bool(let val) = recurring.fieldValue("recurring") {
+                #expect(val == true)
             } else {
-                Issue.record("Expected string value for recurring")
+                Issue.record("Expected bool value for recurring")
             }
 
-            if case .string(let val) = nonRecurring.fieldValue("recurring") {
-                #expect(val == "false")
+            if case .bool(let val) = nonRecurring.fieldValue("recurring") {
+                #expect(val == false)
             } else {
-                Issue.record("Expected string value for recurring")
+                Issue.record("Expected bool value for recurring")
             }
         }
 
