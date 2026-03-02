@@ -78,7 +78,7 @@ public final class ThingsDatabase: Sendable {
                 arguments = []
 
             case .today:
-                let todayDays = daysSinceReferenceDate(Date())
+                let todayPacked = ThingsDateConverter.encodeDate(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
                            userModificationDate, project, area
@@ -87,10 +87,10 @@ public final class ThingsDatabase: Sendable {
                           AND (start = 1 OR startDate = ?)
                     ORDER BY todayIndex, "index"
                     """
-                arguments = [todayDays]
+                arguments = [todayPacked]
 
             case .upcoming:
-                let todayDays = daysSinceReferenceDate(Date())
+                let todayPacked = ThingsDateConverter.encodeDate(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
                            userModificationDate, project, area
@@ -98,10 +98,10 @@ public final class ThingsDatabase: Sendable {
                     WHERE status = 0 AND trashed = 0 AND type = 0 AND startDate > ?
                     ORDER BY startDate, "index"
                     """
-                arguments = [todayDays]
+                arguments = [todayPacked]
 
             case .anytime:
-                let todayDays = daysSinceReferenceDate(Date())
+                let todayPacked = ThingsDateConverter.encodeDate(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
                            userModificationDate, project, area
@@ -110,7 +110,7 @@ public final class ThingsDatabase: Sendable {
                           AND (startDate IS NULL OR startDate <= ?)
                     ORDER BY "index"
                     """
-                arguments = [todayDays]
+                arguments = [todayPacked]
 
             case .someday:
                 sql = """
@@ -175,9 +175,9 @@ public final class ThingsDatabase: Sendable {
                 let tags = try self.fetchTagsForTask(uuid: uuid, db: db)
 
                 let deadline: Date? = (row["deadline"] as Int?).flatMap {
-                    Date(timeIntervalSinceReferenceDate: TimeInterval($0))
+                    ThingsDateConverter.decodeToDate($0)
                 }
-                let creationDate = Date(timeIntervalSinceReferenceDate: TimeInterval(row["creationDate"] as Int))
+                let creationDate = Date(timeIntervalSince1970: TimeInterval(row["creationDate"] as Double))
 
                 return Project(
                     id: uuid,
@@ -284,13 +284,13 @@ public final class ThingsDatabase: Sendable {
         let checklistItems = try fetchChecklistItems(uuid: uuid, db: db)
 
         let deadline: Date? = (row["deadline"] as Int?).flatMap {
-            Date(timeIntervalSinceReferenceDate: TimeInterval($0))
+            ThingsDateConverter.decodeToDate($0)
         }
         let creationDate: Date = (row["creationDate"] as Double?).flatMap {
-            Date(timeIntervalSinceReferenceDate: $0)
+            Date(timeIntervalSince1970: $0)
         } ?? Date()
         let modificationDate: Date = (row["userModificationDate"] as Double?).flatMap {
-            Date(timeIntervalSinceReferenceDate: $0)
+            Date(timeIntervalSince1970: $0)
         } ?? creationDate
 
         return Todo(
@@ -383,14 +383,4 @@ public final class ThingsDatabase: Sendable {
         }
     }
 
-    /// Calculate days since Cocoa reference date (January 1, 2001).
-    /// Things 3 stores startDate as days, not seconds.
-    private func daysSinceReferenceDate(_ date: Date) -> Int {
-        let calendar = Calendar.current
-        let startOfDay = calendar.startOfDay(for: date)
-        // Reference date is Jan 1, 2001 00:00:00 UTC
-        let referenceDate = Date(timeIntervalSinceReferenceDate: 0)
-        let components = calendar.dateComponents([.day], from: referenceDate, to: startOfDay)
-        return components.day ?? 0
-    }
 }
