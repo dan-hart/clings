@@ -68,7 +68,7 @@ public struct JSONOutputFormatter: OutputFormatter {
     }
 
     public func format(todo: Todo) -> String {
-        encode(todo)
+        encode(TodoJSON(from: todo))
     }
 
     public func format(message: String) -> String {
