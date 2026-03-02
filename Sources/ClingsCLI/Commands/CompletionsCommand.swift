@@ -53,7 +53,7 @@ struct CompletionsCommand: ParsableCommand {
             prev="${COMP_WORDS[COMP_CWORD-1]}"
 
             # Main commands
-            local commands="today inbox upcoming anytime someday logbook projects areas tags show add complete cancel delete search bulk open stats review completions"
+            local commands="today inbox upcoming anytime someday logbook projects areas tags show add complete cancel reopen delete search bulk open stats review completions"
 
             # Bulk subcommands
             local bulk_commands="complete cancel tag"
@@ -117,6 +117,7 @@ struct CompletionsCommand: ParsableCommand {
                 'add:Add a new todo'
                 'complete:Mark a todo as completed'
                 'cancel:Cancel a todo'
+                'reopen:Reopen a completed or canceled todo'
                 'delete:Delete a todo'
                 'search:Search todos'
                 'bulk:Bulk operations'
@@ -190,6 +191,7 @@ struct CompletionsCommand: ParsableCommand {
         complete -c clings -n "__fish_use_subcommand" -a "add" -d "Add a new todo"
         complete -c clings -n "__fish_use_subcommand" -a "complete" -d "Mark a todo as completed"
         complete -c clings -n "__fish_use_subcommand" -a "cancel" -d "Cancel a todo"
+        complete -c clings -n "__fish_use_subcommand" -a "reopen" -d "Reopen a completed or canceled todo"
         complete -c clings -n "__fish_use_subcommand" -a "delete" -d "Delete a todo"
         complete -c clings -n "__fish_use_subcommand" -a "search" -d "Search todos"
         complete -c clings -n "__fish_use_subcommand" -a "bulk" -d "Bulk operations"

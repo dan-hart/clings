@@ -59,10 +59,10 @@ public enum ThingsDateConverter {
     /// Pack a Date into a Things 3 date integer.
     public static func encodeDate(_ date: Date) -> Int {
         let components = Calendar.current.dateComponents([.year, .month, .day], from: date)
-        return encode(
-            year: components.year ?? 0,
-            month: components.month ?? 0,
-            day: components.day ?? 0
-        )
+        guard let year = components.year, let month = components.month, let day = components.day else {
+            assertionFailure("Failed to extract date components from \(date)")
+            return 0
+        }
+        return encode(year: year, month: month, day: day)
     }
 }

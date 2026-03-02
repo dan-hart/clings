@@ -172,6 +172,42 @@ struct JXAScriptsTests {
         }
     }
 
+    @Suite("Reopen Todo Script")
+    struct ReopenTodoScript {
+        @Test func setsStatusOpen() {
+            let script = JXAScripts.reopenTodo(id: "todo-reopen")
+            #expect(script.contains("todo.status = 'open'"))
+        }
+
+        @Test func checksExistence() {
+            let script = JXAScripts.reopenTodo(id: "test")
+            #expect(script.contains("if (!todo.exists())"))
+            #expect(script.contains("success: false"))
+        }
+
+        @Test func checksCurrentStatus() {
+            let script = JXAScripts.reopenTodo(id: "test")
+            #expect(script.contains("todo.status()"))
+            #expect(script.contains("already open"))
+        }
+
+        @Test func verifiesStatusChange() {
+            let script = JXAScripts.reopenTodo(id: "test")
+            #expect(script.contains("newStatus !== 'open'"))
+            #expect(script.contains("Failed to reopen"))
+        }
+
+        @Test func returnsSuccess() {
+            let script = JXAScripts.reopenTodo(id: "test")
+            #expect(script.contains("success: true"))
+        }
+
+        @Test func escapesId() {
+            let script = JXAScripts.reopenTodo(id: "id'with'quotes")
+            #expect(script.contains("id\\'with\\'quotes"))
+        }
+    }
+
     @Suite("Delete Todo Script")
     struct DeleteTodoScript {
         @Test func setsStatusCanceled() {
@@ -329,6 +365,7 @@ struct JXAScriptsTests {
                 JXAScripts.fetchTags(),
                 JXAScripts.completeTodo(id: "test"),
                 JXAScripts.cancelTodo(id: "test"),
+                JXAScripts.reopenTodo(id: "test"),
                 JXAScripts.deleteTodo(id: "test"),
                 JXAScripts.moveTodo(id: "test", toProject: "Project"),
                 JXAScripts.updateTodo(id: "test", name: "Name"),
@@ -351,6 +388,7 @@ struct JXAScriptsTests {
                 JXAScripts.fetchTags(),
                 JXAScripts.completeTodo(id: "test"),
                 JXAScripts.cancelTodo(id: "test"),
+                JXAScripts.reopenTodo(id: "test"),
                 JXAScripts.deleteTodo(id: "test"),
                 JXAScripts.moveTodo(id: "test", toProject: "Project"),
                 JXAScripts.updateTodo(id: "test", name: "Name"),

@@ -238,7 +238,18 @@ public enum JXAScripts {
                 return JSON.stringify({ success: false, error: 'Todo not found' });
             }
 
+            const currentStatus = todo.status();
+            if (currentStatus === 'open') {
+                return JSON.stringify({ success: false, error: 'Todo is already open' });
+            }
+
             todo.status = 'open';
+
+            const newStatus = todo.status();
+            if (newStatus !== 'open') {
+                return JSON.stringify({ success: false, error: 'Failed to reopen todo. Things 3 may not support reopening this item.' });
+            }
+
             return JSON.stringify({ success: true, id: '\(id.jxaEscaped)' });
         })()
         """
