@@ -48,6 +48,11 @@ public final class ThingsDatabase: Sendable {
         self.dbPath = path
     }
 
+    /// Initialize with an explicit database path (used by tests).
+    init(dbPath: String) {
+        self.dbPath = dbPath
+    }
+
     /// Open a read-only connection to the database.
     private func openDatabase() throws -> DatabaseQueue {
         var config = Configuration()
@@ -78,19 +83,21 @@ public final class ThingsDatabase: Sendable {
                 arguments = []
 
             case .today:
-                let todayDays = daysSinceReferenceDate(Date())
+                let todayCode = thingsDateCode(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
                            userModificationDate, project, area
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0
-                          AND (start = 1 OR startDate = ?)
+                          -- Issue #5: avoid pulling entire anytime backlog.
+                          -- https://github.com/dan-hart/clings/issues/5
+                          AND start = 1 AND startDate = ?
                     ORDER BY todayIndex, "index"
                     """
-                arguments = [todayDays]
+                arguments = [todayCode]
 
             case .upcoming:
-                let todayDays = daysSinceReferenceDate(Date())
+                let todayCode = thingsDateCode(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
                            userModificationDate, project, area
@@ -98,10 +105,10 @@ public final class ThingsDatabase: Sendable {
                     WHERE status = 0 AND trashed = 0 AND type = 0 AND startDate > ?
                     ORDER BY startDate, "index"
                     """
-                arguments = [todayDays]
+                arguments = [todayCode]
 
             case .anytime:
-                let todayDays = daysSinceReferenceDate(Date())
+                let todayCode = thingsDateCode(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
                            userModificationDate, project, area
@@ -110,7 +117,7 @@ public final class ThingsDatabase: Sendable {
                           AND (startDate IS NULL OR startDate <= ?)
                     ORDER BY "index"
                     """
-                arguments = [todayDays]
+                arguments = [todayCode]
 
             case .someday:
                 sql = """
@@ -383,14 +390,14 @@ public final class ThingsDatabase: Sendable {
         }
     }
 
-    /// Calculate days since Cocoa reference date (January 1, 2001).
-    /// Things 3 stores startDate as days, not seconds.
-    private func daysSinceReferenceDate(_ date: Date) -> Int {
+    /// Encode a local calendar day using Things' packed integer date format.
+    /// Format: `(year << 16) | (month << 12) | (day << 7)`.
+    private func thingsDateCode(_ date: Date) -> Int {
         let calendar = Calendar.current
-        let startOfDay = calendar.startOfDay(for: date)
-        // Reference date is Jan 1, 2001 00:00:00 UTC
-        let referenceDate = Date(timeIntervalSinceReferenceDate: 0)
-        let components = calendar.dateComponents([.day], from: referenceDate, to: startOfDay)
-        return components.day ?? 0
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        let year = components.year ?? 0
+        let month = components.month ?? 0
+        let day = components.day ?? 0
+        return (year << 16) | (month << 12) | (day << 7)
     }
 }

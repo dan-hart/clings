@@ -36,8 +36,8 @@ clings show <ID>         # Show details of a specific todo
 Add tasks using natural language parsing:
 
 ```bash
-clings add "buy milk tomorrow #errands"
-clings add "call mom friday 3pm for Family !high"
+clings add "publish release notes tomorrow #docs"
+clings add "submit expense report friday 3pm #admin !high"
 clings add "finish report by dec 15 #work"
 clings add "review PR // needs careful testing - check auth - verify tests"
 
@@ -45,7 +45,7 @@ clings add "review PR // needs careful testing - check auth - verify tests"
 # - Dates: today, tomorrow, next monday, in 3 days, dec 15
 # - Times: 3pm, 15:00, morning, evening
 # - Tags: #tag1 #tag2
-# - Projects: for ProjectName
+# - Projects: for <Project Name>
 # - Areas: in AreaName
 # - Deadlines: by friday
 # - Priority: !high, !!, !!!
@@ -132,7 +132,7 @@ clings bulk cancel --where "project = 'Old Project'"
 clings bulk tag --where "project = 'Work'" urgent priority
 
 # Move tasks to a project
-clings bulk move --where "tags CONTAINS 'work'" --to "Work Project"
+clings bulk move --where "tags CONTAINS 'work'" --to "Operations Project"
 ```
 
 **Safety options:**
@@ -227,7 +227,7 @@ cp .build/release/clings /usr/local/bin/
 clings today
 
 # Add a quick task
-clings add "buy groceries tomorrow #errands"
+clings add "publish release notes tomorrow #docs"
 
 # View your inbox
 clings inbox
@@ -248,13 +248,14 @@ clings add --help
 
 ## Command Reference
 
-### Global Options
+### Common Options
+
+`--help` and `--version` are available at the root command (`clings`).
+Most output-oriented subcommands support:
 
 ```
 --json                   Output as JSON (for scripting)
 --no-color               Suppress color output
--h, --help               Show help
---version                Show version
 ```
 
 ### Commands
@@ -280,7 +281,7 @@ clings add --help
 | `areas` | - | List all areas |
 | `tags` | - | Manage tags |
 | `bulk` | - | Bulk operations on multiple todos |
-| `open` | - | Open Things 3 to a view or item |
+| `open` | - | Open Things 3 to a view or item (currently disabled) |
 | `stats` | - | View productivity statistics |
 | `review` | - | GTD weekly review workflow (start, status, clear) |
 | `config` | - | Configure clings settings (auth token) |
@@ -296,8 +297,8 @@ Human-readable colored output:
 Today (3 items)
 ──────────────────────────────────────────────
 [ ] Review PR #123        Development   Dec 15   #work
-[ ] Buy groceries         -             -        #personal
-[x] Call dentist          Health        Dec 10   -
+[ ] Review release notes  Docs          Dec 15   #work
+[x] Close audit findings  Ops           Dec 10   -
 ```
 
 ### JSON
@@ -335,6 +336,12 @@ Then enable Things 3 under your terminal application.
 
 Things 3 must be running for clings to communicate with it via AppleScript/JXA.
 
+### `today` shows too many tasks
+
+This was tracked in [Issue #5](https://github.com/dan-hart/clings/issues/5). The root cause was list filter/date encoding mismatches in SQLite reads.
+
+Details and regression coverage are documented in [docs/issues/issue-5-today-list-overcount.md](docs/issues/issue-5-today-list-overcount.md).
+
 ## Development
 
 ```bash
@@ -342,9 +349,11 @@ swift build              # Build
 swift run clings today   # Run in debug mode
 swift test               # Run tests
 bash scripts/asp-preflight.sh --staged --strict   # Safety preflight before commit
+bash scripts/release-docs-check.sh                # Help/README/docs pre-release audit
 ```
 
 See [AGENTS.md](AGENTS.md) for detailed development guidelines.
+Release checklist: [docs/release/help-readme-docs-checklist.md](docs/release/help-readme-docs-checklist.md)
 
 ## Contributing
 

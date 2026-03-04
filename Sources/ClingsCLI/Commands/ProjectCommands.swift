@@ -21,8 +21,8 @@ struct ProjectCommand: AsyncParsableCommand {
         EXAMPLES:
           clings project                    List all projects (same as 'clings projects')
           clings project list               Same as above
-          clings project add "Q1 Planning"  Create a new project
-          clings project add "Sprint" --area "Work" --deadline 2025-01-31
+          clings project add "Release Readiness"  Create a new project
+          clings project add "Documentation Refresh" --area "Operations" --deadline 2025-01-31
 
         SEE ALSO:
           projects, add --project, areas
@@ -68,10 +68,10 @@ struct ProjectAddCommand: AsyncParsableCommand {
         Creates a new project in Things 3.
 
         EXAMPLES:
-          clings project add "Q1 Planning"
-          clings project add "Feature X" --notes "Implementation of feature X"
-          clings project add "Sprint 12" --area "Work" --when today
-          clings project add "Vacation" --deadline 2025-06-01 --tags "personal,planning"
+          clings project add "Release Readiness"
+          clings project add "Feature Rollout" --notes "Implementation of rollout tasks"
+          clings project add "Operations Sprint" --area "Operations" --when today
+          clings project add "Vendor Evaluation" --deadline 2025-06-01 --tags "planning,research"
         """
     )
 

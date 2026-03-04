@@ -13,9 +13,9 @@ struct AddCommand: AsyncParsableCommand {
         abstract: "Add a new todo with natural language support",
         discussion: """
         Supports natural language patterns:
-          clings add "Buy milk tomorrow #errands"
-          clings add "Call mom by friday !!"
-          clings add "Review docs for ProjectName"
+          clings add "Finalize release notes tomorrow #docs"
+          clings add "Submit expense report by friday !!"
+          clings add "Review deployment guide for Migration Project"
           clings add "Task // notes go here"
           clings add "Task - checklist item 1 - checklist item 2"
         """

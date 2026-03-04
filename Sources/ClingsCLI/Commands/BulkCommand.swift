@@ -310,9 +310,9 @@ struct BulkMoveCommand: AsyncParsableCommand {
         Moves multiple todos to a project based on filter criteria.
 
         EXAMPLES:
-          clings bulk move --to "Work Project" --list inbox
+          clings bulk move --to "Operations Project" --list inbox
           clings bulk move --to "Archive" --where "tags CONTAINS 'done'"
-          clings bulk move --to "Personal" --dry-run
+          clings bulk move --to "Backlog" --dry-run
 
         SEE ALSO:
           projects, add --project

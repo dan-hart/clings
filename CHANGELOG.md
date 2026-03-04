@@ -5,6 +5,20 @@ All notable changes to clings will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`today` list overcounting**: Fixed SQLite list filtering so `clings today` no longer over-includes non-today backlog tasks. Root cause and details: [Issue #5](https://github.com/dan-hart/clings/issues/5).
+- **Things date encoding mismatch**: Updated `today`/`anytime`/`upcoming` list comparisons to use Things packed date codes instead of "days since 2001", preventing incorrect boundary behavior (see [Issue #5](https://github.com/dan-hart/clings/issues/5)).
+
+### Added
+
+- **Issue-focused regression suite**: Added targeted database regression tests for [Issue #5](https://github.com/dan-hart/clings/issues/5), including list-scope and date-boundary coverage.
+- **Issue documentation**: Added `docs/issues/issue-5-today-list-overcount.md` with symptom, root cause, fix summary, and verification commands.
+- **Release docs/help audit script**: Added `scripts/release-docs-check.sh` to validate command/help coverage in README and shell completions before release.
+- **Release checklist doc**: Added `docs/release/help-readme-docs-checklist.md` with automated and manual pre-release documentation checks.
+
 ## [0.2.10] - 2025-12-29
 
 ### Fixed

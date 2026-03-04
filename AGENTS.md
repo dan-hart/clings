@@ -253,6 +253,10 @@ Every PR must pass:
 
 ### Release Process
 
+Before tagging a release:
+1. Run docs/help preflight: `bash scripts/release-docs-check.sh`
+2. Ensure README, help text, and docs are consistent
+
 On tag push:
 1. Build release binaries (macOS ARM64, macOS x86_64)
 2. Generate shell completions
@@ -299,8 +303,9 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 - Never add LLM Provider as a co-author on commits
 - **Always update the Homebrew tap when releasing a new version:**
   1. Update version in code
-  2. Commit, tag (e.g., `v0.2.1`), and push to intended public remotes only (normally `origin`)
-  3. Get SHA256: `curl -sL https://github.com/dan-hart/clings/archive/refs/tags/v<VERSION>.tar.gz | shasum -a 256`
-  4. Update your local clone of `homebrew-tap/Formula/clings.rb` with new version and SHA256
-  5. Commit and push homebrew-tap
-  6. Run `brew update && brew upgrade clings` to verify
+  2. Run `bash scripts/release-docs-check.sh` and fix any drift between CLI help, README, and docs
+  3. Commit, tag (e.g., `v0.2.1`), and push to intended public remotes only (normally `origin`)
+  4. Get SHA256: `curl -sL https://github.com/dan-hart/clings/archive/refs/tags/v<VERSION>.tar.gz | shasum -a 256`
+  5. Update your local clone of `homebrew-tap/Formula/clings.rb` with new version and SHA256
+  6. Commit and push homebrew-tap
+  7. Run `brew update && brew upgrade clings` to verify

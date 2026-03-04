@@ -10,6 +10,15 @@ struct ConfigCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "config",
         abstract: "Configure clings settings",
+        discussion: """
+        Manage local clings configuration values.
+
+        EXAMPLES:
+          clings config set-auth-token <token>
+
+        SEE ALSO:
+          update --when, update --heading
+        """,
         subcommands: [SetAuthToken.self]
     )
 }

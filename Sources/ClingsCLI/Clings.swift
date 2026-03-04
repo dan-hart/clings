@@ -18,7 +18,7 @@ struct Clings: AsyncParsableCommand {
         QUICK START:
           clings today              Show today's todos
           clings inbox              Show inbox
-          clings add "Buy milk"     Add a new todo
+          clings add "Review release checklist"     Add a new todo
 
         OUTPUT FORMATS:
           --json                    Machine-readable JSON for scripting
