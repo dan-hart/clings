@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-04
+
 ### Fixed
 
 - **`today` list overcounting**: Fixed SQLite list filtering so `clings today` no longer over-includes non-today backlog tasks. Root cause and details: [Issue #5](https://github.com/dan-hart/clings/issues/5).
