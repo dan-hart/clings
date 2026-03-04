@@ -38,6 +38,9 @@ coverage/
 # Local development
 .direnv/
 .envrc
+.claude/
+research/
+private/
 
 # Testing artifacts
 /Tests/fixtures/temp/

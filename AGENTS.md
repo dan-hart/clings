@@ -299,8 +299,8 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 - Never add LLM Provider as a co-author on commits
 - **Always update the Homebrew tap when releasing a new version:**
   1. Update version in code
-  2. Commit, tag (e.g., `v0.2.1`), and push to all remotes
+  2. Commit, tag (e.g., `v0.2.1`), and push to intended public remotes only (normally `origin`)
   3. Get SHA256: `curl -sL https://github.com/dan-hart/clings/archive/refs/tags/v<VERSION>.tar.gz | shasum -a 256`
-  4. Update `~/Developer/homebrew-tap/Formula/clings.rb` with new version and SHA256
+  4. Update your local clone of `homebrew-tap/Formula/clings.rb` with new version and SHA256
   5. Commit and push homebrew-tap
   6. Run `brew update && brew upgrade clings` to verify

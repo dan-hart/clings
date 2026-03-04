@@ -341,6 +341,7 @@ Things 3 must be running for clings to communicate with it via AppleScript/JXA.
 swift build              # Build
 swift run clings today   # Run in debug mode
 swift test               # Run tests
+bash scripts/asp-preflight.sh --staged --strict   # Safety preflight before commit
 ```
 
 See [AGENTS.md](AGENTS.md) for detailed development guidelines.
@@ -352,9 +353,14 @@ Contributions are welcome! Please:
 1. Fork the repository
 2. Create a feature branch
 3. Make changes following code quality standards
-4. Add tests for new functionality
-5. Ensure all checks pass: `swift build && swift test`
-6. Submit a pull request
+4. Run safety checks:
+   - `bash scripts/asp-preflight.sh --staged --strict`
+   - `git secrets --scan --cached`
+5. Add tests for new functionality
+6. Ensure all checks pass: `swift build && swift test`
+7. Submit a pull request
+
+Full contributor policy: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## License
 

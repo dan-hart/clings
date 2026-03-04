@@ -49,6 +49,16 @@ This project implements several security measures:
 - **Read-only database access**: SQLite reads use read-only connections
 - **Minimal permissions**: Only requests necessary macOS permissions for Things 3 access
 
+## Open Source Repository Hygiene
+
+- Treat all committed content as public and permanent.
+- Never commit local-only directories such as `research/`, `.claude/`, or `private/`.
+- Never commit internal hostnames, private remote URLs, internal IP addresses, or personal machine-only paths.
+- Run `bash scripts/asp-preflight.sh --staged --strict` before each commit.
+- Run `git secrets --scan --cached` before each commit.
+
+If sensitive content is committed, immediately rotate affected secrets (if any) and rewrite history to remove exposed files from all refs before force-pushing.
+
 ## Security Best Practices for Users
 
 1. **Keep clings updated** to receive security fixes
