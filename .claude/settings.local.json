@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:culturedcode.com)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:thingsapi.github.io)",
+      "WebFetch(domain:swiftpackageindex.com)",
+      "Bash(find:*)",
+      "Bash(cat:*)",
+      "Bash(xargs -I {} sh -c 'echo \"\"\"\"=== {} ===\"\"\"\" && head -30 {}')",
+      "Bash(git -C /Users/danhart/Developer/clings log --oneline --max-count=10)",
+      "Bash(clings --help:*)",
+      "Bash(clings list --help:*)",
+      "Bash(clings add --help:*)",
+      "Bash(clings search --help:*)",
+      "Bash(clings bulk --help:*)",
+      "Bash(clings stats --help:*)",
+      "Bash(clings todo --help:*)",
+      "Bash(clings shell --help:*)",
+      "Bash(clings project --help:*)",
+      "Bash(clings open --help:*)",
+      "Bash(clings review --help:*)",
+      "Bash(clings tui --help:*)",
+      "Bash(curl:*)",
+      "Bash(shasum:*)",
+      "Bash(gh auth status:*)",
+      "Bash(swift build:*)",
+      "Bash(swift test:*)",
+      "Bash(swift run:*)",
+      "WebFetch(domain:forum.keyboardmaestro.com)",
+      "WebFetch(domain:gist.github.com)",
+      "Bash(grep:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -343,7 +343,7 @@ swift run clings today   # Run in debug mode
 swift test               # Run tests
 ```
 
-See [CLAUDE.md](CLAUDE.md) for detailed development guidelines.
+See [AGENTS.md](AGENTS.md) for detailed development guidelines.
 
 ## Contributing
 
