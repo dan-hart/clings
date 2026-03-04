@@ -138,17 +138,14 @@ clings tui
 # q/Esc          Quit
 ```
 
-### 8. Shell Integration
+### 8. Shell Completions
 
 Generate shell completions:
 
 ```bash
-clings shell completions bash > ~/.bash_completion.d/clings
-clings shell completions zsh > ~/.zsh/completions/_clings
-clings shell completions fish > ~/.config/fish/completions/clings.fish
-
-# Show installation instructions
-clings shell completions zsh --install
+clings completions bash > ~/.bash_completion.d/clings
+clings completions zsh > ~/.zfunc/_clings
+clings completions fish > ~/.config/fish/completions/clings.fish
 ```
 
 ### 9. Todo Management
@@ -157,24 +154,40 @@ Manage individual todos:
 
 ```bash
 # Show todo details
-clings todo show <ID>
+clings show <ID>
 
 # Update todo properties
-clings todo update <ID> --title "New title"
-clings todo update <ID> --area "Work"
-clings todo update <ID> --project "Sprint 1"
-clings todo update <ID> --when tomorrow --deadline "dec 31"
-clings todo update <ID> --tags "urgent,priority"
+clings update <ID> --name "New title"
+clings update <ID> --notes "Updated notes"
+clings update <ID> --due 2024-12-25
+clings update <ID> --tags work,urgent
+
+# Schedule and organize (requires auth token, see Configuration)
+clings update <ID> --when tomorrow
+clings update <ID> --heading "Waiting on them"
+clings update <ID> --when today --heading "In Progress"
 
 # Mark as complete
-clings todo complete <ID>
+clings complete <ID>          # or: clings done <ID>
 
-# Cancel todo
-clings todo cancel <ID>
-
-# Delete todo
-clings todo delete <ID>
+# Cancel or delete
+clings cancel <ID>
+clings delete <ID>            # or: clings rm <ID>
 ```
+
+### 10. Configuration
+
+Set up the Things 3 auth token for features that use the Things URL scheme (`--when`, `--heading`):
+
+```bash
+# Get your auth token from Things 3:
+# Settings > General > Enable Things URLs > Copy auth token
+
+# Save it to clings
+clings config set-auth-token <your-token>
+```
+
+The auth token is stored at `~/.config/clings/auth-token` with restricted permissions (0600).
 
 ## Requirements
 
@@ -248,23 +261,30 @@ clings add --help
 
 | Command | Alias | Description |
 |---------|-------|-------------|
-| `list [VIEW]` | - | List todos from a view (today, inbox, upcoming, etc.) |
-| `today` | `t` | Show today's todos |
+| `today` | `t` | Show today's todos (default) |
 | `inbox` | `i` | Show inbox todos |
 | `upcoming` | `u` | Show upcoming todos |
 | `anytime` | - | Show anytime todos |
 | `someday` | `s` | Show someday todos |
 | `logbook` | `l` | Show completed todos |
 | `add` | `a` | Quick add with natural language |
-| `todo` | - | Manage todos (show, update, complete, cancel, delete) |
-| `project` | - | Manage projects (list, show, add) |
-| `search` | - | Search todos by text or filters |
+| `show` | - | Show details of a todo by ID |
+| `update` | - | Update a todo's properties |
+| `complete` | `done` | Mark a todo as completed |
+| `cancel` | - | Cancel a todo |
+| `delete` | `rm` | Delete a todo (moves to trash) |
+| `search` | `find`, `f` | Search todos by text |
+| `filter` | - | Filter todos using a query expression |
+| `projects` | - | List all projects |
+| `project` | - | Manage projects |
+| `areas` | - | List all areas |
+| `tags` | - | Manage tags |
+| `bulk` | - | Bulk operations on multiple todos |
 | `open` | - | Open Things 3 to a view or item |
-| `bulk` | `b` | Bulk operations on multiple todos |
 | `stats` | - | View productivity statistics |
-| `review` | `r` | Interactive weekly review workflow |
-| `shell` | - | Shell integration (completions) |
-| `tui` | - | Launch the terminal UI |
+| `review` | - | GTD weekly review workflow |
+| `config` | - | Configure clings settings (auth token) |
+| `completions` | - | Generate shell completions |
 
 ## Output Formats
 
@@ -292,6 +312,7 @@ clings today --json | jq '.items[] | select(.tags | contains(["work"]))'
 
 - **Read operations:** Use direct SQLite access to the Things 3 database (read-only)
 - **Write operations:** Use Apple's JavaScript for Automation (JXA) through the official Things 3 API
+- **Scheduling and headings:** Use the Things 3 URL scheme (requires auth token) since `activationDate` is read-only in JXA
 - **No direct database writes:** clings never writes directly to the Things 3 database
 
 ### Best Practices

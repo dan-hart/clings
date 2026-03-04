@@ -165,6 +165,32 @@ struct ArgumentParsingTests {
             #expect(command.due == "today")
             #expect(command.tags == ["tag1", "tag2"])
         }
+
+        @Test func whenOption() throws {
+            let command = try UpdateCommand.parse(["JKL012", "--when", "tomorrow"])
+            #expect(command.when == "tomorrow")
+        }
+
+        @Test func whenOptionToday() throws {
+            let command = try UpdateCommand.parse(["JKL012", "--when", "today"])
+            #expect(command.when == "today")
+        }
+
+        @Test func whenOptionDate() throws {
+            let command = try UpdateCommand.parse(["JKL012", "--when", "2026-03-15"])
+            #expect(command.when == "2026-03-15")
+        }
+
+        @Test func headingOption() throws {
+            let command = try UpdateCommand.parse(["JKL012", "--heading", "Waiting on them"])
+            #expect(command.heading == "Waiting on them")
+        }
+
+        @Test func whenAndHeadingTogether() throws {
+            let command = try UpdateCommand.parse(["JKL012", "--when", "today", "--heading", "In Progress"])
+            #expect(command.when == "today")
+            #expect(command.heading == "In Progress")
+        }
     }
 
     @Suite("Add Command")
