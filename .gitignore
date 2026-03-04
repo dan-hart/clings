@@ -52,3 +52,4 @@ coverage/
 *private*
 *sensitive*
 *.env*
+backup/

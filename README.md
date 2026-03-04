@@ -172,6 +172,20 @@ clings completions zsh > ~/.zfunc/_clings
 clings completions fish > ~/.config/fish/completions/clings.fish
 ```
 
+### 9. Configuration
+
+Set up the Things 3 auth token for features that use the Things URL scheme (`--when`, `--heading`):
+
+```bash
+# Get your auth token from Things 3:
+# Settings > General > Enable Things URLs > Copy auth token
+
+# Save it to clings
+clings config set-auth-token <your-token>
+```
+
+The auth token is stored at `~/.config/clings/auth-token` with restricted permissions (0600).
+
 ## Requirements
 
 - **macOS 10.15 (Catalina) or later**
@@ -253,22 +267,23 @@ clings add --help
 | `anytime` | - | Show anytime todos |
 | `someday` | `s` | Show someday todos |
 | `logbook` | `l` | Show completed todos |
-| `projects` | - | List all projects |
-| `areas` | - | List all areas |
-| `tags` | - | Manage tags |
-| `show` | - | Show details of a todo by ID |
 | `add` | - | Add a new todo with natural language |
+| `show` | - | Show details of a todo by ID |
 | `update` | - | Update a todo's properties |
 | `complete` | `done` | Mark a todo as completed |
 | `cancel` | - | Cancel a todo |
 | `delete` | `rm` | Delete a todo (moves to trash) |
 | `search` | `find`, `f` | Search todos by text |
-| `filter` | - | Filter todos using SQL-like expressions |
-| `open` | - | Open Things 3 to a view or item |
+| `filter` | - | Filter todos using a query expression |
+| `projects` | - | List all projects |
+| `project` | - | Manage projects |
+| `areas` | - | List all areas |
+| `tags` | - | Manage tags |
 | `bulk` | - | Bulk operations on multiple todos |
+| `open` | - | Open Things 3 to a view or item |
 | `stats` | - | View productivity statistics |
 | `review` | - | GTD weekly review workflow (start, status, clear) |
-| `config` | - | Configure clings settings |
+| `config` | - | Configure clings settings (auth token) |
 | `completions` | - | Generate shell completions |
 
 ## Output Formats
@@ -297,6 +312,7 @@ clings today --json | jq '.items[] | select(.tags | contains(["work"]))'
 
 - **Read operations:** Use direct SQLite access to the Things 3 database (read-only)
 - **Write operations:** Use Apple's JavaScript for Automation (JXA) through the official Things 3 API
+- **Scheduling and headings:** Use the Things 3 URL scheme (requires auth token) since `activationDate` is read-only in JXA
 - **No direct database writes:** clings never writes directly to the Things 3 database
 
 ### Best Practices
@@ -327,7 +343,7 @@ swift run clings today   # Run in debug mode
 swift test               # Run tests
 ```
 
-See [CLAUDE.md](CLAUDE.md) for detailed development guidelines.
+See [AGENTS.md](AGENTS.md) for detailed development guidelines.
 
 ## Contributing
 

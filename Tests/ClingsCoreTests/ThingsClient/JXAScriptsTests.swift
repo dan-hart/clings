@@ -243,19 +243,22 @@ struct JXAScriptsTests {
             #expect(script.contains("It\\'s done"))
             #expect(script.contains("Line1\\nLine2"))
         }
+
+        // Note: --when uses Things URL scheme (activationDate is read-only in JXA).
+        // URL scheme tests would require integration testing with Things 3.
     }
 
     @Suite("Create Todo Script")
     struct CreateTodoScript {
         @Test func withName() {
             let script = JXAScripts.createTodo(name: "New Task")
-            #expect(script.contains("name: 'New Task'"))
-            #expect(script.contains("app.make({ new: 'to do'"))
+            #expect(script.contains("tell application \"Things3\""))
+            #expect(script.contains("make new to do with properties {name: \"New Task\"}"))
         }
 
         @Test func withNotes() {
             let script = JXAScripts.createTodo(name: "Task", notes: "Some notes")
-            #expect(script.contains("notes: 'Some notes'"))
+            #expect(script.contains("notes: \"Some notes\""))
         }
 
         @Test func withTags() {
@@ -267,26 +270,25 @@ struct JXAScriptsTests {
 
         @Test func withProject() {
             let script = JXAScripts.createTodo(name: "Task", project: "My Project")
-            #expect(script.contains("app.projects.byName('My Project')"))
-            #expect(script.contains("todo.project = project"))
+            #expect(script.contains("if exists project \"My Project\" then"))
+            #expect(script.contains("set project of newTodo to project \"My Project\""))
         }
 
         @Test func withArea() {
             let script = JXAScripts.createTodo(name: "Task", area: "Work Area")
-            #expect(script.contains("app.areas.byName('Work Area')"))
-            #expect(script.contains("todo.area = area"))
+            #expect(script.contains("if exists area \"Work Area\" then"))
+            #expect(script.contains("set area of newTodo to area \"Work Area\""))
         }
 
         @Test func withChecklistItems() {
             let script = JXAScripts.createTodo(name: "Task", checklistItems: ["Step 1", "Step 2"])
-            #expect(script.contains("'Step 1'"))
-            #expect(script.contains("'Step 2'"))
+            #expect(script.contains("\"Step 1\""))
+            #expect(script.contains("\"Step 2\""))
         }
 
         @Test func returnsIdAndName() {
             let script = JXAScripts.createTodo(name: "Task")
-            #expect(script.contains("id: todo.id()"))
-            #expect(script.contains("name: todo.name()"))
+            #expect(script.contains("return id of newTodo"))
         }
     }
 
@@ -329,7 +331,6 @@ struct JXAScriptsTests {
                 JXAScripts.deleteTodo(id: "test"),
                 JXAScripts.moveTodo(id: "test", toProject: "Project"),
                 JXAScripts.updateTodo(id: "test", name: "Name"),
-                JXAScripts.createTodo(name: "Task"),
                 JXAScripts.search(query: "test"),
             ]
 
@@ -351,13 +352,18 @@ struct JXAScriptsTests {
                 JXAScripts.deleteTodo(id: "test"),
                 JXAScripts.moveTodo(id: "test", toProject: "Project"),
                 JXAScripts.updateTodo(id: "test", name: "Name"),
-                JXAScripts.createTodo(name: "Task"),
                 JXAScripts.search(query: "test"),
             ]
 
             for script in scripts {
                 #expect(script.contains("Application('Things3')"))
             }
+        }
+
+        @Test func createTodoUsesAppleScript() {
+            let script = JXAScripts.createTodo(name: "Task")
+            #expect(script.contains("tell application \"Things3\""))
+            #expect(script.contains("end tell"))
         }
     }
 }

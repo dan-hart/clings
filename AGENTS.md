@@ -1,4 +1,4 @@
-# CLAUDE.md - clings Project Guidelines
+# AGENTS.md - clings Project Guidelines
 
 > A Things 3 CLI for macOS
 
@@ -9,7 +9,7 @@
 - **License:** GNU General Public License v3.0 (GPLv3)
 - **Platform:** macOS only (requires Things 3 installed)
 - **Technology:** Swift + SQLite (reads) + JavaScript for Automation (JXA) via `osascript` (writes)
-- **Version:** 0.2.1
+- **Version:** 0.2.11
 
 ## Build & Run
 
@@ -294,9 +294,9 @@ When releasing a new version:
 
 This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
 
-## Claude Directives
+## LLM Provider Directives
 
-- Never add Claude as a co-author on commits
+- Never add LLM Provider as a co-author on commits
 - **Always update the Homebrew tap when releasing a new version:**
   1. Update version in code
   2. Commit, tag (e.g., `v0.2.1`), and push to all remotes
