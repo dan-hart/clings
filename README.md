@@ -5,6 +5,7 @@
 > **Disclaimer:** This project is not affiliated with, endorsed by, or sponsored by [Cultured Code](https://culturedcode.com/). Things 3 is a registered trademark of Cultured Code GmbH & Co. KG. clings is an independent, open-source project that provides a command-line interface wrapper for the Things 3 application.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![CI](https://github.com/dan-hart/clings/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/dan-hart/clings/actions/workflows/ci.yml)
 [![Built with Swift](https://img.shields.io/badge/built%20with-Swift-FA7343.svg)](https://swift.org/)
 [![macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos/)
 
