@@ -81,7 +81,7 @@ struct ViewsSaveCommand: ParsableCommand {
         Store a reusable filter expression under a short name.
 
         EXAMPLES:
-          clings views save work-today "area = 'Work' AND due <= today"
+          clings views save docs-today "tags CONTAINS 'docs' AND due <= today"
           clings views save docs "tags CONTAINS 'docs'" --note "Documentation queue"
         """
     )
@@ -110,7 +110,7 @@ struct ViewsRunCommand: AsyncParsableCommand {
         matching open todos.
 
         EXAMPLES:
-          clings views run work-today
+          clings views run docs-today
           clings views run docs --json
           clings views run docs --format "{status} {name} [{project}]"
         """
@@ -141,7 +141,7 @@ struct ViewsDeleteCommand: ParsableCommand {
         Remove a saved view you no longer need.
 
         EXAMPLES:
-          clings views delete work-today
+          clings views delete docs-today
           clings views rm docs
         """,
         aliases: ["rm"]

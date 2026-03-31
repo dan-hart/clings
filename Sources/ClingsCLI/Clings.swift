@@ -21,8 +21,8 @@ struct Clings: AsyncParsableCommand {
         EXAMPLES:
           clings today              Show today's todos
           clings inbox              Show inbox
-          clings add "Review release checklist tomorrow #docs"
-          clings views run work-today
+          clings add "Draft changelog entry tomorrow #docs"
+          clings views run docs-today
           clings doctor --verbose
 
         OUTPUT FORMATS:

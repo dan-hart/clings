@@ -37,9 +37,9 @@ clings show <ID>         # Show details of a specific todo
 Add tasks using natural language parsing:
 
 ```bash
-clings add "publish release notes tomorrow #docs"
-clings add "submit expense report friday 3pm #admin !high"
-clings add "finish report by dec 15 #work"
+clings add "draft changelog entry tomorrow #docs"
+clings add "replace air filter friday 3pm #home !high"
+clings add "finish reading list by dec 15 #reading"
 clings add "review PR // needs careful testing - check auth - verify tests"
 
 # Supported patterns:
@@ -60,13 +60,13 @@ You can also use explicit flags:
 clings add "Task title" \
   --when tomorrow \
   --deadline "2024-12-31" \
-  --tags work urgent \
-  --project "Sprint 1" \
-  --area "Work" \
+  --tags docs urgent \
+  --project "Documentation" \
+  --area "Writing" \
   --notes "Additional context"
 
 # Preview without creating
-clings add "Test task tomorrow #work" --parse-only
+clings add "Test task tomorrow #docs" --parse-only
 ```
 
 ### 3. Search and Filter
@@ -80,8 +80,8 @@ clings find "project report"     # alias for search
 clings f "status"                # short alias
 
 # Save and reuse named views
-clings views save work-today "area = 'Work' AND due <= today"
-clings views run work-today
+clings views save docs-today "tags CONTAINS 'docs' AND due <= today"
+clings views run docs-today
 clings views list
 
 # Advanced filtering (SQL-like query language)
@@ -110,7 +110,7 @@ clings show <ID>
 # Interactive pick flows
 clings pick show report
 clings pick complete release
-clings pick cancel "follow up"
+clings pick cancel cleanup
 
 # Update properties
 clings update <ID> --name "New title"
@@ -143,14 +143,14 @@ clings bulk complete --where "tags CONTAINS 'done'" --dry-run
 # Complete matching tasks
 clings bulk complete --where "tags CONTAINS 'done'"
 
-# Cancel old project tasks
-clings bulk cancel --where "project = 'Old Project'"
+# Cancel archive prep tasks
+clings bulk cancel --where "project = 'Archive Prep'"
 
-# Tag work tasks as urgent
-clings bulk tag "urgent,priority" --where "project = 'Work'"
+# Tag matching tasks as urgent
+clings bulk tag "urgent,priority" --where "tags CONTAINS 'docs'"
 
 # Move tasks to a project
-clings bulk move --where "tags CONTAINS 'work'" --to "Operations Project"
+clings bulk move --where "tags CONTAINS 'draft'" --to "Archive"
 ```
 
 **Safety options:**
@@ -223,7 +223,7 @@ Save reusable task blueprints with tags, notes, checklist items, and relative sc
 
 ```bash
 clings template save weekly-review "Weekly review" \
-  --project "Operations" \
+  --project "Documentation" \
   --when "tomorrow morning" \
   --checklist "Process inbox" "Review deadlines"
 
@@ -275,11 +275,11 @@ cp .build/release/clings /usr/local/bin/
 clings today
 
 # Add a quick task
-clings add "publish release notes tomorrow #docs"
+clings add "draft changelog entry tomorrow #docs"
 
 # Save and run a reusable view
-clings views save urgent-work "area = 'Work' AND tags CONTAINS 'urgent'"
-clings views run urgent-work
+clings views save docs-today "tags CONTAINS 'docs' AND due <= today"
+clings views run docs-today
 
 # Save and reuse a template
 clings template save weekly-review "Weekly review" --when "tomorrow morning"
@@ -365,9 +365,9 @@ Human-readable colored output:
 ```
 Today (3 items)
 ──────────────────────────────────────────────
-[ ] Review PR #123        Development   Dec 15   #work
-[ ] Review release notes  Docs          Dec 15   #work
-[x] Close audit findings  Ops           Dec 10   -
+[ ] Review PR #123        Development   Dec 15   #code
+[ ] Draft changelog entry Docs          Dec 15   #docs
+[x] Archive old notes    Archive       Dec 10   -
 ```
 
 ### JSON
@@ -375,7 +375,7 @@ Today (3 items)
 Machine-readable JSON for scripting:
 
 ```bash
-clings today --json | jq '.items[] | select(.tags | contains(["work"]))'
+clings today --json | jq '.items[] | select(.tags | contains(["docs"]))'
 ```
 
 ## Data Safety

@@ -22,7 +22,7 @@ struct BulkCommand: AsyncParsableCommand {
         EXAMPLES:
           clings bulk complete --where "tags CONTAINS 'done'"
           clings bulk cancel --list inbox --dry-run
-          clings bulk move --to "Archive" --where "status = open"
+          clings bulk move --to "Archive" --where "tags CONTAINS 'draft'"
 
         SEE ALSO:
           filter, complete, cancel
@@ -147,7 +147,7 @@ struct BulkCancelCommand: AsyncParsableCommand {
 
         EXAMPLES:
           clings bulk cancel --list inbox
-          clings bulk cancel --where "status = open AND project IS NULL"
+          clings bulk cancel --where "status = open AND tags CONTAINS 'cleanup'"
           clings bulk cancel --dry-run
 
         SEE ALSO:
@@ -310,7 +310,7 @@ struct BulkMoveCommand: AsyncParsableCommand {
         Moves multiple todos to a project based on filter criteria.
 
         EXAMPLES:
-          clings bulk move --to "Operations Project" --list inbox
+          clings bulk move --to "Archive" --list inbox
           clings bulk move --to "Archive" --where "tags CONTAINS 'done'"
           clings bulk move --to "Backlog" --dry-run
 

@@ -1,6 +1,6 @@
 # Clings Productivity Suite Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> This plan records the implementation checklist used to ship the productivity-suite work. The checkbox format is kept for traceability.
 
 **Goal:** Add 10 shippable CLI improvements to `clings` with shared local state, better analysis, and stronger task capture.
 

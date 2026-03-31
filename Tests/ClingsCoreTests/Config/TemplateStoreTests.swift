@@ -16,8 +16,8 @@ struct TemplateStoreTests {
                 title: "Weekly review",
                 notes: "Check inbox and projects",
                 tags: ["planning"],
-                project: "Operations",
-                area: "Work",
+                project: "Documentation",
+                area: "Writing",
                 whenExpression: "tomorrow morning",
                 deadlineExpression: "next friday",
                 checklistItems: ["Process inbox", "Review deadlines"]

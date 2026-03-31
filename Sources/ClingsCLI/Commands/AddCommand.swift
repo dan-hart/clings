@@ -16,9 +16,9 @@ struct AddCommand: AsyncParsableCommand {
         and checklist items.
 
         EXAMPLES:
-          clings add "Finalize release notes tomorrow #docs"
-          clings add "Submit expense report by friday !!"
-          clings add "Review deployment guide for Migration Project"
+          clings add "Draft changelog entry tomorrow #docs"
+          clings add "Replace air filter by friday !!"
+          clings add "Review chapter outline for Writing Project"
           clings add "Task // notes go here"
           clings add "Task - checklist item 1 - checklist item 2"
         """

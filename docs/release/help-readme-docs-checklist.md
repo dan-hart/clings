@@ -30,6 +30,6 @@ swift run clings bulk move --help
 
 - Update `CHANGELOG.md` under `Unreleased`
 - Confirm README command reference matches current CLI
-- Confirm [docs/cli/command-reference.md](/Users/danhart/Developer/clings/docs/cli/command-reference.md) reflects the current help text and examples
-- Confirm [docs/development/testing-and-coverage.md](/Users/danhart/Developer/clings/docs/development/testing-and-coverage.md) still matches the supported verification workflow
+- Confirm [docs/cli/command-reference.md](../cli/command-reference.md) reflects the current help text and examples
+- Confirm [docs/development/testing-and-coverage.md](../development/testing-and-coverage.md) still matches the supported verification workflow
 - Confirm issue-specific docs are linked for important behavior changes

@@ -20,8 +20,8 @@ Quick examples:
 
 ```bash
 clings today
-clings add "Review release checklist tomorrow #docs"
-clings views run work-today
+clings add "Draft changelog entry tomorrow #docs"
+clings views run docs-today
 clings doctor --verbose
 ```
 
@@ -55,12 +55,12 @@ clings <command> <subcommand> --help
 Use `add` when you want fast capture, `search` when you want free-text lookup, and `filter` when you want structured querying.
 
 ```bash
-clings add "Publish release notes tomorrow #docs"
+clings add "Draft changelog entry tomorrow #docs"
 clings add "Weekly review prep" --template weekly-review
 clings add "Test task tomorrow #docs" --parse-only --json
 
 clings search "release"
-clings filter "area = 'Work' AND due <= today"
+clings filter "tags CONTAINS 'docs' AND due <= today"
 clings today --format "{status} {name} [{project}]"
 ```
 
@@ -109,7 +109,7 @@ clings pick delete cleanup
 
 ```bash
 clings project list
-clings project add "Release Readiness" --area "Operations" --deadline 2025-06-01
+clings project add "Writing Sprint" --area "Writing" --deadline 2025-06-01
 clings project audit
 clings project audit --json
 
@@ -125,8 +125,8 @@ Preview first with `--dry-run`, then repeat the same command without it when the
 ```bash
 clings bulk complete --where "tags CONTAINS 'done'" --dry-run
 clings bulk complete --where "tags CONTAINS 'done'"
-clings bulk cancel --where "project = 'Old Project'"
-clings bulk tag "urgent,priority" --where "area = 'Work'"
+clings bulk cancel --where "project = 'Archive Prep'"
+clings bulk tag "urgent,priority" --where "tags CONTAINS 'docs'"
 clings bulk move --where "tags CONTAINS 'docs'" --to "Documentation"
 ```
 
