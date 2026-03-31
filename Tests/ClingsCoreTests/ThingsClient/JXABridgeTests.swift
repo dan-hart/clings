@@ -153,12 +153,20 @@ struct JXABridgeTests {
 
         let expectedOutput = try await bridge.execute("""
         (() => {
-            const app = Application('Things3');
-            return app.running();
+            try {
+                const app = Application('Things3');
+                return app.running();
+            } catch (error) {
+                return '__missing__';
+            }
         })()
         """)
         let isRunning = await bridge.isThingsRunning()
 
-        #expect(isRunning == (expectedOutput.lowercased() == "true"))
+        if expectedOutput == "__missing__" {
+            #expect(isRunning == false)
+        } else {
+            #expect(isRunning == (expectedOutput.lowercased() == "true"))
+        }
     }
 }
