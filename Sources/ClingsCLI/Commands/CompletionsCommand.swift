@@ -12,7 +12,7 @@ struct CompletionsCommand: ParsableCommand {
         discussion: """
         Generate shell completion scripts for bash, zsh, or fish.
 
-        Installation:
+        EXAMPLES:
           bash:  clings completions bash > ~/.bash_completion.d/clings
           zsh:   clings completions zsh > ~/.zfunc/_clings
           fish:  clings completions fish > ~/.config/fish/completions/clings.fish
@@ -53,13 +53,13 @@ struct CompletionsCommand: ParsableCommand {
             prev="${COMP_WORDS[COMP_CWORD-1]}"
 
             # Main commands
-            local commands="today inbox upcoming anytime someday logbook projects project areas tags show add complete cancel delete update search bulk filter open stats review completions config"
+            local commands="today inbox upcoming anytime someday logbook projects project areas tags show add complete cancel delete update search views template undo focus pick doctor bulk filter open stats review completions config"
 
             # Bulk subcommands
             local bulk_commands="complete cancel tag move"
 
             # Project subcommands
-            local project_commands="list add"
+            local project_commands="list add audit"
 
             # Tag subcommands
             local tag_commands="list add delete rename"
@@ -69,6 +69,15 @@ struct CompletionsCommand: ParsableCommand {
 
             # Stats subcommands
             local stats_commands="trends heatmap"
+
+            # Views subcommands
+            local views_commands="list save run delete"
+
+            # Template subcommands
+            local template_commands="list save run delete"
+
+            # Pick subcommands
+            local pick_commands="show complete cancel delete"
 
             case "${prev}" in
                 clings)
@@ -93,6 +102,18 @@ struct CompletionsCommand: ParsableCommand {
                     ;;
                 stats)
                     COMPREPLY=( $(compgen -W "${stats_commands}" -- ${cur}) )
+                    return 0
+                    ;;
+                views)
+                    COMPREPLY=( $(compgen -W "${views_commands}" -- ${cur}) )
+                    return 0
+                    ;;
+                template)
+                    COMPREPLY=( $(compgen -W "${template_commands}" -- ${cur}) )
+                    return 0
+                    ;;
+                pick)
+                    COMPREPLY=( $(compgen -W "${pick_commands}" -- ${cur}) )
                     return 0
                     ;;
                 completions)
@@ -142,6 +163,12 @@ struct CompletionsCommand: ParsableCommand {
                 'delete:Delete a todo'
                 'update:Update a todo'
                 'search:Search todos'
+                'views:Manage saved filter views'
+                'template:Manage reusable task templates'
+                'undo:Undo the most recent supported mutation'
+                'focus:Show a focused queue of high-attention tasks'
+                'pick:Interactively pick a todo for a follow-up action'
+                'doctor:Check clings setup and local environment'
                 'bulk:Bulk operations'
                 'filter:Filter todos'
                 'open:Open in Things (currently disabled)'
@@ -170,6 +197,7 @@ struct CompletionsCommand: ParsableCommand {
             project_commands=(
                 'list:List all projects'
                 'add:Create a new project'
+                'audit:Audit project health and missing next actions'
             )
 
             local -a tag_commands
@@ -184,6 +212,30 @@ struct CompletionsCommand: ParsableCommand {
             stats_commands=(
                 'trends:Show completion trends over time'
                 'heatmap:Show contribution heatmap'
+            )
+
+            local -a views_commands
+            views_commands=(
+                'list:List saved views'
+                'save:Save a named filter view'
+                'run:Run a saved filter view'
+                'delete:Delete a saved view'
+            )
+
+            local -a template_commands
+            template_commands=(
+                'list:List saved templates'
+                'save:Save a task template'
+                'run:Create a task from a template'
+                'delete:Delete a template'
+            )
+
+            local -a pick_commands
+            pick_commands=(
+                'show:Interactively pick a todo to inspect'
+                'complete:Interactively pick a todo to complete'
+                'cancel:Interactively pick a todo to cancel'
+                'delete:Interactively pick a todo to delete'
             )
 
             local -a config_commands
@@ -216,6 +268,15 @@ struct CompletionsCommand: ParsableCommand {
                             ;;
                         stats)
                             _describe 'stats command' stats_commands
+                            ;;
+                        views)
+                            _describe 'views command' views_commands
+                            ;;
+                        template)
+                            _describe 'template command' template_commands
+                            ;;
+                        pick)
+                            _describe 'pick command' pick_commands
                             ;;
                         config)
                             _describe 'config command' config_commands
@@ -257,6 +318,12 @@ struct CompletionsCommand: ParsableCommand {
         complete -c clings -n "__fish_use_subcommand" -a "delete" -d "Delete a todo"
         complete -c clings -n "__fish_use_subcommand" -a "update" -d "Update a todo"
         complete -c clings -n "__fish_use_subcommand" -a "search" -d "Search todos"
+        complete -c clings -n "__fish_use_subcommand" -a "views" -d "Manage saved filter views"
+        complete -c clings -n "__fish_use_subcommand" -a "template" -d "Manage reusable task templates"
+        complete -c clings -n "__fish_use_subcommand" -a "undo" -d "Undo the most recent supported mutation"
+        complete -c clings -n "__fish_use_subcommand" -a "focus" -d "Show a focused queue of high-attention tasks"
+        complete -c clings -n "__fish_use_subcommand" -a "pick" -d "Interactively pick a todo for a follow-up action"
+        complete -c clings -n "__fish_use_subcommand" -a "doctor" -d "Check clings setup and local environment"
         complete -c clings -n "__fish_use_subcommand" -a "bulk" -d "Bulk operations"
         complete -c clings -n "__fish_use_subcommand" -a "filter" -d "Filter todos"
         complete -c clings -n "__fish_use_subcommand" -a "open" -d "Open in Things (currently disabled)"
@@ -274,12 +341,31 @@ struct CompletionsCommand: ParsableCommand {
         # Project subcommands
         complete -c clings -n "__fish_seen_subcommand_from project" -a "list" -d "List all projects"
         complete -c clings -n "__fish_seen_subcommand_from project" -a "add" -d "Create a new project"
+        complete -c clings -n "__fish_seen_subcommand_from project" -a "audit" -d "Audit project health and missing next actions"
 
         # Tag subcommands
         complete -c clings -n "__fish_seen_subcommand_from tags" -a "list" -d "List all tags"
         complete -c clings -n "__fish_seen_subcommand_from tags" -a "add" -d "Create a new tag"
         complete -c clings -n "__fish_seen_subcommand_from tags" -a "delete" -d "Delete a tag"
         complete -c clings -n "__fish_seen_subcommand_from tags" -a "rename" -d "Rename a tag"
+
+        # Views subcommands
+        complete -c clings -n "__fish_seen_subcommand_from views" -a "list" -d "List saved views"
+        complete -c clings -n "__fish_seen_subcommand_from views" -a "save" -d "Save a named filter view"
+        complete -c clings -n "__fish_seen_subcommand_from views" -a "run" -d "Run a saved filter view"
+        complete -c clings -n "__fish_seen_subcommand_from views" -a "delete" -d "Delete a saved view"
+
+        # Template subcommands
+        complete -c clings -n "__fish_seen_subcommand_from template" -a "list" -d "List saved templates"
+        complete -c clings -n "__fish_seen_subcommand_from template" -a "save" -d "Save a task template"
+        complete -c clings -n "__fish_seen_subcommand_from template" -a "run" -d "Create a task from a template"
+        complete -c clings -n "__fish_seen_subcommand_from template" -a "delete" -d "Delete a template"
+
+        # Pick subcommands
+        complete -c clings -n "__fish_seen_subcommand_from pick" -a "show" -d "Interactively pick a todo to inspect"
+        complete -c clings -n "__fish_seen_subcommand_from pick" -a "complete" -d "Interactively pick a todo to complete"
+        complete -c clings -n "__fish_seen_subcommand_from pick" -a "cancel" -d "Interactively pick a todo to cancel"
+        complete -c clings -n "__fish_seen_subcommand_from pick" -a "delete" -d "Interactively pick a todo to delete"
 
         # Review subcommands
         complete -c clings -n "__fish_seen_subcommand_from review" -a "start" -d "Start or resume a weekly review"

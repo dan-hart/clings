@@ -52,7 +52,7 @@ struct FilterCommand: AsyncParsableCommand {
 
     func run() async throws {
         let filter = try FilterParser.parse(expression)
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
 
         // Fetch all open todos and filter
         var todos: [Todo] = []
@@ -66,11 +66,6 @@ struct FilterCommand: AsyncParsableCommand {
 
         // Apply filter
         let filtered = uniqueTodos.filter { filter.matches($0) }
-
-        let formatter: OutputFormatter = output.json
-            ? JSONOutputFormatter()
-            : TextOutputFormatter(useColors: !output.noColor)
-
-        print(formatter.format(todos: filtered))
+        print(renderTodos(filtered, list: "Filter", output: output))
     }
 }

@@ -138,6 +138,12 @@ struct TaskParserTests {
             #expect(result.project == nil)
             #expect(result.title.contains("Looking for something"))
         }
+
+        @Test func quotedProjectExtraction() {
+            let result = parser.parse("Review notes for \"Migration Sprint\"")
+            #expect(result.project == "Migration Sprint")
+            #expect(result.title == "Review notes")
+        }
     }
 
     @Suite("Area Extraction")
@@ -160,6 +166,12 @@ struct TaskParserTests {
             let result = parser.parse("Task in 3 days")
             #expect(result.area == nil)
             #expect(result.whenDate != nil)
+        }
+
+        @Test func quotedAreaExtraction() {
+            let result = parser.parse("Draft plan in \"Deep Work\"")
+            #expect(result.area == "Deep Work")
+            #expect(result.title == "Draft plan")
         }
     }
 
@@ -230,6 +242,11 @@ struct TaskParserTests {
             let calendar = Calendar.current
             let weekday = calendar.component(.weekday, from: result.whenDate!)
             #expect(weekday == 2) // Monday = 2
+        }
+
+        @Test func whenDateMonthDayWithTime() {
+            let result = parser.parse("Demo dec 15 3pm")
+            #expect(result.whenDate != nil)
         }
     }
 

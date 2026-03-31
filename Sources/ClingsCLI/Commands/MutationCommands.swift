@@ -45,11 +45,7 @@ struct CompleteCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
-
-        let formatter: OutputFormatter = output.json
-            ? JSONOutputFormatter()
-            : TextOutputFormatter(useColors: !output.noColor)
+        let client = CommandRuntime.makeClient()
 
         // Determine which mode to use
         if let searchTitle = title {
@@ -65,7 +61,8 @@ struct CompleteCommand: AsyncParsableCommand {
                 // Exactly one match - complete it
                 let todo = openTodos[0]
                 try await client.completeTodo(id: todo.id)
-                print(formatter.format(message: "Completed: \(todo.name)"))
+                try UndoStore.record(UndoEntry(operation: .complete, todoID: todo.id, snapshot: TodoSnapshot(todo: todo)))
+                print(renderMessage("Completed: \(todo.name)", output: output))
 
             default:
                 // Multiple matches - show list with IDs
@@ -80,8 +77,10 @@ struct CompleteCommand: AsyncParsableCommand {
             }
         } else if let todoId = id {
             // Original ID-based completion
+            let snapshot = try? await client.fetchTodo(id: todoId)
             try await client.completeTodo(id: todoId)
-            print(formatter.format(message: "Completed todo: \(todoId)"))
+            try UndoStore.record(UndoEntry(operation: .complete, todoID: todoId, snapshot: snapshot.map { TodoSnapshot(todo: $0) }))
+            print(renderMessage("Completed todo: \(todoId)", output: output))
         } else {
             throw ValidationError("Provide either a todo ID or --title flag")
         }
@@ -116,14 +115,11 @@ struct CancelCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
+        let snapshot = try? await client.fetchTodo(id: id)
         try await client.cancelTodo(id: id)
-
-        let formatter: OutputFormatter = output.json
-            ? JSONOutputFormatter()
-            : TextOutputFormatter(useColors: !output.noColor)
-
-        print(formatter.format(message: "Canceled todo: \(id)"))
+        try UndoStore.record(UndoEntry(operation: .cancel, todoID: id, snapshot: snapshot.map { TodoSnapshot(todo: $0) }))
+        print(renderMessage("Canceled todo: \(id)", output: output))
     }
 }
 
@@ -159,14 +155,11 @@ struct DeleteCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
+        let snapshot = try? await client.fetchTodo(id: id)
         try await client.deleteTodo(id: id)
-
-        let formatter: OutputFormatter = output.json
-            ? JSONOutputFormatter()
-            : TextOutputFormatter(useColors: !output.noColor)
-
-        print(formatter.format(message: "Deleted todo: \(id)"))
+        try UndoStore.record(UndoEntry(operation: .delete, todoID: id, snapshot: snapshot.map { TodoSnapshot(todo: $0) }))
+        print(renderMessage("Deleted todo: \(id)", output: output))
     }
 }
 
@@ -180,7 +173,7 @@ struct UpdateCommand: AsyncParsableCommand {
         Update one or more properties of a todo by ID.
         Only specified options will be updated.
 
-        Examples:
+        EXAMPLES:
           clings update ABC123 --name "New title"
           clings update ABC123 --notes "Updated notes"
           clings update ABC123 --due 2024-12-25
@@ -223,7 +216,7 @@ struct UpdateCommand: AsyncParsableCommand {
         if let when = when {
             let validKeywords = Set(["today", "tomorrow", "evening", "anytime", "someday"])
             let isKeyword = validKeywords.contains(when.lowercased())
-            let isDate = parseDate(when) != nil
+            let isDate = parseFlexibleDate(when) != nil
             guard isKeyword || isDate else {
                 throw ThingsError.invalidState(
                     "Invalid --when value: '\(when)'. Use 'today', 'tomorrow', 'evening', 'anytime', 'someday', or YYYY-MM-DD."
@@ -265,12 +258,13 @@ struct UpdateCommand: AsyncParsableCommand {
             }
         }
 
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
+        let previousSnapshot = try? await client.fetchTodo(id: id)
 
         // Parse due date if provided
         var dueDate: Date? = nil
         if let dueStr = due {
-            dueDate = parseDate(dueStr)
+            dueDate = parseFlexibleDate(dueStr)
             if dueDate == nil {
                 throw ThingsError.invalidState("Invalid date format: \(dueStr). Use YYYY-MM-DD, 'today', or 'tomorrow'.")
             }
@@ -305,30 +299,11 @@ struct UpdateCommand: AsyncParsableCommand {
             }
         }
 
-        let formatter: OutputFormatter = output.json
-            ? JSONOutputFormatter()
-            : TextOutputFormatter(useColors: !output.noColor)
-
         let urlSchemeNote = needsURLScheme ? " (--when/--heading sent via URL scheme; verify in Things)" : ""
-        print(formatter.format(message: "Updated todo: \(id)\(urlSchemeNote)"))
-    }
-
-    private func parseDate(_ str: String) -> Date? {
-        let calendar = Calendar.current
-        let now = Date()
-        let lower = str.lowercased()
-
-        if lower == "today" {
-            return calendar.startOfDay(for: now)
+        if let previousSnapshot {
+            try UndoStore.record(UndoEntry(operation: .update, todoID: id, snapshot: TodoSnapshot(todo: previousSnapshot)))
         }
-        if lower == "tomorrow" {
-            return calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
-        }
-
-        // Try ISO date format (YYYY-MM-DD)
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.date(from: str)
+        print(renderMessage("Updated todo: \(id)\(urlSchemeNote)", output: output))
     }
 
     private func updateViaURLScheme(id: String, when: String?, heading: String?, token: String) throws {
@@ -351,17 +326,6 @@ struct UpdateCommand: AsyncParsableCommand {
             throw ThingsError.operationFailed("Failed to construct Things URL")
         }
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        process.arguments = [url]
-        do {
-            try process.run()
-        } catch {
-            throw ThingsError.operationFailed("Failed to launch Things URL scheme handler: \(error.localizedDescription)")
-        }
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else {
-            throw ThingsError.operationFailed("Failed to update via Things URL scheme (exit code \(process.terminationStatus))")
-        }
+        try CommandRuntime.openURLScheme(url)
     }
 }

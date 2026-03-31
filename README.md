@@ -79,12 +79,20 @@ clings search "meeting"
 clings find "project report"     # alias for search
 clings f "status"                # short alias
 
+# Save and reuse named views
+clings views save work-today "area = 'Work' AND due <= today"
+clings views run work-today
+clings views list
+
 # Advanced filtering (SQL-like query language)
 clings filter "status = open"
 clings filter "due < today AND status = open"
 clings filter "tags CONTAINS 'urgent'"
 clings filter "name LIKE '%report%'"
 clings filter "project IS NOT NULL"
+
+# Custom todo-line formatting
+clings today --format "{status} {name} [{project}] {tags}"
 ```
 
 **Filter operators:** `=`, `!=`, `<`, `>`, `<=`, `>=`, `LIKE`, `CONTAINS`, `IS NULL`, `IS NOT NULL`, `IN`
@@ -99,6 +107,11 @@ Manage individual todos:
 # Show details
 clings show <ID>
 
+# Interactive pick flows
+clings pick show report
+clings pick complete release
+clings pick cancel "follow up"
+
 # Update properties
 clings update <ID> --name "New title"
 clings update <ID> --notes "Updated notes"
@@ -111,6 +124,10 @@ clings complete --title "milk"   # complete by title search
 clings cancel <ID>
 clings delete <ID>               # or: clings rm <ID>
 clings delete <ID> --force       # skip confirmation
+
+# Undo supported recent changes
+clings undo
+clings undo --show
 ```
 
 ### 5. Bulk Operations
@@ -130,7 +147,7 @@ clings bulk complete --where "tags CONTAINS 'done'"
 clings bulk cancel --where "project = 'Old Project'"
 
 # Tag work tasks as urgent
-clings bulk tag --where "project = 'Work'" urgent priority
+clings bulk tag "urgent,priority" --where "project = 'Work'"
 
 # Move tasks to a project
 clings bulk move --where "tags CONTAINS 'work'" --to "Operations Project"
@@ -150,6 +167,11 @@ clings stats              # Show dashboard
 clings stats trends       # Completion trends over time
 clings stats heatmap      # Activity heatmap calendar
 clings stats --days 7     # Limit to last 7 days
+
+# Focus mode
+clings focus
+clings focus --limit 5
+clings focus --format "{name} [{project}]"
 ```
 
 ### 7. Weekly Review
@@ -161,6 +183,10 @@ clings review             # Start a new review (default)
 clings review start       # Same as above
 clings review status      # Show last review session info
 clings review clear       # Clear review session
+
+# Audit open projects for stalled work
+clings project audit
+clings project audit --json
 ```
 
 ### 8. Shell Completions
@@ -183,9 +209,30 @@ Set up the Things 3 auth token for features that use the Things URL scheme (`--w
 
 # Save it to clings
 clings config set-auth-token <your-token>
+
+# Diagnose local setup
+clings doctor
+clings doctor --verbose
 ```
 
 The auth token is stored at `~/.config/clings/auth-token` with restricted permissions (0600).
+
+### 10. Templates
+
+Save reusable task blueprints with tags, notes, checklist items, and relative schedule expressions:
+
+```bash
+clings template save weekly-review "Weekly review" \
+  --project "Operations" \
+  --when "tomorrow morning" \
+  --checklist "Process inbox" "Review deadlines"
+
+clings template list
+clings template run weekly-review
+
+# You can also combine a template with an explicit add command
+clings add "Weekly review prep" --template weekly-review
+```
 
 ## Requirements
 
@@ -230,6 +277,14 @@ clings today
 # Add a quick task
 clings add "publish release notes tomorrow #docs"
 
+# Save and run a reusable view
+clings views save urgent-work "area = 'Work' AND tags CONTAINS 'urgent'"
+clings views run urgent-work
+
+# Save and reuse a template
+clings template save weekly-review "Weekly review" --when "tomorrow morning"
+clings template run weekly-review
+
 # View your inbox
 clings inbox
 
@@ -241,6 +296,12 @@ clings filter "due < today AND status = open"
 
 # Get productivity stats
 clings stats
+
+# See your working queue
+clings focus
+
+# Check local setup
+clings doctor
 
 # Get help on any command
 clings --help
@@ -257,6 +318,7 @@ Most output-oriented subcommands support:
 ```
 --json                   Output as JSON (for scripting)
 --no-color               Suppress color output
+--format "{name} ..."    Custom todo-line formatting on todo-list commands
 ```
 
 ### Commands
@@ -276,6 +338,12 @@ Most output-oriented subcommands support:
 | `cancel` | - | Cancel a todo |
 | `delete` | `rm` | Delete a todo (moves to trash) |
 | `search` | `find`, `f` | Search todos by text |
+| `views` | - | Manage saved filter views |
+| `template` | - | Manage reusable task templates |
+| `undo` | - | Undo the most recent supported mutation |
+| `focus` | - | Show a focused queue of high-attention tasks |
+| `pick` | - | Interactively pick a todo for a follow-up action |
+| `doctor` | - | Check clings setup and local environment |
 | `filter` | - | Filter todos using a query expression |
 | `projects` | - | List all projects |
 | `project` | - | Manage projects |

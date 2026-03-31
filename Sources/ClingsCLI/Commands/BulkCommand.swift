@@ -76,7 +76,7 @@ struct BulkCompleteCommand: AsyncParsableCommand {
     var list: String = "today"
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
 
         // Get list view
         guard let listView = ListView(rawValue: list.lowercased()) else {
@@ -114,7 +114,7 @@ struct BulkCompleteCommand: AsyncParsableCommand {
         // Confirm unless --yes
         if !bulkOptions.yes {
             print("\nProceed? (y/N): ", terminator: "")
-            guard let response = readLine(), response.lowercased() == "y" else {
+            guard let response = CommandRuntime.inputReader(), response.lowercased() == "y" else {
                 print(formatter.format(message: "Aborted"))
                 return
             }
@@ -161,7 +161,7 @@ struct BulkCancelCommand: AsyncParsableCommand {
     var list: String = "today"
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
 
         guard let listView = ListView(rawValue: list.lowercased()) else {
             throw ThingsError.invalidState("Unknown list: \(list)")
@@ -194,7 +194,7 @@ struct BulkCancelCommand: AsyncParsableCommand {
 
         if !bulkOptions.yes {
             print("\nProceed? (y/N): ", terminator: "")
-            guard let response = readLine(), response.lowercased() == "y" else {
+            guard let response = CommandRuntime.inputReader(), response.lowercased() == "y" else {
                 print(formatter.format(message: "Aborted"))
                 return
             }
@@ -246,7 +246,7 @@ struct BulkTagCommand: AsyncParsableCommand {
     var list: String = "today"
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
 
         guard let listView = ListView(rawValue: list.lowercased()) else {
             throw ThingsError.invalidState("Unknown list: \(list)")
@@ -281,7 +281,7 @@ struct BulkTagCommand: AsyncParsableCommand {
 
         if !bulkOptions.yes {
             print("\nProceed? (y/N): ", terminator: "")
-            guard let response = readLine(), response.lowercased() == "y" else {
+            guard let response = CommandRuntime.inputReader(), response.lowercased() == "y" else {
                 print(formatter.format(message: "Aborted"))
                 return
             }
@@ -328,7 +328,7 @@ struct BulkMoveCommand: AsyncParsableCommand {
     var list: String = "today"
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
 
         guard let listView = ListView(rawValue: list.lowercased()) else {
             throw ThingsError.invalidState("Unknown list: \(list)")
@@ -361,7 +361,7 @@ struct BulkMoveCommand: AsyncParsableCommand {
 
         if !bulkOptions.yes {
             print("\nProceed? (y/N): ", terminator: "")
-            guard let response = readLine(), response.lowercased() == "y" else {
+            guard let response = CommandRuntime.inputReader(), response.lowercased() == "y" else {
                 print(formatter.format(message: "Aborted"))
                 return
             }

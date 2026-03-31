@@ -36,6 +36,13 @@ public enum JXAError: Error, LocalizedError {
 ///
 /// This actor provides safe, concurrent access to osascript execution with
 /// timeout handling and proper error reporting.
+public protocol JXAExecuting: Sendable {
+    func execute(_ script: String) async throws -> String
+    func executeJSON<T: Decodable & Sendable>(_ script: String, as type: T.Type) async throws -> T
+    func executeAppleScript(_ script: String) async throws -> String
+    func isThingsRunning() async -> Bool
+}
+
 public actor JXABridge {
     /// Default timeout for script execution in seconds.
     public static let defaultTimeout: TimeInterval = 30.0
@@ -110,7 +117,7 @@ public actor JXABridge {
     ///   - type: The type to decode the JSON into.
     /// - Returns: The decoded value.
     /// - Throws: `JXAError` if execution or decoding fails.
-    public func executeJSON<T: Decodable>(_ script: String, as type: T.Type) async throws -> T {
+    public func executeJSON<T: Decodable & Sendable>(_ script: String, as type: T.Type) async throws -> T {
         let output = try await execute(script)
 
         guard !output.isEmpty else {
@@ -238,3 +245,5 @@ public actor JXABridge {
         }
     }
 }
+
+extension JXABridge: JXAExecuting {}

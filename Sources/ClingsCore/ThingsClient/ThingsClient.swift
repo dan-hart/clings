@@ -59,6 +59,7 @@ public protocol ThingsClientProtocol: Sendable {
         area: String?
     ) async throws -> String
     func completeTodo(id: String) async throws
+    func reopenTodo(id: String) async throws
     func cancelTodo(id: String) async throws
     func deleteTodo(id: String) async throws
     func moveTodo(id: String, toProject: String) async throws
@@ -77,15 +78,24 @@ public protocol ThingsClientProtocol: Sendable {
     func openInThings(list: ListView) throws
 }
 
+public protocol ThingsDatabaseReadable: Sendable {
+    func fetchList(_ list: ListView) throws -> [Todo]
+    func fetchProjects() throws -> [Project]
+    func fetchAreas() throws -> [Area]
+    func fetchTags() throws -> [Tag]
+    func fetchTodo(id: String) throws -> Todo
+    func search(query: String) throws -> [Todo]
+}
+
 /// Result from a mutation operation.
-struct MutationResult: Decodable {
+struct MutationResult: Decodable, Sendable {
     let success: Bool
     let error: String?
     let id: String?
 }
 
 /// Result from a creation operation.
-struct CreationResult: Decodable {
+struct CreationResult: Decodable, Sendable {
     let success: Bool
     let error: String?
     let id: String?
@@ -93,18 +103,18 @@ struct CreationResult: Decodable {
 }
 
 /// Error response from JXA.
-struct ErrorResponse: Decodable {
+struct ErrorResponse: Decodable, Sendable {
     let error: String
     let id: String?
 }
 
 /// Client for interacting with Things 3 via JXA.
 public actor ThingsClient: ThingsClientProtocol {
-    private let bridge: JXABridge
+    private let bridge: any JXAExecuting
 
     /// Create a new Things client.
     /// - Parameter bridge: The JXA bridge to use for script execution.
-    public init(bridge: JXABridge = JXABridge()) {
+    public init(bridge: any JXAExecuting = JXABridge()) {
         self.bridge = bridge
     }
 
@@ -252,6 +262,14 @@ public actor ThingsClient: ThingsClientProtocol {
 
     public func completeTodo(id: String) async throws {
         let script = JXAScripts.completeTodo(id: id)
+        let result = try await bridge.executeJSON(script, as: MutationResult.self)
+        if !result.success {
+            throw ThingsError.operationFailed(result.error ?? "Unknown error")
+        }
+    }
+
+    public func reopenTodo(id: String) async throws {
+        let script = JXAScripts.reopenTodo(id: id)
         let result = try await bridge.executeJSON(script, as: MutationResult.self)
         if !result.success {
             throw ThingsError.operationFailed(result.error ?? "Unknown error")

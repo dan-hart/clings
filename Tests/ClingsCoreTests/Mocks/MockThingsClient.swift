@@ -41,6 +41,9 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
     /// Track which todo IDs were completed.
     private(set) var completedIds: [String] = []
 
+    /// Track which todo IDs were reopened.
+    private(set) var reopenedIds: [String] = []
+
     /// Track which todo IDs were canceled.
     private(set) var canceledIds: [String] = []
 
@@ -134,6 +137,11 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
         completedIds.append(id)
     }
 
+    func reopenTodo(id: String) async throws {
+        if let error = errorToThrow { throw error }
+        reopenedIds.append(id)
+    }
+
     func cancelTodo(id: String) async throws {
         if let error = errorToThrow { throw error }
         canceledIds.append(id)
@@ -203,6 +211,7 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
     func reset() {
         fetchedLists = []
         completedIds = []
+        reopenedIds = []
         canceledIds = []
         deletedIds = []
         moveOperations = []

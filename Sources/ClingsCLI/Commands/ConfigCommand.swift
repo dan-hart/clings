@@ -26,7 +26,15 @@ struct ConfigCommand: ParsableCommand {
 struct SetAuthToken: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "set-auth-token",
-        abstract: "Set the Things 3 auth token for URL scheme operations (e.g., --heading)"
+        abstract: "Set the Things 3 auth token for URL scheme operations (e.g., --heading)",
+        discussion: """
+        Save the Things URL auth token locally so URL-scheme features can run
+        without prompting for the token each time.
+
+        EXAMPLES:
+          clings config set-auth-token <token>
+          clings doctor --verbose
+        """
     )
 
     @Argument(help: "The auth token from Things 3 (Settings > General > Enable Things URLs)")

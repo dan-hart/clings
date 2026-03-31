@@ -19,12 +19,22 @@ struct CommandConfigurationTests {
 
         @Test func hasVersion() {
             let config = Clings.configuration
-            #expect(config.version != nil)
+            #expect(!config.version.isEmpty)
         }
 
         @Test func subcommands() {
             let config = Clings.configuration
             #expect(!config.subcommands.isEmpty)
+        }
+
+        @Test func includesNewTopLevelCommands() {
+            let subcommandNames = Set(Clings.configuration.subcommands.map { $0.configuration.commandName })
+            #expect(subcommandNames.contains("doctor"))
+            #expect(subcommandNames.contains("views"))
+            #expect(subcommandNames.contains("template"))
+            #expect(subcommandNames.contains("undo"))
+            #expect(subcommandNames.contains("focus"))
+            #expect(subcommandNames.contains("pick"))
         }
     }
 
@@ -117,8 +127,52 @@ struct CommandConfigurationTests {
 
         @Test func discussionContainsExamples() {
             let config = AddCommand.configuration
+            #expect(config.discussion.contains("EXAMPLES:"))
             #expect(config.discussion.contains("clings add"))
             #expect(config.discussion.contains("#"))
+        }
+    }
+
+    @Suite("Help Text")
+    struct HelpText {
+        @Test func keyCommandsIncludeExamplesInDiscussion() {
+            let discussions: [(String, String)] = [
+                ("clings", Clings.configuration.discussion),
+                ("add", AddCommand.configuration.discussion),
+                ("stats", StatsCommand.configuration.discussion),
+                ("doctor", DoctorCommand.configuration.discussion),
+                ("focus", FocusCommand.configuration.discussion),
+                ("undo", UndoCommand.configuration.discussion),
+                ("views", ViewsCommand.configuration.discussion),
+                ("views list", ViewsListCommand.configuration.discussion),
+                ("views save", ViewsSaveCommand.configuration.discussion),
+                ("views run", ViewsRunCommand.configuration.discussion),
+                ("views delete", ViewsDeleteCommand.configuration.discussion),
+                ("template", TemplateCommand.configuration.discussion),
+                ("template list", TemplateListCommand.configuration.discussion),
+                ("template save", TemplateSaveCommand.configuration.discussion),
+                ("template run", TemplateRunCommand.configuration.discussion),
+                ("template delete", TemplateDeleteCommand.configuration.discussion),
+                ("pick", PickCommand.configuration.discussion),
+                ("pick show", PickShowCommand.configuration.discussion),
+                ("pick complete", PickCompleteCommand.configuration.discussion),
+                ("pick cancel", PickCancelCommand.configuration.discussion),
+                ("pick delete", PickDeleteCommand.configuration.discussion),
+                ("review", ReviewCommand.configuration.discussion),
+                ("review start", ReviewStartCommand.configuration.discussion),
+                ("review status", ReviewStatusCommand.configuration.discussion),
+                ("review clear", ReviewClearCommand.configuration.discussion),
+                ("project list", ProjectListCommand.configuration.discussion),
+                ("project audit", ProjectAuditCommand.configuration.discussion),
+                ("tags list", TagsListCommand.configuration.discussion),
+                ("completions", CompletionsCommand.configuration.discussion),
+                ("config set-auth-token", SetAuthToken.configuration.discussion),
+            ]
+
+            for (name, discussion) in discussions {
+                #expect(!discussion.isEmpty, "\(name) should include detailed help text")
+                #expect(discussion.contains("EXAMPLES:"), "\(name) should include examples")
+            }
         }
     }
 
@@ -196,6 +250,47 @@ struct CommandConfigurationTests {
         @Test func configuration() {
             let config = ReviewCommand.configuration
             #expect(config.commandName == "review")
+        }
+    }
+
+    @Suite("New Commands")
+    struct NewCommands {
+        @Test func doctorCommand() {
+            let config = DoctorCommand.configuration
+            #expect(config.commandName == "doctor")
+        }
+
+        @Test func viewsCommand() {
+            let config = ViewsCommand.configuration
+            #expect(config.commandName == "views")
+            #expect(!config.subcommands.isEmpty)
+        }
+
+        @Test func templateCommand() {
+            let config = TemplateCommand.configuration
+            #expect(config.commandName == "template")
+            #expect(!config.subcommands.isEmpty)
+        }
+
+        @Test func undoCommand() {
+            let config = UndoCommand.configuration
+            #expect(config.commandName == "undo")
+        }
+
+        @Test func focusCommand() {
+            let config = FocusCommand.configuration
+            #expect(config.commandName == "focus")
+        }
+
+        @Test func pickCommand() {
+            let config = PickCommand.configuration
+            #expect(config.commandName == "pick")
+            #expect(!config.subcommands.isEmpty)
+        }
+
+        @Test func projectAuditCommand() {
+            let config = ProjectAuditCommand.configuration
+            #expect(config.commandName == "audit")
         }
     }
 

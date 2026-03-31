@@ -15,6 +15,7 @@ struct ArgumentParsingTests {
             let options = try OutputOptions.parse([])
             #expect(!options.json)
             #expect(!options.noColor)
+            #expect(options.format == nil)
         }
 
         @Test func jsonFlag() throws {
@@ -31,6 +32,11 @@ struct ArgumentParsingTests {
             let options = try OutputOptions.parse(["--json", "--no-color"])
             #expect(options.json)
             #expect(options.noColor)
+        }
+
+        @Test func formatOption() throws {
+            let options = try OutputOptions.parse(["--format", "{name}"])
+            #expect(options.format == "{name}")
         }
     }
 
@@ -240,6 +246,11 @@ struct ArgumentParsingTests {
             let command = try AddCommand.parse(["Task", "--parse-only"])
             #expect(command.parseOnly)
         }
+
+        @Test func templateOption() throws {
+            let command = try AddCommand.parse(["Task", "--template", "daily"])
+            #expect(command.template == "daily")
+        }
     }
 
     @Suite("Search Command")
@@ -397,6 +408,47 @@ struct ArgumentParsingTests {
             let config = ReviewCommand.configuration
             #expect(!config.subcommands.isEmpty)
             #expect(config.defaultSubcommand != nil)
+        }
+    }
+
+    @Suite("New Command Parsing")
+    struct NewCommandParsing {
+        @Test func doctorVerboseFlag() throws {
+            let command = try DoctorCommand.parse(["--verbose"])
+            #expect(command.verbose)
+        }
+
+        @Test func viewsSaveCommand() throws {
+            let command = try ViewsSaveCommand.parse(["work", "status = open", "--note", "Daily"])
+            #expect(command.name == "work")
+            #expect(command.expression == "status = open")
+            #expect(command.note == "Daily")
+        }
+
+        @Test func templateRunCommand() throws {
+            let command = try TemplateRunCommand.parse(["weekly-review"])
+            #expect(command.name == "weekly-review")
+        }
+
+        @Test func undoShowFlag() throws {
+            let command = try UndoCommand.parse(["--show"])
+            #expect(command.show)
+        }
+
+        @Test func focusLimitAndFormat() throws {
+            let command = try FocusCommand.parse(["--limit", "5", "--format", "{name}"])
+            #expect(command.limit == 5)
+            #expect(command.output.format == "{name}")
+        }
+
+        @Test func pickCompleteQuery() throws {
+            let command = try PickCompleteCommand.parse(["release"])
+            #expect(command.query == "release")
+        }
+
+        @Test func projectAuditJson() throws {
+            let command = try ProjectAuditCommand.parse(["--json"])
+            #expect(command.output.json)
         }
     }
 

@@ -93,15 +93,141 @@ struct ThingsDatabaseTests {
         #expect(todoIDs == ["open-today"])
     }
 
+    @Test func fetchProjectsIncludesAreaTagsAndDates() throws {
+        let fixture = try makeFixtureDatabase()
+        let deadline = 1_234
+        let createdAt = 4_567.0
+
+        try fixture.db.write { db in
+            try insertArea(db, id: "area-work", title: "Work", index: 0)
+            try insertTag(db, id: "tag-docs", title: "docs")
+            try insertTask(
+                db,
+                id: "project-1",
+                title: "Documentation",
+                start: 0,
+                startDate: nil,
+                index: 0,
+                type: 1,
+                notes: "Project notes",
+                deadline: deadline,
+                creationDate: createdAt,
+                area: "area-work"
+            )
+            try insertTaskTag(db, taskID: "project-1", tagID: "tag-docs")
+        }
+
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let projects = try database.fetchProjects()
+
+        #expect(projects.count == 1)
+        #expect(projects[0].id == "project-1")
+        #expect(projects[0].name == "Documentation")
+        #expect(projects[0].notes == "Project notes")
+        #expect(projects[0].area?.name == "Work")
+        #expect(projects[0].tags.map(\.name) == ["docs"])
+        #expect(projects[0].dueDate == Date(timeIntervalSinceReferenceDate: TimeInterval(deadline)))
+        #expect(projects[0].creationDate == Date(timeIntervalSinceReferenceDate: TimeInterval(createdAt)))
+    }
+
+    @Test func fetchAreasAndTagsReturnAttachedMetadata() throws {
+        let fixture = try makeFixtureDatabase()
+
+        try fixture.db.write { db in
+            try insertArea(db, id: "area-home", title: "Home", index: 0)
+            try insertTag(db, id: "tag-home", title: "home")
+            try insertTag(db, id: "tag-errands", title: "errands")
+            try db.execute(
+                sql: "INSERT INTO TMAreaTag (areas, tags) VALUES (?, ?), (?, ?)",
+                arguments: ["area-home", "tag-home", "area-home", "tag-errands"]
+            )
+        }
+
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let areas = try database.fetchAreas()
+        let tags = try database.fetchTags()
+
+        #expect(areas.count == 1)
+        #expect(areas[0].name == "Home")
+        #expect(areas[0].tags.map(\.name).sorted() == ["errands", "home"])
+        #expect(tags.map(\.name) == ["errands", "home"])
+    }
+
+    @Test func fetchTodoAndSearchReturnRichTodoMetadata() throws {
+        let fixture = try makeFixtureDatabase()
+
+        try fixture.db.write { db in
+            try insertArea(db, id: "area-work", title: "Work", index: 0)
+            try insertTag(db, id: "tag-docs", title: "docs")
+            try insertTask(
+                db,
+                id: "project-1",
+                title: "Documentation",
+                start: 0,
+                startDate: nil,
+                index: 0,
+                type: 1
+            )
+            try insertTask(
+                db,
+                id: "todo-1",
+                title: "Ship docs",
+                start: 1,
+                startDate: thingsDateCode(Date()),
+                index: 1,
+                notes: "Coordinate release notes",
+                deadline: 900,
+                creationDate: 100,
+                modificationDate: 200,
+                project: "project-1",
+                area: "area-work"
+            )
+            try insertTaskTag(db, taskID: "todo-1", tagID: "tag-docs")
+            try db.execute(
+                sql: """
+                    INSERT INTO TMChecklistItem (uuid, title, status, task, "index")
+                    VALUES
+                        ('check-1', 'Draft outline', 3, 'todo-1', 0),
+                        ('check-2', 'Publish examples', 0, 'todo-1', 1)
+                    """
+            )
+        }
+
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let todo = try database.fetchTodo(id: "todo-1")
+        let searchResults = try database.search(query: "release")
+
+        #expect(todo.name == "Ship docs")
+        #expect(todo.notes == "Coordinate release notes")
+        #expect(todo.project?.name == "Documentation")
+        #expect(todo.area?.name == "Work")
+        #expect(todo.tags.map(\.name) == ["docs"])
+        #expect(todo.checklistItems.map(\.name) == ["Draft outline", "Publish examples"])
+        #expect(todo.checklistItems.map(\.completed) == [true, false])
+        #expect(todo.dueDate == Date(timeIntervalSinceReferenceDate: 900))
+        #expect(todo.creationDate == Date(timeIntervalSinceReferenceDate: 100))
+        #expect(todo.modificationDate == Date(timeIntervalSinceReferenceDate: 200))
+        #expect(searchResults.map(\.id) == ["todo-1"])
+    }
+
+    @Test func fetchTodoThrowsNotFoundForUnknownID() throws {
+        let fixture = try makeFixtureDatabase()
+        let database = ThingsDatabase(dbPath: fixture.path)
+
+        #expect(throws: ThingsError.self) {
+            _ = try database.fetchTodo(id: "missing")
+        }
+    }
+
     private func makeFixtureDatabase() throws -> (path: String, db: DatabaseQueue) {
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("clings-thingsdb-tests-\(UUID().uuidString).sqlite")
         let dbQueue = try DatabaseQueue(path: tempURL.path)
 
-        try dbQueue.write { db in
-            try db.execute(
-                sql: """
-                    CREATE TABLE TMTask (
+            try dbQueue.write { db in
+                try db.execute(
+                    sql: """
+                        CREATE TABLE TMTask (
                         uuid TEXT PRIMARY KEY,
                         title TEXT NOT NULL,
                         notes TEXT,
@@ -118,13 +244,22 @@ struct ThingsDatabaseTests {
                         startDate INTEGER,
                         todayIndex INTEGER,
                         "index" INTEGER NOT NULL
+                        )
+                        """
+                )
+
+            try db.execute(
+                sql: """
+                    CREATE TABLE TMArea (
+                        uuid TEXT PRIMARY KEY,
+                        title TEXT NOT NULL,
+                        "index" INTEGER NOT NULL DEFAULT 0
                     )
                     """
             )
-
-            try db.execute(sql: "CREATE TABLE TMArea (uuid TEXT PRIMARY KEY, title TEXT NOT NULL)")
             try db.execute(sql: "CREATE TABLE TMTag (uuid TEXT PRIMARY KEY, title TEXT NOT NULL)")
             try db.execute(sql: "CREATE TABLE TMTaskTag (tasks TEXT NOT NULL, tags TEXT NOT NULL)")
+            try db.execute(sql: "CREATE TABLE TMAreaTag (areas TEXT NOT NULL, tags TEXT NOT NULL)")
             try db.execute(
                 sql: """
                     CREATE TABLE TMChecklistItem (
@@ -149,16 +284,59 @@ struct ThingsDatabaseTests {
         startDate: Int?,
         index: Int,
         status: Int = 0,
-        trashed: Int = 0
+        trashed: Int = 0,
+        type: Int = 0,
+        notes: String? = nil,
+        deadline: Int? = nil,
+        creationDate: Double = 0,
+        modificationDate: Double? = nil,
+        project: String? = nil,
+        area: String? = nil
     ) throws {
         try db.execute(
             sql: """
                 INSERT INTO TMTask (
                     uuid, title, notes, status, stopDate, deadline, creationDate, userModificationDate,
                     project, area, trashed, type, start, startDate, todayIndex, "index"
-                ) VALUES (?, ?, NULL, ?, NULL, NULL, 0, 0, NULL, NULL, ?, 0, ?, ?, 0, ?)
+                ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
                 """,
-            arguments: [id, title, status, trashed, start, startDate, index]
+            arguments: [
+                id,
+                title,
+                notes,
+                status,
+                deadline,
+                creationDate,
+                modificationDate ?? creationDate,
+                project,
+                area,
+                trashed,
+                type,
+                start,
+                startDate,
+                index,
+            ]
+        )
+    }
+
+    private func insertArea(_ db: Database, id: String, title: String, index: Int) throws {
+        try db.execute(
+            sql: "INSERT INTO TMArea (uuid, title, \"index\") VALUES (?, ?, ?)",
+            arguments: [id, title, index]
+        )
+    }
+
+    private func insertTag(_ db: Database, id: String, title: String) throws {
+        try db.execute(
+            sql: "INSERT INTO TMTag (uuid, title) VALUES (?, ?)",
+            arguments: [id, title]
+        )
+    }
+
+    private func insertTaskTag(_ db: Database, taskID: String, tagID: String) throws {
+        try db.execute(
+            sql: "INSERT INTO TMTaskTag (tasks, tags) VALUES (?, ?)",
+            arguments: [taskID, tagID]
         )
     }
 

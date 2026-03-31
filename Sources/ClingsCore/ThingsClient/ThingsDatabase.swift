@@ -401,3 +401,5 @@ public final class ThingsDatabase: Sendable {
         return (year << 16) | (month << 12) | (day << 7)
     }
 }
+
+extension ThingsDatabase: ThingsDatabaseReadable {}

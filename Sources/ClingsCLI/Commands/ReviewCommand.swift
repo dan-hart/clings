@@ -18,6 +18,11 @@ struct ReviewCommand: AsyncParsableCommand {
         3. Check project status
         4. Review deadlines
         5. Generate summary
+
+        EXAMPLES:
+          clings review
+          clings review status
+          clings review clear
         """,
         subcommands: [
             ReviewStartCommand.self,
@@ -33,7 +38,15 @@ struct ReviewCommand: AsyncParsableCommand {
 struct ReviewStartCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "start",
-        abstract: "Start or resume a weekly review"
+        abstract: "Start or resume a weekly review",
+        discussion: """
+        Walk through inbox, someday, projects, deadlines, and a short weekly
+        summary, then persist the review session locally.
+
+        EXAMPLES:
+          clings review
+          clings review start
+        """
     )
 
     @OptionGroup var output: OutputOptions
@@ -52,11 +65,22 @@ struct ReviewStartCommand: AsyncParsableCommand {
         print("\(bold)📋 Weekly Review\(reset)")
         print("\(dim)─────────────────────────────────────\(reset)")
 
-        let db = try ThingsDatabase()
+        let db = try CommandRuntime.makeDatabase()
+        let inbox = try db.fetchList(.inbox)
+        let someday = try db.fetchList(.someday)
+        let projects = try db.fetchProjects()
+        let upcoming = try db.fetchList(.upcoming)
+        let today = try db.fetchList(.today)
+        let summary = ReviewAssistant().summarize(
+            inbox: inbox,
+            someday: someday,
+            today: today,
+            upcoming: upcoming,
+            projects: projects
+        )
 
         // Step 1: Inbox
         print("\n\(bold)Step 1: Process Inbox\(reset)")
-        let inbox = try db.fetchList(.inbox)
         if inbox.isEmpty {
             print("  \(green)✓ Inbox is empty!\(reset)")
         } else {
@@ -66,7 +90,6 @@ struct ReviewStartCommand: AsyncParsableCommand {
 
         // Step 2: Someday/Maybe
         print("\n\(bold)Step 2: Review Someday/Maybe\(reset)")
-        let someday = try db.fetchList(.someday)
         print("  \(someday.count) items in Someday")
         if !someday.isEmpty {
             print("  \(dim)Consider: Which items should be activated?\(reset)")
@@ -74,58 +97,42 @@ struct ReviewStartCommand: AsyncParsableCommand {
 
         // Step 3: Projects
         print("\n\(bold)Step 3: Check Projects\(reset)")
-        let projects = try db.fetchProjects()
         let activeProjects = projects.filter { $0.status == .open }
         print("  \(activeProjects.count) active projects")
-
-        // Find stalled projects (no recent activity)
-        let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
-        var stalledCount = 0
-        for project in activeProjects {
-            // A project is "stalled" if it has no todos in today/upcoming
-            // This is a simplified heuristic
-            if let created = project.creationDate, created < weekAgo {
-                stalledCount += 1
-            }
-        }
-        if stalledCount > 0 {
-            print("  \(yellow)⚠ \(stalledCount) projects may need attention\(reset)")
+        if !summary.stalledProjects.isEmpty {
+            print("  \(yellow)⚠ \(summary.stalledProjects.count) projects may need attention\(reset)")
         }
 
         // Step 4: Deadlines
         print("\n\(bold)Step 4: Review Deadlines\(reset)")
-        let upcoming = try db.fetchList(.upcoming)
-        let today = try db.fetchList(.today)
-        let allOpen = upcoming + today
-
-        let nextWeek = Calendar.current.date(byAdding: .day, value: 7, to: Date())!
-        let upcomingDeadlines = allOpen.filter { todo in
-            guard let due = todo.dueDate else { return false }
-            return due <= nextWeek
-        }
-
-        if upcomingDeadlines.isEmpty {
+        if summary.upcomingDeadlines.isEmpty {
             print("  \(green)✓ No deadlines in the next 7 days\(reset)")
         } else {
-            print("  \(cyan)\(upcomingDeadlines.count) deadlines in the next 7 days:\(reset)")
-            for todo in upcomingDeadlines.prefix(5) {
+            print("  \(cyan)\(summary.upcomingDeadlines.count) deadlines in the next 7 days:\(reset)")
+            for todo in summary.upcomingDeadlines.prefix(5) {
                 let dueStr = todo.dueDate.map { formatDate($0) } ?? ""
                 print("    • \(todo.name) \(dim)(\(dueStr))\(reset)")
             }
-            if upcomingDeadlines.count > 5 {
-                print("    \(dim)... and \(upcomingDeadlines.count - 5) more\(reset)")
+            if summary.upcomingDeadlines.count > 5 {
+                print("    \(dim)... and \(summary.upcomingDeadlines.count - 5) more\(reset)")
             }
         }
 
         // Step 5: Summary
         print("\n\(bold)Step 5: Summary\(reset)")
-        let todayCount = try db.fetchList(.today).count
+        let todayCount = today.count
         let stats = try StatsCollector().collect(days: 7)
 
         print("  Today's todos:        \(todayCount)")
         print("  Completed this week:  \(green)\(stats.completedInPeriod)\(reset)")
         print("  Inbox items:          \(inbox.count)")
         print("  Overdue items:        \(stats.overdue > 0 ? "\(yellow)\(stats.overdue)\(reset)" : "0")")
+        if !summary.suggestedActions.isEmpty {
+            print("\n\(bold)Suggested Actions\(reset)")
+            for action in summary.suggestedActions {
+                print("  • \(action)")
+            }
+        }
 
         // Save session
         var updatedSession = session
@@ -149,7 +156,14 @@ struct ReviewStartCommand: AsyncParsableCommand {
 struct ReviewStatusCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "status",
-        abstract: "Show current review session status"
+        abstract: "Show current review session status",
+        discussion: """
+        Show the last saved review timestamp and whether the core review steps
+        have been marked complete.
+
+        EXAMPLES:
+          clings review status
+        """
     )
 
     @OptionGroup var output: OutputOptions
@@ -184,7 +198,13 @@ struct ReviewStatusCommand: AsyncParsableCommand {
 struct ReviewClearCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "clear",
-        abstract: "Clear the current review session"
+        abstract: "Clear the current review session",
+        discussion: """
+        Delete the saved weekly review session so the next run starts fresh.
+
+        EXAMPLES:
+          clings review clear
+        """
     )
 
     func run() async throws {
@@ -207,25 +227,22 @@ struct ReviewSession: Codable {
     }
 
     private static var sessionPath: URL {
-        let configDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".clings")
-        try? FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
-        return configDir.appendingPathComponent("review-session.json")
+        (try? ClingsConfig.fileURL(named: "review-session.json"))
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".clings/review-session.json")
     }
 
     static func load() -> ReviewSession? {
-        guard let data = try? Data(contentsOf: sessionPath) else { return nil }
-        return try? JSONDecoder().decode(ReviewSession.self, from: data)
+        if !FileManager.default.fileExists(atPath: sessionPath.path) {
+            return nil
+        }
+        return try? JSONFileStore.load(ReviewSession.self, from: "review-session.json", default: ReviewSession())
     }
 
     func save() {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(self) else { return }
-        try? data.write(to: Self.sessionPath)
+        try? JSONFileStore.save(self, to: "review-session.json")
     }
 
     static func clear() {
-        try? FileManager.default.removeItem(at: sessionPath)
+        try? JSONFileStore.delete(fileName: "review-session.json")
     }
 }
