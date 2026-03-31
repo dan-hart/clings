@@ -14,6 +14,9 @@ struct OutputOptions: ParsableArguments {
 
     @Flag(name: .long, help: "Suppress color output")
     var noColor = false
+
+    @Option(name: .long, help: "Custom todo line template, e.g. '{status} {name} [{project}]'")
+    var format: String?
 }
 
 // MARK: - Base List Command
@@ -25,19 +28,9 @@ protocol ListCommand: AsyncParsableCommand {
 
 extension ListCommand {
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
         let todos = try await client.fetchList(listView)
-
-        let formatter: OutputFormatter = output.json
-            ? JSONOutputFormatter()
-            : TextOutputFormatter(useColors: !output.noColor)
-
-        // Include list name in JSON for API compatibility
-        if output.json {
-            print(formatter.format(todos: todos, list: listView.displayName))
-        } else {
-            print(formatter.format(todos: todos))
-        }
+        print(renderTodos(todos, list: listView.displayName, output: output))
     }
 }
 
@@ -232,7 +225,7 @@ struct ProjectsCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
         let projects = try await client.fetchProjects()
 
         let formatter: OutputFormatter = output.json
@@ -268,7 +261,7 @@ struct AreasCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
         let areas = try await client.fetchAreas()
 
         let formatter: OutputFormatter = output.json

@@ -55,9 +55,20 @@ if [[ "${#missing_in_completions[@]}" -gt 0 ]]; then
   fail "zsh completions missing commands: ${missing_in_completions[*]}"
 fi
 
-PERSONAL_PATTERN='(Call mom|Buy milk|ProjectName|Q1 Planning|Sprint 12|Family)'
-if rg -n "$PERSONAL_PATTERN" Sources/ClingsCLI/Clings.swift Sources/ClingsCLI/Commands README.md -S >/dev/null; then
-  fail "found personal or placeholder examples in help/docs (update examples to neutral text)"
+PUBLIC_DOC_FILES=(
+  README.md
+  Sources/ClingsCLI/Clings.swift
+  Sources/ClingsCLI/Commands
+  docs
+)
+
+PERSONAL_PATTERN='(Call mom|Buy milk|ProjectName|Q1 Planning|Sprint 12|Family|expense report|Migration Project|Operations Project)'
+if rg -n "$PERSONAL_PATTERN" "${PUBLIC_DOC_FILES[@]}" -S >/dev/null; then
+  fail "found personal, work-specific, or placeholder examples in help/docs (update examples to neutral text)"
+fi
+
+if rg -n '/Users/' "${PUBLIC_DOC_FILES[@]}" -S >/dev/null; then
+  fail "found absolute local filesystem paths in public docs/help"
 fi
 
 echo "release-docs-check: OK"

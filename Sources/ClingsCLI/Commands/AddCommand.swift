@@ -12,10 +12,13 @@ struct AddCommand: AsyncParsableCommand {
         commandName: "add",
         abstract: "Add a new todo with natural language support",
         discussion: """
-        Supports natural language patterns:
-          clings add "Finalize release notes tomorrow #docs"
-          clings add "Submit expense report by friday !!"
-          clings add "Review deployment guide for Migration Project"
+        Supports natural language patterns for capture, scheduling, tags, notes,
+        and checklist items.
+
+        EXAMPLES:
+          clings add "Draft changelog entry tomorrow #docs"
+          clings add "Replace air filter by friday !!"
+          clings add "Review chapter outline for Writing Project"
           clings add "Task // notes go here"
           clings add "Task - checklist item 1 - checklist item 2"
         """
@@ -23,6 +26,9 @@ struct AddCommand: AsyncParsableCommand {
 
     @Argument(help: "The todo title (supports natural language)")
     var title: String
+
+    @Option(name: .long, help: "Start from a saved task template")
+    var template: String?
 
     @Option(name: .long, help: "Add notes to the todo")
     var notes: String?
@@ -49,7 +55,50 @@ struct AddCommand: AsyncParsableCommand {
 
     func run() async throws {
         let parser = TaskParser()
-        var parsed = parser.parse(title)
+        var parsed = ParsedTask(title: "")
+
+        if let template {
+            guard let savedTemplate = try TemplateStore.load(name: template) else {
+                throw ValidationError("Template not found: \(template)")
+            }
+
+            parsed = ParsedTask(
+                title: savedTemplate.title,
+                notes: savedTemplate.notes,
+                tags: savedTemplate.tags,
+                project: savedTemplate.project,
+                area: savedTemplate.area,
+                dueDate: parseFlexibleDate(savedTemplate.deadlineExpression),
+                whenDate: parseFlexibleDate(savedTemplate.whenExpression),
+                checklistItems: savedTemplate.checklistItems
+            )
+        }
+
+        let titleParsed = parser.parse(title)
+        if !titleParsed.title.isEmpty {
+            parsed.title = titleParsed.title
+        }
+        if let parsedNotes = titleParsed.notes, !parsedNotes.isEmpty {
+            parsed.notes = parsedNotes
+        }
+        if !titleParsed.tags.isEmpty {
+            parsed.tags.append(contentsOf: titleParsed.tags)
+        }
+        if let parsedProject = titleParsed.project {
+            parsed.project = parsedProject
+        }
+        if let parsedArea = titleParsed.area {
+            parsed.area = parsedArea
+        }
+        if let parsedWhen = titleParsed.whenDate {
+            parsed.whenDate = parsedWhen
+        }
+        if let parsedDue = titleParsed.dueDate {
+            parsed.dueDate = parsedDue
+        }
+        if !titleParsed.checklistItems.isEmpty {
+            parsed.checklistItems = titleParsed.checklistItems
+        }
 
         // Command line options override parsed values
         if let notes = notes {
@@ -65,11 +114,13 @@ struct AddCommand: AsyncParsableCommand {
             parsed.area = area
         }
         if let when = when {
-            parsed.whenDate = parseSimpleDate(when)
+            parsed.whenDate = parseFlexibleDate(when)
         }
         if let deadline = deadline {
-            parsed.dueDate = parseSimpleDate(deadline)
+            parsed.dueDate = parseFlexibleDate(deadline)
         }
+
+        parsed.tags = Array(NSOrderedSet(array: parsed.tags)) as? [String] ?? parsed.tags
 
         // Handle parse-only mode
         if parseOnly {
@@ -77,8 +128,8 @@ struct AddCommand: AsyncParsableCommand {
             return
         }
 
-        let client = ThingsClientFactory.create()
-        _ = try await client.createTodo(
+        let client = CommandRuntime.makeClient()
+        let id = try await client.createTodo(
             name: parsed.title,
             notes: parsed.notes,
             when: parsed.whenDate,
@@ -88,26 +139,9 @@ struct AddCommand: AsyncParsableCommand {
             area: parsed.area,
             checklistItems: parsed.checklistItems
         )
+        try UndoStore.record(UndoEntry(operation: .create, todoID: id, snapshot: nil))
 
-        let outputFormatter: OutputFormatter = output.json
-            ? JSONOutputFormatter()
-            : TextOutputFormatter(useColors: !output.noColor)
-
-        print(outputFormatter.format(message: "Created: \(parsed.title)"))
-    }
-
-    private func parseSimpleDate(_ str: String) -> Date? {
-        let calendar = Calendar.current
-        let now = Date()
-        let lower = str.lowercased()
-
-        if lower == "today" {
-            return calendar.startOfDay(for: now)
-        }
-        if lower == "tomorrow" {
-            return calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
-        }
-        return nil
+        print(renderMessage("Created: \(parsed.title)", output: output))
     }
 
     private func printParsedResult(_ parsed: ParsedTask) {

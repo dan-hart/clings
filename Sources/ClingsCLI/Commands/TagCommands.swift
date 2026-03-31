@@ -47,13 +47,20 @@ struct TagsListCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "list",
         abstract: "List all tags",
+        discussion: """
+        Show every tag currently available in Things.
+
+        EXAMPLES:
+          clings tags list
+          clings tags ls --json
+        """,
         aliases: ["ls"]
     )
 
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
         let tags = try await client.fetchTags()
 
         let formatter: OutputFormatter = output.json
@@ -92,7 +99,7 @@ struct TagsAddCommand: AsyncParsableCommand {
             throw ThingsError.invalidState("Tag name cannot be empty")
         }
 
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
         let tag = try await client.createTag(name: trimmedName)
 
         let formatter: OutputFormatter = output.json
@@ -143,14 +150,14 @@ struct TagsDeleteCommand: AsyncParsableCommand {
         // Confirmation unless --force
         if !force {
             print("Delete tag '\(trimmedName)'? This will remove it from all todos. [y/N] ", terminator: "")
-            guard let response = readLine()?.lowercased(),
+            guard let response = CommandRuntime.inputReader()?.lowercased(),
                   response == "y" || response == "yes" else {
                 print("Cancelled")
                 return
             }
         }
 
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
         try await client.deleteTag(name: trimmedName)
 
         let formatter: OutputFormatter = output.json
@@ -201,7 +208,7 @@ struct TagsRenameCommand: AsyncParsableCommand {
             throw ThingsError.invalidState("Old and new names are the same")
         }
 
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
         try await client.renameTag(oldName: trimmedOld, newName: trimmedNew)
 
         let formatter: OutputFormatter = output.json

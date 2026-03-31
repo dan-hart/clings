@@ -288,10 +288,9 @@ struct FilterParserTests {
                 try FilterParser.parse("NOT status = completed"),
             ]
 
-            for expr in exprs {
-                // Should not throw
-                #expect(expr != nil)
-            }
+            #expect(String(describing: exprs[0]) == String(describing: exprs[1]))
+            #expect(String(describing: exprs[2]) == String(describing: exprs[3]))
+            #expect(String(describing: exprs[4]) == String(describing: exprs[5]))
         }
     }
 
@@ -335,8 +334,11 @@ struct FilterParserTests {
                 "status = open AND (tags CONTAINS 'urgent' OR project IS NOT NULL) AND due <= tomorrow"
             )
 
-            // Just verify it parses without error
-            #expect(expr != nil)
+            if case .compound = expr {
+                // Expected compound expression
+            } else {
+                Issue.record("Expected compound expression")
+            }
         }
 
         @Test func multipleAndConditions() throws {

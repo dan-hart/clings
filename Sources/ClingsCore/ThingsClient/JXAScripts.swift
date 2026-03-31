@@ -210,6 +210,23 @@ public enum JXAScripts {
         """
     }
 
+    /// Re-open a todo by ID.
+    public static func reopenTodo(id: String) -> String {
+        """
+        (() => {
+            const app = Application('Things3');
+            const todo = app.toDos.byId('\(id.jxaEscaped)');
+
+            if (!todo.exists()) {
+                return JSON.stringify({ success: false, error: 'Todo not found' });
+            }
+
+            todo.status = 'open';
+            return JSON.stringify({ success: true, id: '\(id.jxaEscaped)' });
+        })()
+        """
+    }
+
     /// Cancel a todo by ID.
     public static func cancelTodo(id: String) -> String {
         """

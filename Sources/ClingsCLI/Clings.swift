@@ -15,10 +15,15 @@ struct Clings: AsyncParsableCommand {
         discussion: """
         clings provides fast, scriptable access to Things 3 from the command line.
 
-        QUICK START:
+        USAGE:
+          clings <subcommand> [options]
+
+        EXAMPLES:
           clings today              Show today's todos
           clings inbox              Show inbox
-          clings add "Review release checklist"     Add a new todo
+          clings add "Draft changelog entry tomorrow #docs"
+          clings views run docs-today
+          clings doctor --verbose
 
         OUTPUT FORMATS:
           --json                    Machine-readable JSON for scripting
@@ -51,6 +56,12 @@ struct Clings: AsyncParsableCommand {
             DeleteCommand.self,
             UpdateCommand.self,
             SearchCommand.self,
+            ViewsCommand.self,
+            TemplateCommand.self,
+            UndoCommand.self,
+            FocusCommand.self,
+            PickCommand.self,
+            DoctorCommand.self,
 
             // Bulk operations
             BulkCommand.self,

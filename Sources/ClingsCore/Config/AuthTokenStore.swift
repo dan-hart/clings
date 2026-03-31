@@ -8,9 +8,7 @@ import Foundation
 /// Manages the Things 3 auth token used for URL scheme operations (e.g., heading updates).
 public enum AuthTokenStore {
     private static var configDir: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config")
-            .appendingPathComponent("clings")
+        ClingsConfig.directoryURL
     }
 
     private static var tokenFile: URL {

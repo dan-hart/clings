@@ -21,8 +21,8 @@ struct ProjectCommand: AsyncParsableCommand {
         EXAMPLES:
           clings project                    List all projects (same as 'clings projects')
           clings project list               Same as above
-          clings project add "Release Readiness"  Create a new project
-          clings project add "Documentation Refresh" --area "Operations" --deadline 2025-01-31
+          clings project add "Documentation Refresh"  Create a new project
+          clings project add "Writing Refresh" --area "Writing" --deadline 2025-01-31
 
         SEE ALSO:
           projects, add --project, areas
@@ -30,6 +30,7 @@ struct ProjectCommand: AsyncParsableCommand {
         subcommands: [
             ProjectListCommand.self,
             ProjectAddCommand.self,
+            ProjectAuditCommand.self,
         ],
         defaultSubcommand: ProjectListCommand.self
     )
@@ -41,13 +42,20 @@ struct ProjectListCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "list",
         abstract: "List all projects",
+        discussion: """
+        Show every project currently available in Things.
+
+        EXAMPLES:
+          clings project list
+          clings project ls --json
+        """,
         aliases: ["ls"]
     )
 
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
         let projects = try await client.fetchProjects()
 
         let formatter: OutputFormatter = output.json
@@ -68,10 +76,10 @@ struct ProjectAddCommand: AsyncParsableCommand {
         Creates a new project in Things 3.
 
         EXAMPLES:
-          clings project add "Release Readiness"
-          clings project add "Feature Rollout" --notes "Implementation of rollout tasks"
-          clings project add "Operations Sprint" --area "Operations" --when today
-          clings project add "Vendor Evaluation" --deadline 2025-06-01 --tags "planning,research"
+          clings project add "Documentation Refresh"
+          clings project add "Reading List" --notes "Collect and organize reference material"
+          clings project add "Writing Sprint" --area "Writing" --when today
+          clings project add "Reference Review" --deadline 2025-06-01 --tags "planning,research"
         """
     )
 
@@ -101,7 +109,7 @@ struct ProjectAddCommand: AsyncParsableCommand {
             throw ThingsError.invalidState("Project title cannot be empty")
         }
 
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
         let parsedWhen = try when.map { try parseWhenDate($0) }
         let parsedDeadline = try deadline.map { try parseWhenDate($0) }
         let tagList = tags?
@@ -143,5 +151,49 @@ struct ProjectAddCommand: AsyncParsableCommand {
             return date
         }
         throw ThingsError.invalidState("Invalid date format: \(str). Use YYYY-MM-DD, 'today', or 'tomorrow'.")
+    }
+}
+
+struct ProjectAuditCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "audit",
+        abstract: "Audit project health and missing next actions",
+        discussion: """
+        Inspect open projects and flag missing next actions, overdue work, and
+        other stalled-project signals.
+
+        EXAMPLES:
+          clings project audit
+          clings project audit --json
+        """
+    )
+
+    @OptionGroup var output: OutputOptions
+
+    func run() async throws {
+        let client = CommandRuntime.makeClient()
+        let report = ProjectAudit().audit(
+            projects: try await client.fetchProjects(),
+            todos: try await fetchOpenTodos(client: client)
+        )
+
+        if output.json {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(report)
+            print(String(data: data, encoding: .utf8) ?? "{}")
+            return
+        }
+
+        if report.items.isEmpty {
+            print("No open projects to audit")
+            return
+        }
+
+        for item in report.items {
+            let findings = item.findings.isEmpty ? "Healthy" : item.findings.joined(separator: ", ")
+            print("\(item.project.name): \(findings)")
+        }
     }
 }

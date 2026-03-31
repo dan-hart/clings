@@ -35,13 +35,8 @@ struct SearchCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
         let todos = try await client.search(query: query)
-
-        let formatter: OutputFormatter = output.json
-            ? JSONOutputFormatter()
-            : TextOutputFormatter(useColors: !output.noColor)
-
-        print(formatter.format(todos: todos))
+        print(renderTodos(todos, list: "Search", output: output))
     }
 }

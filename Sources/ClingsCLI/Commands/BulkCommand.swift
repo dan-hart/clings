@@ -22,7 +22,7 @@ struct BulkCommand: AsyncParsableCommand {
         EXAMPLES:
           clings bulk complete --where "tags CONTAINS 'done'"
           clings bulk cancel --list inbox --dry-run
-          clings bulk move --to "Archive" --where "status = open"
+          clings bulk move --to "Archive" --where "tags CONTAINS 'draft'"
 
         SEE ALSO:
           filter, complete, cancel
@@ -76,7 +76,7 @@ struct BulkCompleteCommand: AsyncParsableCommand {
     var list: String = "today"
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
 
         // Get list view
         guard let listView = ListView(rawValue: list.lowercased()) else {
@@ -114,7 +114,7 @@ struct BulkCompleteCommand: AsyncParsableCommand {
         // Confirm unless --yes
         if !bulkOptions.yes {
             print("\nProceed? (y/N): ", terminator: "")
-            guard let response = readLine(), response.lowercased() == "y" else {
+            guard let response = CommandRuntime.inputReader(), response.lowercased() == "y" else {
                 print(formatter.format(message: "Aborted"))
                 return
             }
@@ -147,7 +147,7 @@ struct BulkCancelCommand: AsyncParsableCommand {
 
         EXAMPLES:
           clings bulk cancel --list inbox
-          clings bulk cancel --where "status = open AND project IS NULL"
+          clings bulk cancel --where "status = open AND tags CONTAINS 'cleanup'"
           clings bulk cancel --dry-run
 
         SEE ALSO:
@@ -161,7 +161,7 @@ struct BulkCancelCommand: AsyncParsableCommand {
     var list: String = "today"
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
 
         guard let listView = ListView(rawValue: list.lowercased()) else {
             throw ThingsError.invalidState("Unknown list: \(list)")
@@ -194,7 +194,7 @@ struct BulkCancelCommand: AsyncParsableCommand {
 
         if !bulkOptions.yes {
             print("\nProceed? (y/N): ", terminator: "")
-            guard let response = readLine(), response.lowercased() == "y" else {
+            guard let response = CommandRuntime.inputReader(), response.lowercased() == "y" else {
                 print(formatter.format(message: "Aborted"))
                 return
             }
@@ -246,7 +246,7 @@ struct BulkTagCommand: AsyncParsableCommand {
     var list: String = "today"
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
 
         guard let listView = ListView(rawValue: list.lowercased()) else {
             throw ThingsError.invalidState("Unknown list: \(list)")
@@ -281,7 +281,7 @@ struct BulkTagCommand: AsyncParsableCommand {
 
         if !bulkOptions.yes {
             print("\nProceed? (y/N): ", terminator: "")
-            guard let response = readLine(), response.lowercased() == "y" else {
+            guard let response = CommandRuntime.inputReader(), response.lowercased() == "y" else {
                 print(formatter.format(message: "Aborted"))
                 return
             }
@@ -310,7 +310,7 @@ struct BulkMoveCommand: AsyncParsableCommand {
         Moves multiple todos to a project based on filter criteria.
 
         EXAMPLES:
-          clings bulk move --to "Operations Project" --list inbox
+          clings bulk move --to "Archive" --list inbox
           clings bulk move --to "Archive" --where "tags CONTAINS 'done'"
           clings bulk move --to "Backlog" --dry-run
 
@@ -328,7 +328,7 @@ struct BulkMoveCommand: AsyncParsableCommand {
     var list: String = "today"
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = CommandRuntime.makeClient()
 
         guard let listView = ListView(rawValue: list.lowercased()) else {
             throw ThingsError.invalidState("Unknown list: \(list)")
@@ -361,7 +361,7 @@ struct BulkMoveCommand: AsyncParsableCommand {
 
         if !bulkOptions.yes {
             print("\nProceed? (y/N): ", terminator: "")
-            guard let response = readLine(), response.lowercased() == "y" else {
+            guard let response = CommandRuntime.inputReader(), response.lowercased() == "y" else {
                 print(formatter.format(message: "Aborted"))
                 return
             }

@@ -7,12 +7,17 @@ import Foundation
 
 /// Hybrid Things client that uses SQLite for fast reads and JXA/AppleScript for writes.
 public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable {
-    private let database: ThingsDatabase
-    private let jxaBridge: JXABridge
+    private let database: any ThingsDatabaseReadable
+    private let jxaBridge: any JXAExecuting
 
     public init() throws {
         self.database = try ThingsDatabase()
         self.jxaBridge = JXABridge()
+    }
+
+    init(database: any ThingsDatabaseReadable, jxaBridge: any JXAExecuting) {
+        self.database = database
+        self.jxaBridge = jxaBridge
     }
 
     // MARK: - Reads (via SQLite - fast)
@@ -122,6 +127,14 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
 
     public func completeTodo(id: String) async throws {
         let script = JXAScripts.completeTodo(id: id)
+        let result = try await jxaBridge.executeJSON(script, as: MutationResult.self)
+        if !result.success {
+            throw ThingsError.operationFailed(result.error ?? "Unknown error")
+        }
+    }
+
+    public func reopenTodo(id: String) async throws {
+        let script = JXAScripts.reopenTodo(id: id)
         let result = try await jxaBridge.executeJSON(script, as: MutationResult.self)
         if !result.success {
             throw ThingsError.operationFailed(result.error ?? "Unknown error")

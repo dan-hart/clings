@@ -18,6 +18,13 @@ struct StatsCommand: AsyncParsableCommand {
         - Overdue items
         - Tag distribution
 
+        EXAMPLES:
+          clings stats
+          clings stats --days 7
+          clings stats --json
+          clings stats trends
+          clings stats heatmap
+
         Use 'stats trends' for completion trends over time.
         Use 'stats heatmap' for a GitHub-style contribution calendar.
         """,
@@ -203,7 +210,7 @@ struct Stats: Codable {
 
 struct StatsCollector {
     func collect(days: Int) throws -> Stats {
-        let db = try ThingsDatabase()
+        let db = try CommandRuntime.makeDatabase()
 
         // Fetch all lists
         let inbox = try db.fetchList(.inbox)
@@ -285,7 +292,7 @@ struct StatsCollector {
 
     /// Collect daily completion counts for trends/heatmap.
     func collectDailyCompletions(days: Int) throws -> [Date: Int] {
-        let db = try ThingsDatabase()
+        let db = try CommandRuntime.makeDatabase()
         let logbook = try db.fetchList(.logbook)
 
         let calendar = Calendar.current
