@@ -8,6 +8,7 @@
 [![CI](https://github.com/dan-hart/clings/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/dan-hart/clings/actions/workflows/ci.yml)
 [![Built with Swift](https://img.shields.io/badge/built%20with-Swift-FA7343.svg)](https://swift.org/)
 [![macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos/)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-ffdd00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/codedbydan)
 
 **clings** brings the power of [Things 3](https://culturedcode.com/things/) to your terminal. Manage tasks, projects, and workflows with natural language, bulk operations, and powerful search - all without leaving the command line.
 
@@ -448,3 +449,7 @@ GNU General Public License v3.0 (GPLv3) - see [LICENSE](LICENSE)
 
 - **Repository:** https://github.com/dan-hart/clings
 - **Things 3:** https://culturedcode.com/things/
+
+## Support
+
+<a href="https://buymeacoffee.com/codedbydan"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" width="217" height="60"></a>
