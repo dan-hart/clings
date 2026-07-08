@@ -11,8 +11,8 @@ import Testing
 /// Regression coverage for https://github.com/dan-hart/clings/issues/5
 @Suite("ThingsDatabase")
 struct ThingsDatabaseTests {
-    @Test("Issue #5: today list excludes non-today start=1 tasks")
-    func todayListExcludesNonTodayStartTasks() throws {
+    @Test("Today list includes regular scheduled tasks with a start date")
+    func todayListIncludesRegularScheduledTasks() throws {
         let fixture = try makeFixtureDatabase()
 
         let todayCode = thingsDateCode(Date())
@@ -29,7 +29,35 @@ struct ThingsDatabaseTests {
 
         let database = ThingsDatabase(dbPath: fixture.path)
         let todoIDs = Set(try database.fetchList(.today).map(\.id))
-        #expect(todoIDs == ["today-task"])
+        #expect(todoIDs.contains("today-task"))
+        #expect(todoIDs.contains("yesterday-task"))
+        #expect(todoIDs.contains("tomorrow-task"))
+        #expect(!todoIDs.contains("no-date-task"))
+        #expect(todoIDs.contains("start-two-today"))
+    }
+
+    @Test("Today list includes unconfirmed and overdue tasks")
+    func todayListIncludesUnconfirmedAndOverdueTasks() throws {
+        let fixture = try makeFixtureDatabase()
+
+        let todayCode = thingsDateCode(Date())
+        let yesterdayCode = todayCode - 128
+        let tomorrowCode = todayCode + 128
+
+        try fixture.db.write { db in
+            try insertTask(db, id: "scheduled-yesterday", title: "Scheduled Yesterday", start: 2, startDate: yesterdayCode, index: 0)
+            try insertTask(db, id: "scheduled-tomorrow", title: "Scheduled Tomorrow", start: 2, startDate: tomorrowCode, index: 1)
+            try insertTask(db, id: "overdue-deadline", title: "Overdue Deadline", start: 0, startDate: nil, index: 2, deadline: yesterdayCode)
+            try insertTask(db, id: "suppressed-deadline", title: "Suppressed Deadline", start: 0, startDate: nil, index: 3, deadline: yesterdayCode, deadlineSuppressionDate: todayCode)
+        }
+
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let todoIDs = Set(try database.fetchList(.today).map(\.id))
+
+        #expect(todoIDs.contains("scheduled-yesterday"))
+        #expect(!todoIDs.contains("scheduled-tomorrow"))
+        #expect(todoIDs.contains("overdue-deadline"))
+        #expect(!todoIDs.contains("suppressed-deadline"))
     }
 
     @Test("Issue #5: anytime list uses packed Things date format")
@@ -234,6 +262,7 @@ struct ThingsDatabaseTests {
                         status INTEGER NOT NULL,
                         stopDate REAL,
                         deadline INTEGER,
+                        deadlineSuppressionDate INTEGER,
                         creationDate REAL NOT NULL,
                         userModificationDate REAL NOT NULL,
                         project TEXT,
@@ -288,6 +317,7 @@ struct ThingsDatabaseTests {
         type: Int = 0,
         notes: String? = nil,
         deadline: Int? = nil,
+        deadlineSuppressionDate: Int? = nil,
         creationDate: Double = 0,
         modificationDate: Double? = nil,
         project: String? = nil,
@@ -296,9 +326,9 @@ struct ThingsDatabaseTests {
         try db.execute(
             sql: """
                 INSERT INTO TMTask (
-                    uuid, title, notes, status, stopDate, deadline, creationDate, userModificationDate,
+                    uuid, title, notes, status, stopDate, deadline, deadlineSuppressionDate, creationDate, userModificationDate,
                     project, area, trashed, type, start, startDate, todayIndex, "index"
-                ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
                 """,
             arguments: [
                 id,
@@ -306,6 +336,7 @@ struct ThingsDatabaseTests {
                 notes,
                 status,
                 deadline,
+                deadlineSuppressionDate,
                 creationDate,
                 modificationDate ?? creationDate,
                 project,

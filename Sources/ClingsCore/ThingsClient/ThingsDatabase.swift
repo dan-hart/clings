@@ -89,12 +89,14 @@ public final class ThingsDatabase: Sendable {
                            userModificationDate, project, area
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0
-                          -- Issue #5: avoid pulling entire anytime backlog.
-                          -- https://github.com/dan-hart/clings/issues/5
-                          AND start = 1 AND startDate = ?
+                          AND (
+                              (start = 1 AND startDate IS NOT NULL)
+                              OR (start = 2 AND startDate IS NOT NULL AND startDate <= ?)
+                              OR (startDate IS NULL AND deadline IS NOT NULL AND deadline <= ? AND deadlineSuppressionDate IS NULL)
+                          )
                     ORDER BY todayIndex, "index"
                     """
-                arguments = [todayCode]
+                arguments = [todayCode, todayCode]
 
             case .upcoming:
                 let todayCode = thingsDateCode(Date())
