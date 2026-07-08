@@ -48,8 +48,8 @@ public final class ThingsDatabase: Sendable {
         self.dbPath = path
     }
 
-    /// Initialize with an explicit database path (used by tests).
-    init(dbPath: String) {
+    /// Initialize with an explicit database path.
+    public init(dbPath: String) {
         self.dbPath = dbPath
     }
 
