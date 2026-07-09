@@ -9,7 +9,7 @@
 - **License:** GNU General Public License v3.0 (GPLv3)
 - **Platform:** macOS only (requires Things 3 installed)
 - **Technology:** Swift + SQLite (reads) + JavaScript for Automation (JXA) via `osascript` (writes)
-- **Version:** 0.3.0
+- **Version:** 0.3.1
 
 ## Build & Run
 
