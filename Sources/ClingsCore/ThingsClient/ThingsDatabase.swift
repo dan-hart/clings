@@ -90,13 +90,13 @@ public final class ThingsDatabase: Sendable {
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0
                           AND (
-                              (start = 1 AND startDate IS NOT NULL)
+                              (start = 1 AND startDate IS NOT NULL AND startDate <= ?)
                               OR (start = 2 AND startDate IS NOT NULL AND startDate <= ?)
                               OR (startDate IS NULL AND deadline IS NOT NULL AND deadline <= ? AND deadlineSuppressionDate IS NULL)
                           )
-                    ORDER BY todayIndex, "index"
+                    ORDER BY todayIndex IS NULL, todayIndex, "index"
                     """
-                arguments = [todayCode, todayCode]
+                arguments = [todayCode, todayCode, todayCode]
 
             case .upcoming:
                 let todayCode = thingsDateCode(Date())
