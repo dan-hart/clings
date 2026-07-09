@@ -15,6 +15,11 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         self.jxaBridge = JXABridge()
     }
 
+    public init(databasePath: String, bridge: any JXAExecuting = JXABridge()) {
+        self.database = ThingsDatabase(dbPath: databasePath)
+        self.jxaBridge = bridge
+    }
+
     init(database: any ThingsDatabaseReadable, jxaBridge: any JXAExecuting) {
         self.database = database
         self.jxaBridge = jxaBridge
