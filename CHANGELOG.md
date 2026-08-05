@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`someday`/`anytime`/etc. list drift from Things**: `ThingsDatabase` list queries (`fetchList`, `search`) no longer include Things' internal repeating-task templates, which are hidden generator rows (identified by a non-null `rt1_recurrenceRule`) rather than real todos.
+- **Deadline decoding**: `deadline` values are now decoded using Things' packed date format (`(year << 16) | (month << 12) | (day << 7)`) instead of being misread as raw seconds since the Cocoa reference date. The previous decoding produced a nonsensical shared date (e.g. April 23, 2009) for every todo carrying Things' year-4001 "no real deadline" sentinel; that sentinel now correctly decodes to `nil`.
+- **Trashed project descendants**: Todos filed (directly, or via a heading) under a trashed project are now excluded from every list except Trash, matching Things' own behavior. Previously only a todo's own `trashed` flag was checked, so items under a trashed project kept appearing everywhere.
+- **`someday` vs. a concrete start date**: The `someday` list now excludes todos that also carry a `startDate`, matching how Things itself buckets them (under Anytime/Upcoming instead of Someday).
+- **Project resolution through headings**: Todos filed under a heading (rather than directly under a project) now correctly resolve their parent project instead of reporting no project.
+- **Untitled todos rendered as a blank line**: `TextOutputFormatter` now renders todos with an empty title as `(no title)` in both list and detail views, instead of a bare checkbox with nothing after it.
+
 ## [0.3.1] - 2026-07-09
 
 ### Added

@@ -91,9 +91,11 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
     public var isOpen: Bool { status == .open }
 
     /// Whether the task is overdue (has a due date in the past and is still open).
+    /// Compared at calendar-day granularity, since due dates are date-only:
+    /// a task due today is not overdue until tomorrow.
     public var isOverdue: Bool {
         guard status == .open, let dueDate = dueDate else { return false }
-        return dueDate < Date()
+        return dueDate < Calendar.current.startOfDay(for: Date())
     }
 
     /// Human-readable summary for display.

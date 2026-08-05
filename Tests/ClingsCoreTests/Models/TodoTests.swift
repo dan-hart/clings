@@ -108,6 +108,14 @@ struct TodoTests {
             #expect(!todo.isOverdue)
         }
 
+        @Test func isNotOverdueWhenDueDateIsToday() {
+            // Deadlines are date-only (local midnight). A task due "today"
+            // must not read as overdue merely because midnight has passed.
+            let todayMidnight = Calendar.current.startOfDay(for: Date())
+            let todo = Todo(id: "t1", name: "Due Today", status: .open, dueDate: todayMidnight)
+            #expect(!todo.isOverdue)
+        }
+
         @Test func summaryWithProjectAndTags() {
             let project = Project(id: "p1", name: "MyProject")
             let tag1 = Tag(name: "work")

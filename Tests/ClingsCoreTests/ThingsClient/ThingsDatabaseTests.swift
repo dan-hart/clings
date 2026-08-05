@@ -176,7 +176,8 @@ struct ThingsDatabaseTests {
 
     @Test func fetchProjectsIncludesAreaTagsAndDates() throws {
         let fixture = try makeFixtureDatabase()
-        let deadline = 1_234
+        let deadlineComponents = DateComponents(year: 2030, month: 6, day: 15)
+        let deadline = (2030 << 16) | (6 << 12) | (15 << 7)
         let createdAt = 4_567.0
 
         try fixture.db.write { db in
@@ -207,8 +208,33 @@ struct ThingsDatabaseTests {
         #expect(projects[0].notes == "Project notes")
         #expect(projects[0].area?.name == "Work")
         #expect(projects[0].tags.map(\.name) == ["docs"])
-        #expect(projects[0].dueDate == Date(timeIntervalSinceReferenceDate: TimeInterval(deadline)))
+        #expect(projects[0].dueDate == gregorianDate(from: deadlineComponents))
         #expect(projects[0].creationDate == Date(timeIntervalSinceReferenceDate: TimeInterval(createdAt)))
+    }
+
+    @Test("fetchProjects excludes repeating-project templates")
+    func fetchProjectsExcludesRecurrenceTemplates() throws {
+        let fixture = try makeFixtureDatabase()
+
+        try fixture.db.write { db in
+            try insertTask(
+                db,
+                id: "recurring-project-template",
+                title: "Weekly Review",
+                start: 0,
+                startDate: nil,
+                index: 0,
+                type: 1,
+                recurrenceRule: "<plist/>"
+            )
+            try insertTask(db, id: "real-project", title: "Real Project", start: 0, startDate: nil, index: 1, type: 1)
+        }
+
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let projectIDs = Set(try database.fetchProjects().map(\.id))
+
+        #expect(!projectIDs.contains("recurring-project-template"))
+        #expect(projectIDs.contains("real-project"))
     }
 
     @Test func fetchAreasAndTagsReturnAttachedMetadata() throws {
@@ -236,6 +262,8 @@ struct ThingsDatabaseTests {
 
     @Test func fetchTodoAndSearchReturnRichTodoMetadata() throws {
         let fixture = try makeFixtureDatabase()
+        let deadlineComponents = DateComponents(year: 2030, month: 1, day: 2)
+        let deadline = (2030 << 16) | (1 << 12) | (2 << 7)
 
         try fixture.db.write { db in
             try insertArea(db, id: "area-work", title: "Work", index: 0)
@@ -257,7 +285,7 @@ struct ThingsDatabaseTests {
                 startDate: thingsDateCode(Date()),
                 index: 1,
                 notes: "Coordinate release notes",
-                deadline: 900,
+                deadline: deadline,
                 creationDate: 100,
                 modificationDate: 200,
                 project: "project-1",
@@ -285,10 +313,135 @@ struct ThingsDatabaseTests {
         #expect(todo.tags.map(\.name) == ["docs"])
         #expect(todo.checklistItems.map(\.name) == ["Draft outline", "Publish examples"])
         #expect(todo.checklistItems.map(\.completed) == [true, false])
-        #expect(todo.dueDate == Date(timeIntervalSinceReferenceDate: 900))
+        #expect(todo.dueDate == gregorianDate(from: deadlineComponents))
         #expect(todo.creationDate == Date(timeIntervalSinceReferenceDate: 100))
         #expect(todo.modificationDate == Date(timeIntervalSinceReferenceDate: 200))
         #expect(searchResults.map(\.id) == ["todo-1"])
+    }
+
+    @Test("Deadline sentinel (Things year 4001, \"no real deadline\") decodes to nil")
+    func deadlineSentinelDecodesToNoDueDate() throws {
+        let fixture = try makeFixtureDatabase()
+        let sentinelCode = (4001 << 16) | (1 << 12) | (1 << 7)
+
+        try fixture.db.write { db in
+            try insertTask(db, id: "no-real-deadline", title: "No Real Deadline", start: 0, startDate: nil, index: 0, deadline: sentinelCode)
+        }
+
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let todo = try database.fetchTodo(id: "no-real-deadline")
+        #expect(todo.dueDate == nil)
+    }
+
+    @Test("List queries exclude repeating-task templates")
+    func listQueriesExcludeRecurrenceTemplates() throws {
+        let fixture = try makeFixtureDatabase()
+        let todayCode = thingsDateCode(Date())
+
+        try fixture.db.write { db in
+            try insertTask(
+                db,
+                id: "recurring-template",
+                title: "Pay Mortgage",
+                start: 2,
+                startDate: nil,
+                index: 0,
+                recurrenceRule: "<plist/>"
+            )
+            try insertTask(db, id: "real-someday-task", title: "Real Someday Task", start: 2, startDate: nil, index: 1)
+            try insertTask(
+                db,
+                id: "recurring-anytime-template",
+                title: "Recurring Anytime",
+                start: 1,
+                startDate: todayCode,
+                index: 2,
+                recurrenceRule: "<plist/>"
+            )
+        }
+
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let somedayIDs = Set(try database.fetchList(.someday).map(\.id))
+        let anytimeIDs = Set(try database.fetchList(.anytime).map(\.id))
+
+        #expect(!somedayIDs.contains("recurring-template"))
+        #expect(somedayIDs.contains("real-someday-task"))
+        #expect(!anytimeIDs.contains("recurring-anytime-template"))
+    }
+
+    @Test("Someday list excludes tasks that also carry a concrete start date")
+    func somedayListExcludesTasksWithStartDate() throws {
+        let fixture = try makeFixtureDatabase()
+        let todayCode = thingsDateCode(Date())
+
+        try fixture.db.write { db in
+            try insertTask(db, id: "someday-no-date", title: "Someday No Date", start: 2, startDate: nil, index: 0)
+            try insertTask(db, id: "someday-with-date", title: "Someday With Date", start: 2, startDate: todayCode, index: 1)
+        }
+
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let somedayIDs = Set(try database.fetchList(.someday).map(\.id))
+
+        #expect(somedayIDs.contains("someday-no-date"))
+        #expect(!somedayIDs.contains("someday-with-date"))
+    }
+
+    @Test("List queries exclude todos whose ancestor project is trashed, even directly or via a heading")
+    func listQueriesExcludeDescendantsOfTrashedProjects() throws {
+        let fixture = try makeFixtureDatabase()
+
+        try fixture.db.write { db in
+            try insertTask(db, id: "live-project", title: "Live Project", start: 0, startDate: nil, index: 0, type: 1)
+            try insertTask(db, id: "trashed-project", title: "Trashed Project", start: 0, startDate: nil, index: 1, trashed: 1, type: 1)
+            try insertTask(db, id: "heading-in-trashed-project", title: "Heading", start: 0, startDate: nil, index: 2, type: 2, project: "trashed-project")
+
+            try insertTask(db, id: "task-in-live-project", title: "Task In Live Project", start: 2, startDate: nil, index: 3, project: "live-project")
+            try insertTask(db, id: "task-in-trashed-project", title: "Task In Trashed Project", start: 2, startDate: nil, index: 4, project: "trashed-project")
+            try insertTask(db, id: "task-under-trashed-heading", title: "Task Under Trashed Heading", start: 2, startDate: nil, index: 5, heading: "heading-in-trashed-project")
+        }
+
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let somedayIDs = Set(try database.fetchList(.someday).map(\.id))
+
+        #expect(somedayIDs.contains("task-in-live-project"))
+        #expect(!somedayIDs.contains("task-in-trashed-project"))
+        #expect(!somedayIDs.contains("task-under-trashed-heading"))
+    }
+
+    @Test("A todo filed directly under a heading resolves its project through that heading")
+    func todoUnderHeadingResolvesProjectThroughHeading() throws {
+        let fixture = try makeFixtureDatabase()
+
+        try fixture.db.write { db in
+            try insertTask(db, id: "live-project", title: "Live Project", start: 0, startDate: nil, index: 0, type: 1)
+            try insertTask(db, id: "heading-1", title: "Heading", start: 0, startDate: nil, index: 1, type: 2, project: "live-project")
+            try insertTask(db, id: "todo-under-heading", title: "Todo Under Heading", start: 1, startDate: nil, index: 2, heading: "heading-1")
+        }
+
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let todo = try database.fetchTodo(id: "todo-under-heading")
+
+        #expect(todo.project?.id == "live-project")
+    }
+
+    @Test("Search excludes todos whose ancestor project is trashed, even directly or via a heading")
+    func searchExcludesDescendantsOfTrashedProjects() throws {
+        let fixture = try makeFixtureDatabase()
+
+        try fixture.db.write { db in
+            try insertTask(db, id: "live-project", title: "Live Project", start: 0, startDate: nil, index: 0, type: 1)
+            try insertTask(db, id: "trashed-project", title: "Trashed Project", start: 0, startDate: nil, index: 1, trashed: 1, type: 1)
+            try insertTask(db, id: "heading-in-trashed-project", title: "Heading", start: 0, startDate: nil, index: 2, type: 2, project: "trashed-project")
+
+            try insertTask(db, id: "task-in-live-project", title: "Findable Task", start: 2, startDate: nil, index: 3, project: "live-project")
+            try insertTask(db, id: "task-in-trashed-project", title: "Findable Task", start: 2, startDate: nil, index: 4, project: "trashed-project")
+            try insertTask(db, id: "task-under-trashed-heading", title: "Findable Task", start: 2, startDate: nil, index: 5, heading: "heading-in-trashed-project")
+        }
+
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let resultIDs = Set(try database.search(query: "Findable").map(\.id))
+
+        #expect(resultIDs == ["task-in-live-project"])
     }
 
     @Test func fetchTodoThrowsNotFoundForUnknownID() throws {
@@ -319,12 +472,14 @@ struct ThingsDatabaseTests {
                         creationDate REAL NOT NULL,
                         userModificationDate REAL NOT NULL,
                         project TEXT,
+                        heading TEXT,
                         area TEXT,
                         trashed INTEGER NOT NULL,
                         type INTEGER NOT NULL,
                         start INTEGER,
                         startDate INTEGER,
                         todayIndex INTEGER,
+                        rt1_recurrenceRule TEXT,
                         "index" INTEGER NOT NULL
                         )
                         """
@@ -375,14 +530,16 @@ struct ThingsDatabaseTests {
         creationDate: Double = 0,
         modificationDate: Double? = nil,
         project: String? = nil,
-        area: String? = nil
+        heading: String? = nil,
+        area: String? = nil,
+        recurrenceRule: String? = nil
     ) throws {
         try db.execute(
             sql: """
                 INSERT INTO TMTask (
                     uuid, title, notes, status, stopDate, deadline, deadlineSuppressionDate, creationDate, userModificationDate,
-                    project, area, trashed, type, start, startDate, todayIndex, "index"
-                ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    project, heading, area, trashed, type, start, startDate, todayIndex, rt1_recurrenceRule, "index"
+                ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
             arguments: [
                 id,
@@ -394,12 +551,14 @@ struct ThingsDatabaseTests {
                 creationDate,
                 modificationDate ?? creationDate,
                 project,
+                heading,
                 area,
                 trashed,
                 type,
                 start,
                 startDate,
                 todayIndex,
+                recurrenceRule,
                 index,
             ]
         )
@@ -427,12 +586,23 @@ struct ThingsDatabaseTests {
     }
 
     /// Things packs local date components into an integer: yyyyMMMMdd0000000.
+    /// Things always packs/unpacks these dates using the Gregorian calendar,
+    /// independent of the test machine's preferred `Calendar.current`.
     private func thingsDateCode(_ date: Date) -> Int {
-        let calendar = Calendar.current
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone.current
         let components = calendar.dateComponents([.year, .month, .day], from: date)
         let year = components.year ?? 0
         let month = components.month ?? 0
         let day = components.day ?? 0
         return (year << 16) | (month << 12) | (day << 7)
+    }
+
+    /// Independent of the test machine's preferred `Calendar.current`, matching
+    /// the Gregorian calendar ThingsDatabase uses to decode packed dates.
+    private func gregorianDate(from components: DateComponents) -> Date? {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone.current
+        return calendar.date(from: components)
     }
 }
