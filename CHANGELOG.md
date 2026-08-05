@@ -5,6 +5,15 @@ All notable changes to clings will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-08-05
+
+### Fixed
+
+- **Search ignores trashed/hidden project descendants**: Search and list filters now skip project descendants and avoid including archived/trashed items by descending path.
+- **Template projects are excluded from project listing**: Repeating project templates now filter out of `clings projects` output via `rt1_recurrenceRule`.
+- **Someday date decoding now uses explicit Gregorian calendar context**: Packed deadline conversion now uses a deterministic Gregorian timezone-based decode path.
+- **Overdue logic uses day granularity**: `today` no longer counts as overdue when the due date is later in the day.
+
 ## [0.2.10] - 2025-12-29
 
 ### Fixed
