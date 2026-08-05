@@ -152,7 +152,11 @@ public struct TextOutputFormatter: OutputFormatter {
         var lines: [String] = []
 
         // Title
-        lines.append(bold(todo.name))
+        if todo.name.isEmpty {
+            lines.append(dim("(no title)"))
+        } else {
+            lines.append(bold(todo.name))
+        }
 
         // Status and dates
         var metaLine = "Status: \(statusColor(todo.status))"
@@ -229,7 +233,9 @@ public struct TextOutputFormatter: OutputFormatter {
 
         // Name
         var name = todo.name
-        if todo.status == .completed || todo.status == .canceled {
+        if name.isEmpty {
+            name = dim("(no title)")
+        } else if todo.status == .completed || todo.status == .canceled {
             name = strikethrough(name)
         }
         parts.append(name)

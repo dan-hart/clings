@@ -193,6 +193,19 @@ struct OutputFormatterTests {
             #expect(output.contains("Project Beta"))
         }
 
+        @Test("Todos with an empty title render a placeholder instead of a blank line")
+        func formatTodoWithEmptyTitle() {
+            let formatter = TextOutputFormatter(useColors: false)
+            let untitled = Todo(id: "untitled-1", name: "")
+
+            let listOutput = formatter.format(todos: [untitled])
+            #expect(listOutput.contains("(no title)"))
+            #expect(listOutput.contains("☐"))
+
+            let detailOutput = formatter.format(todo: untitled)
+            #expect(detailOutput.contains("(no title)"))
+        }
+
         @Test func formatEmptyProjects() {
             let formatter = TextOutputFormatter(useColors: false)
             let output = formatter.format(projects: [])
