@@ -74,10 +74,11 @@ public final class ThingsDatabase: Sendable {
             case .inbox:
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, heading, area
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0
                           AND start = 0 AND project IS NULL AND startDate IS NULL
+                          AND rt1_recurrenceRule IS NULL
                     ORDER BY "index"
                     """
                 arguments = []
@@ -86,9 +87,10 @@ public final class ThingsDatabase: Sendable {
                 let todayCode = thingsDateCode(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, heading, area
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0
+                          AND rt1_recurrenceRule IS NULL
                           AND (
                               (start = 1 AND startDate IS NOT NULL AND startDate <= ?)
                               OR (start = 2 AND startDate IS NOT NULL AND startDate <= ?)
@@ -102,9 +104,10 @@ public final class ThingsDatabase: Sendable {
                 let todayCode = thingsDateCode(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, heading, area
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0 AND startDate > ?
+                          AND rt1_recurrenceRule IS NULL
                     ORDER BY startDate, "index"
                     """
                 arguments = [todayCode]
@@ -113,10 +116,11 @@ public final class ThingsDatabase: Sendable {
                 let todayCode = thingsDateCode(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, heading, area
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0 AND start = 1
                           AND (startDate IS NULL OR startDate <= ?)
+                          AND rt1_recurrenceRule IS NULL
                     ORDER BY "index"
                     """
                 arguments = [todayCode]
@@ -124,9 +128,11 @@ public final class ThingsDatabase: Sendable {
             case .someday:
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, heading, area
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0 AND start = 2
+                          AND startDate IS NULL
+                          AND rt1_recurrenceRule IS NULL
                     ORDER BY "index"
                     """
                 arguments = []
@@ -134,9 +140,10 @@ public final class ThingsDatabase: Sendable {
             case .logbook:
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, heading, area
                     FROM TMTask
                     WHERE status = 3 AND trashed = 0 AND type = 0
+                          AND rt1_recurrenceRule IS NULL
                     ORDER BY stopDate DESC
                     LIMIT 500
                     """
@@ -145,17 +152,28 @@ public final class ThingsDatabase: Sendable {
             case .trash:
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, heading, area
                     FROM TMTask
                     WHERE trashed = 1 AND type = 0
+                          AND rt1_recurrenceRule IS NULL
                     ORDER BY "index"
                     """
                 arguments = []
             }
 
             let rows = try Row.fetchAll(db, sql: sql, arguments: arguments)
-            return try rows.map { row in
-                try self.todoFromRow(row, db: db)
+            return try rows.compactMap { row -> Todo? in
+                // Things hides descendants of a trashed project from every list
+                // (except Trash itself), even though the descendant's own
+                // `trashed` flag stays 0. Mirror that here.
+                if list != .trash {
+                    let projectUuid: String? = row["project"]
+                    let headingUuid: String? = row["heading"]
+                    if try self.isAncestorProjectTrashed(projectUuid: projectUuid, headingUuid: headingUuid, db: db) {
+                        return nil
+                    }
+                }
+                return try self.todoFromRow(row, db: db)
             }
         }
     }
@@ -183,9 +201,7 @@ public final class ThingsDatabase: Sendable {
                 let area: Area? = try areaUuid.flatMap { try self.fetchArea(uuid: $0, db: db) }
                 let tags = try self.fetchTagsForTask(uuid: uuid, db: db)
 
-                let deadline: Date? = (row["deadline"] as Int?).flatMap {
-                    Date(timeIntervalSinceReferenceDate: TimeInterval($0))
-                }
+                let deadline = self.decodeDeadline(row["deadline"] as Int?)
                 let creationDate = Date(timeIntervalSinceReferenceDate: TimeInterval(row["creationDate"] as Int))
 
                 return Project(
@@ -241,7 +257,7 @@ public final class ThingsDatabase: Sendable {
         return try db.read { db in
             let sql = """
                 SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                       userModificationDate, project, area
+                       userModificationDate, project, heading, area
                 FROM TMTask
                 WHERE uuid = ? AND type = 0
                 """
@@ -261,9 +277,10 @@ public final class ThingsDatabase: Sendable {
         return try db.read { db in
             let sql = """
                 SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                       userModificationDate, project, area
+                       userModificationDate, project, heading, area
                 FROM TMTask
                 WHERE type = 0 AND trashed = 0
+                      AND rt1_recurrenceRule IS NULL
                       AND (title LIKE ? OR notes LIKE ?)
                 ORDER BY todayIndex, "index"
                 LIMIT 100
@@ -285,16 +302,21 @@ public final class ThingsDatabase: Sendable {
         let notes: String? = row["notes"]
         let statusInt: Int = row["status"]
         let projectUuid: String? = row["project"]
+        let headingUuid: String? = row["heading"]
         let areaUuid: String? = row["area"]
 
-        let project: Project? = try projectUuid.flatMap { try self.fetchProjectBasic(uuid: $0, db: db) }
+        // A todo filed under a heading has `project` left blank; the real
+        // parent project lives on the heading row instead.
+        let resolvedProjectUuid = try projectUuid ?? headingUuid.flatMap {
+            try self.projectUuid(forHeading: $0, db: db)
+        }
+
+        let project: Project? = try resolvedProjectUuid.flatMap { try self.fetchProjectBasic(uuid: $0, db: db) }
         let area: Area? = try areaUuid.flatMap { try self.fetchArea(uuid: $0, db: db) }
         let tags = try fetchTagsForTask(uuid: uuid, db: db)
         let checklistItems = try fetchChecklistItems(uuid: uuid, db: db)
 
-        let deadline: Date? = (row["deadline"] as Int?).flatMap {
-            Date(timeIntervalSinceReferenceDate: TimeInterval($0))
-        }
+        let deadline = decodeDeadline(row["deadline"] as Int?)
         let creationDate: Date = (row["creationDate"] as Double?).flatMap {
             Date(timeIntervalSinceReferenceDate: $0)
         } ?? Date()
@@ -333,6 +355,26 @@ public final class ThingsDatabase: Sendable {
             dueDate: nil,
             creationDate: Date()
         )
+    }
+
+    /// Resolve the project a heading belongs to.
+    private func projectUuid(forHeading headingUuid: String, db: Database) throws -> String? {
+        let sql = "SELECT project FROM TMTask WHERE uuid = ? AND type = 2"
+        return try Row.fetchOne(db, sql: sql, arguments: [headingUuid])?["project"]
+    }
+
+    /// Whether a todo's ancestor project (direct, or via a heading) is trashed.
+    /// Things hides descendants of a trashed project from every list even
+    /// though the descendant's own `trashed` column stays 0.
+    private func isAncestorProjectTrashed(projectUuid: String?, headingUuid: String?, db: Database) throws -> Bool {
+        let resolvedProjectUuid = try projectUuid ?? headingUuid.flatMap {
+            try self.projectUuid(forHeading: $0, db: db)
+        }
+        guard let resolvedProjectUuid else { return false }
+
+        let sql = "SELECT trashed FROM TMTask WHERE uuid = ? AND type = 1"
+        guard let row = try Row.fetchOne(db, sql: sql, arguments: [resolvedProjectUuid]) else { return false }
+        return (row["trashed"] as Int) == 1
     }
 
     private func fetchArea(uuid: String, db: Database) throws -> Area? {
@@ -401,6 +443,30 @@ public final class ThingsDatabase: Sendable {
         let month = components.month ?? 0
         let day = components.day ?? 0
         return (year << 16) | (month << 12) | (day << 7)
+    }
+
+    /// Decode a `deadline` value stored using Things' packed integer date
+    /// format (see `thingsDateCode`). Things uses year 4001 as an internal
+    /// sentinel for "no real deadline" (visible via AppleScript as
+    /// `January 1, 4001`), which is not a real date to surface to users.
+    ///
+    /// Note this is a date-only value (no time component); it was previously
+    /// misdecoded as raw seconds since the Cocoa reference date, which
+    /// produced nonsensical dates like April 23, 2009 for every task sharing
+    /// that sentinel.
+    private func decodeDeadline(_ value: Int?) -> Date? {
+        guard let value else { return nil }
+
+        let year = value >> 16
+        let month = (value >> 12) & 0xF
+        let day = (value >> 7) & 0x1F
+        guard year > 0, year < 4001, month > 0, day > 0 else { return nil }
+
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = day
+        return Calendar.current.date(from: components)
     }
 }
 
