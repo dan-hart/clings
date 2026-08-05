@@ -208,8 +208,33 @@ struct ThingsDatabaseTests {
         #expect(projects[0].notes == "Project notes")
         #expect(projects[0].area?.name == "Work")
         #expect(projects[0].tags.map(\.name) == ["docs"])
-        #expect(projects[0].dueDate == Calendar.current.date(from: deadlineComponents))
+        #expect(projects[0].dueDate == gregorianDate(from: deadlineComponents))
         #expect(projects[0].creationDate == Date(timeIntervalSinceReferenceDate: TimeInterval(createdAt)))
+    }
+
+    @Test("fetchProjects excludes repeating-project templates")
+    func fetchProjectsExcludesRecurrenceTemplates() throws {
+        let fixture = try makeFixtureDatabase()
+
+        try fixture.db.write { db in
+            try insertTask(
+                db,
+                id: "recurring-project-template",
+                title: "Weekly Review",
+                start: 0,
+                startDate: nil,
+                index: 0,
+                type: 1,
+                recurrenceRule: "<plist/>"
+            )
+            try insertTask(db, id: "real-project", title: "Real Project", start: 0, startDate: nil, index: 1, type: 1)
+        }
+
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let projectIDs = Set(try database.fetchProjects().map(\.id))
+
+        #expect(!projectIDs.contains("recurring-project-template"))
+        #expect(projectIDs.contains("real-project"))
     }
 
     @Test func fetchAreasAndTagsReturnAttachedMetadata() throws {
@@ -288,7 +313,7 @@ struct ThingsDatabaseTests {
         #expect(todo.tags.map(\.name) == ["docs"])
         #expect(todo.checklistItems.map(\.name) == ["Draft outline", "Publish examples"])
         #expect(todo.checklistItems.map(\.completed) == [true, false])
-        #expect(todo.dueDate == Calendar.current.date(from: deadlineComponents))
+        #expect(todo.dueDate == gregorianDate(from: deadlineComponents))
         #expect(todo.creationDate == Date(timeIntervalSinceReferenceDate: 100))
         #expect(todo.modificationDate == Date(timeIntervalSinceReferenceDate: 200))
         #expect(searchResults.map(\.id) == ["todo-1"])
@@ -397,6 +422,26 @@ struct ThingsDatabaseTests {
         let todo = try database.fetchTodo(id: "todo-under-heading")
 
         #expect(todo.project?.id == "live-project")
+    }
+
+    @Test("Search excludes todos whose ancestor project is trashed, even directly or via a heading")
+    func searchExcludesDescendantsOfTrashedProjects() throws {
+        let fixture = try makeFixtureDatabase()
+
+        try fixture.db.write { db in
+            try insertTask(db, id: "live-project", title: "Live Project", start: 0, startDate: nil, index: 0, type: 1)
+            try insertTask(db, id: "trashed-project", title: "Trashed Project", start: 0, startDate: nil, index: 1, trashed: 1, type: 1)
+            try insertTask(db, id: "heading-in-trashed-project", title: "Heading", start: 0, startDate: nil, index: 2, type: 2, project: "trashed-project")
+
+            try insertTask(db, id: "task-in-live-project", title: "Findable Task", start: 2, startDate: nil, index: 3, project: "live-project")
+            try insertTask(db, id: "task-in-trashed-project", title: "Findable Task", start: 2, startDate: nil, index: 4, project: "trashed-project")
+            try insertTask(db, id: "task-under-trashed-heading", title: "Findable Task", start: 2, startDate: nil, index: 5, heading: "heading-in-trashed-project")
+        }
+
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let resultIDs = Set(try database.search(query: "Findable").map(\.id))
+
+        #expect(resultIDs == ["task-in-live-project"])
     }
 
     @Test func fetchTodoThrowsNotFoundForUnknownID() throws {
@@ -541,12 +586,23 @@ struct ThingsDatabaseTests {
     }
 
     /// Things packs local date components into an integer: yyyyMMMMdd0000000.
+    /// Things always packs/unpacks these dates using the Gregorian calendar,
+    /// independent of the test machine's preferred `Calendar.current`.
     private func thingsDateCode(_ date: Date) -> Int {
-        let calendar = Calendar.current
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone.current
         let components = calendar.dateComponents([.year, .month, .day], from: date)
         let year = components.year ?? 0
         let month = components.month ?? 0
         let day = components.day ?? 0
         return (year << 16) | (month << 12) | (day << 7)
+    }
+
+    /// Independent of the test machine's preferred `Calendar.current`, matching
+    /// the Gregorian calendar ThingsDatabase uses to decode packed dates.
+    private func gregorianDate(from components: DateComponents) -> Date? {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone.current
+        return calendar.date(from: components)
     }
 }

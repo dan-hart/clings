@@ -187,6 +187,7 @@ public final class ThingsDatabase: Sendable {
                 SELECT uuid, title, notes, status, stopDate, deadline, creationDate, area
                 FROM TMTask
                 WHERE type = 1 AND trashed = 0 AND status = 0
+                      AND rt1_recurrenceRule IS NULL
                 ORDER BY "index"
                 """
 
@@ -288,8 +289,15 @@ public final class ThingsDatabase: Sendable {
 
             let pattern = "%\(query)%"
             let rows = try Row.fetchAll(db, sql: sql, arguments: [pattern, pattern])
-            return try rows.map { row in
-                try self.todoFromRow(row, db: db)
+            return try rows.compactMap { row -> Todo? in
+                // Mirror fetchList: descendants of a trashed project stay hidden
+                // even though their own `trashed` flag is 0.
+                let projectUuid: String? = row["project"]
+                let headingUuid: String? = row["heading"]
+                if try self.isAncestorProjectTrashed(projectUuid: projectUuid, headingUuid: headingUuid, db: db) {
+                    return nil
+                }
+                return try self.todoFromRow(row, db: db)
             }
         }
     }
@@ -436,8 +444,12 @@ public final class ThingsDatabase: Sendable {
 
     /// Encode a local calendar day using Things' packed integer date format.
     /// Format: `(year << 16) | (month << 12) | (day << 7)`.
+    /// Things always packs/unpacks these dates using the Gregorian calendar,
+    /// regardless of the user's preferred calendar (Buddhist, Hebrew, Persian,
+    /// etc.), since the bit fields encode a fixed Gregorian year/month/day.
     private func thingsDateCode(_ date: Date) -> Int {
-        let calendar = Calendar.current
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone.current
         let components = calendar.dateComponents([.year, .month, .day], from: date)
         let year = components.year ?? 0
         let month = components.month ?? 0
@@ -466,7 +478,10 @@ public final class ThingsDatabase: Sendable {
         components.year = year
         components.month = month
         components.day = day
-        return Calendar.current.date(from: components)
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone.current
+        return calendar.date(from: components)
     }
 }
 
