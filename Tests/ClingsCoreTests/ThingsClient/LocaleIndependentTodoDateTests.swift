@@ -20,7 +20,10 @@ struct LocaleIndependentTodoDateTests {
         #expect(script.contains("set year of scheduledDate to 2026"))
         #expect(script.contains("set month of scheduledDate to September"))
         #expect(script.contains("set day of scheduledDate to 12"))
-        #expect(script.contains("set time of scheduledDate to 0"))
+        #expect(!script.contains("set time of scheduledDate"))
+        #expect(script.contains("set minutes of scheduledDate to 0"))
+        #expect(script.contains("set seconds of scheduledDate to 0"))
+        #expect(script.contains("set hours of scheduledDate to 0"))
         #expect(script.contains("schedule newTodo for scheduledDate"))
     }
 
@@ -35,7 +38,10 @@ struct LocaleIndependentTodoDateTests {
         #expect(script.contains("set year of deadlineDate to 2026"))
         #expect(script.contains("set month of deadlineDate to September"))
         #expect(script.contains("set day of deadlineDate to 13"))
-        #expect(script.contains("set time of deadlineDate to 63045"))
+        #expect(!script.contains("set time of deadlineDate"))
+        #expect(script.contains("set minutes of deadlineDate to 30"))
+        #expect(script.contains("set seconds of deadlineDate to 45"))
+        #expect(script.contains("set hours of deadlineDate to 17"))
         #expect(script.contains("set due date of newTodo to deadlineDate"))
     }
 
@@ -44,5 +50,7 @@ struct LocaleIndependentTodoDateTests {
 
         #expect(!script.contains("set scheduledDate to current date"))
         #expect(!script.contains("set deadlineDate to current date"))
+        #expect(!script.contains("schedule newTodo"))
+        #expect(!script.contains("set due date of newTodo"))
     }
 }

@@ -351,15 +351,20 @@ public enum JXAScripts {
             "January", "February", "March", "April", "May", "June",
             "July", "August", "September", "October", "November", "December"
         ]
-        let secondsSinceMidnight = hour * 3600 + minute * 60 + second
-
+        // Work at noon while changing calendar fields, then assign wall-clock
+        // components. AppleScript's `set time` can cross back into the previous
+        // day when the target date starts with a DST gap (e.g. Santiago).
+        // Set the hour last so half-hour DST gaps do not affect intermediate times.
         return """
         set \(variableName) to current date
+        set hours of \(variableName) to 12
         set day of \(variableName) to 1
         set year of \(variableName) to \(year)
         set month of \(variableName) to \(monthNames[month - 1])
         set day of \(variableName) to \(day)
-        set time of \(variableName) to \(secondsSinceMidnight)
+        set minutes of \(variableName) to \(minute)
+        set seconds of \(variableName) to \(second)
+        set hours of \(variableName) to \(hour)
         """
     }
 
