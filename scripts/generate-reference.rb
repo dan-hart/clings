@@ -36,7 +36,12 @@ commands.each do |path, command|
       label = names.empty? ? "<#{argument.fetch('valueName', 'value')}>" : names.join(", ")
       label += " <#{argument['valueName']}>" if argument["kind"] == "option"
       label += "..." if argument["isRepeating"]
-      lines << "| `#{escape.call(label)}` | #{escape.call(argument['abstract'])} |"
+      details = [argument['abstract']]
+      details << (argument['isOptional'] ? 'Optional.' : 'Required.')
+      details << "Default: #{argument['defaultValue']}." if argument.key?('defaultValue')
+      values = argument.fetch('allValues', [])
+      details << "Values: #{values.join(', ')}." unless values.empty?
+      lines << "| `#{escape.call(label)}` | #{escape.call(details.join(' '))} |"
     end
     lines << ""
   end
