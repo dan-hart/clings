@@ -203,13 +203,14 @@ TITLE is one shell argument. Dates, `#tags`, `for Project`, `in Area`, `// notes
 and `- checklist item` patterns may be extracted. Preview whenever literal title
 text overlaps parser syntax. Explicit scalar options override parsed values;
 tags combine. Priority markers are parsed but are not sent as a Things priority.
-Unrecognized explicit dates can resolve to no date without a validation error.
+Unrecognized or impossible dates are rejected before writes, including invalid
+times embedded in task text. Use `--parse-only` to inspect the complete mutation.
 `add --when/--deadline` does not require a URL auth token. Creation records undo.
 
 ### update ID
 
 Accepts `--name TEXT`, `--notes TEXT`, `--due DATE`, `--when DATE`,
-`--heading NAME`, and `--tags TAG...`. At least one property is required.
+`--heading NAME`, `--tags TAG...`, and `--parse-only`. At least one property is required.
 Tags replace the existing set; `--tags docs urgent` is two tags, while
 `--tags docs,urgent` is one tag value.
 
@@ -217,6 +218,8 @@ Tags replace the existing set; `--tags docs urgent` is two tags, while
 parseable date. `--when`/`--heading` require a Things URL token, validated before
 mutations begin. Name/notes/deadline/tags updates use automation. Update records
 a snapshot for undo, but scheduling/headings are not restored by undo.
+`--parse-only` shows the complete proposed fields and undo limitations without
+requiring a URL token or performing writes.
 
 ### complete [ID], cancel ID, delete ID
 
@@ -238,7 +241,12 @@ not an assumed unique title. These commands accept shared output options, but
 and can return completed/canceled todos. SQLite search excludes repeating
 templates and descendants of trashed projects.
 
-`filter` reads open lists only, deduplicates todos, then evaluates its DSL.
+`filter` defaults to open lists, deduplicates todos, then evaluates its DSL.
+Search, filter, and `views run` share `--list`, `--include-logbook`, `--sort`,
+and positive `--limit`. Sort keys are `id`, `name`, `due`, `when`, `created`,
+and `modified`; a leading minus reverses order. Absent dates stay last and ties
+use stable IDs. `when`/`start` is the scheduled start, distinct from `due`.
+Unknown filter fields and trailing syntax are rejected.
 Supported fields/operators and date boundaries are documented in
 [Filtering and scripting](filtering-and-scripting.md). No arbitrary SQL runs.
 
@@ -265,7 +273,7 @@ They do not create smart lists inside Things.
 
 Save defaults: `--notes`, `--when`, `--deadline`, `--project`, `--area`,
 `--tags TAG...`, `--checklist ITEM...`. Quote each multiword checklist item.
-Dates embedded in TITLE are not retained as schedule defaults; use the explicit
+Relative dates embedded in TITLE are retained as schedule defaults; explicit
 date options. Their relative expressions resolve when run. With template save,
 explicit tags replace parsed tags; with add --template, tags combine.
 

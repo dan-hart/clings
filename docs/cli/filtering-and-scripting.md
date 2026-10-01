@@ -12,7 +12,12 @@
 | `bulk ACTION --list LIST --where EXPR` | Only the selected Things list; defaults to Today |
 | `logbook --json` | Historical list; use `jq` to select completed or canceled records |
 
-A query such as `status = completed` cannot make `filter` search Logbook. Use a Logbook JSON pipeline instead. Filters are evaluated against loaded tasks; this is not a SQL execution interface.
+A query such as `status = completed` needs `--include-logbook` or `--list logbook`.
+Search, filter, and view execution share `--list`, `--include-logbook`, `--sort`,
+and positive `--limit` controls. Sort by `id`, `name`, `due`, `when`, `created`,
+or `modified`; prefix with `-` for descending (for example `--sort=-modified`).
+Absent dates stay last in either direction; equal values use a stable ID tie-break.
+Filters are evaluated against loaded tasks; this is not a SQL execution interface.
 
 ## Quote expressions
 
@@ -41,12 +46,14 @@ clings filter "project IN ('Documentation', 'Reference')"
 | `notes` | Notes text |
 | `status` | `open`, `completed`, or `canceled` |
 | `due`, `dueDate` | Optional deadline, not the scheduled start |
+| `when`, `start`, `scheduledDate` | Optional scheduled start, distinct from the deadline |
 | `tags` | Tag names |
 | `project`, `area` | Optional names, not IDs |
 | `created`, `creationDate` | Creation timestamp |
 | `modified`, `modificationDate` | Modification timestamp |
 
-There is currently no scheduled-start field in the filter DSL. Unknown fields are not reliably rejected; double-check spelling, especially in null checks.
+Unknown fields and trailing expressions are rejected. Use `when IS NOT NULL`
+to query scheduled tasks, without confusing their start dates with deadlines.
 
 ## Operators and dates
 

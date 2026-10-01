@@ -38,9 +38,11 @@ You may be running an older Homebrew release or a different binary on `PATH`. Re
 clings add "Draft outline" --when tomorrow --deadline friday --parse-only --json
 ```
 
-Inspect `when` and `deadline` separately. The planned start and deadline are different fields. Use explicit options or ISO dates when free-text interpretation is unclear. `add` can silently resolve an unrecognized date option to no date; successful parsing of the command is not proof that a date was accepted.
+Inspect `when` and `deadline` separately. The planned start and deadline are different fields. Use explicit options or ISO dates when free-text interpretation is unclear. Invalid dates and impossible times are rejected before writes. Both `add --parse-only` and `update --parse-only` show the final fields without applying changes.
 
-For templates, use `template save --when ... --deadline ...`: date phrases found only in the title are not stored as scheduling defaults. Relative expressions are evaluated when a task is created.
+Templates retain relative expressions from title phrases or explicit
+`template save --when ... --deadline ...` options. Explicit options override the
+embedded expressions; relative dates are evaluated when a task is created.
 
 The current source builds creation dates from Gregorian components to avoid locale-sensitive English AppleScript date parsing and includes runtime tests for midnight and half-hour DST transitions. Older installed releases may not contain this fix. Filter date parsing is separate and `today` means midnight; use `due < tomorrow` for deadlines anywhere today.
 

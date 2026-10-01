@@ -101,7 +101,7 @@ clings add "Publish documentation" \
   --parse-only --json
 ```
 
-The **start date** is when you plan to work; the **deadline** is when it is due. Explicit options override parsed values; tags are combined. Preview unfamiliar dates: an unrecognized date can resolve to no date.
+The **start date** is when you plan to work; the **deadline** is when it is due. Explicit options override parsed values; tags are combined. Invalid or impossible dates are rejected before a write. Preview unfamiliar expressions with `--parse-only`; update supports this preview too.
 
 ### Turn a query into a named view
 
@@ -112,7 +112,7 @@ clings views run docs-due
 clings views run docs-due --format "{id} {name} [{project}] {due}"
 ```
 
-Views evaluate relative dates when run. They search open lists, not Logbook, and live in local clings configuration.
+Views evaluate relative dates when run and live in local clings configuration. Their default scope is open lists; use `--list` to narrow it or `--include-logbook` to include history. Search, filter, and view execution support stable `--sort` and positive `--limit` controls.
 
 ### Reuse a checklist without freezing its dates
 
@@ -125,7 +125,7 @@ clings add "Prepare next release" --template release-prep --parse-only --json
 clings template run release-prep
 ```
 
-Use template `--when`/`--deadline` options to store relative expressions. Dates embedded in the template title are not retained as schedule defaults.
+Templates retain relative dates from both embedded phrases and `--when`/`--deadline` options. Explicit options win; expressions resolve when the template runs.
 
 ### Export a report you can use elsewhere
 
