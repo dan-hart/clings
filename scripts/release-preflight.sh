@@ -24,8 +24,8 @@ fi
 RELEASE_VERSION="${RELEASE_TAG#v}"
 SOURCE_VERSION="$(ruby -e 's=File.read("Sources/ClingsCLI/Clings.swift"); m=s.match(/version:\s*"([0-9]+\.[0-9]+\.[0-9]+)"/); abort "Missing source version" unless m; puts m[1]')"
 [[ "$SOURCE_VERSION" == "$RELEASE_VERSION" ]] || fail "Source version $SOURCE_VERSION does not match $RELEASE_TAG"
-rg -q "\*\*Version:\*\* $RELEASE_VERSION$" AGENTS.md || fail 'AGENTS version does not match release'
-rg -q "^## \[$RELEASE_VERSION\] - " CHANGELOG.md || fail 'Changelog version entry is missing'
+ruby -e 'v=ARGV.fetch(0); exit(File.readlines("AGENTS.md").any? { |line| line.chomp.end_with?("**Version:** #{v}") } ? 0 : 1)' "$RELEASE_VERSION" || fail 'AGENTS version does not match release'
+ruby -e 'v=ARGV.fetch(0); exit(File.readlines("CHANGELOG.md").any? { |line| line.start_with?("## [#{v}] - ") } ? 0 : 1)' "$RELEASE_VERSION" || fail 'Changelog version entry is missing'
 
 # These reviewed fixes must never be lost by publishing from an old checkout.
 for REQUIRED_COMMIT in \

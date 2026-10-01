@@ -48,6 +48,47 @@ pointing elsewhere are rejected. Published assets are never overwritten by the
 workflow. A tap update uses the remote formula's current file SHA so concurrent
 changes fail safely instead of being lost.
 
+Pushing the same tag again does not start another workflow. For a failed run:
+
+```bash
+gh run list --repo dan-hart/clings --workflow release.yml
+gh run view RUN_ID --repo dan-hart/clings --log-failed
+gh release view v0.4.0 --repo dan-hart/clings --json isDraft,assets,targetCommitish
+```
+
+Confirm the remote tag still targets the intended commit. If no release exists,
+rerun the failed jobs explicitly, then resume `release.sh` after they pass:
+
+```bash
+gh run rerun RUN_ID --repo dan-hart/clings --failed
+gh run watch RUN_ID --repo dan-hart/clings --exit-status
+bash scripts/release.sh v0.4.0
+```
+
+If publication created a draft before failing, do not rerun the Publish job
+blindly: `gh release create` will collide with the draft. Download the successful
+build artifacts from that exact run with `gh run download RUN_ID`, verify both
+archives' `build-info.json` commit/version/architecture and all `SHA256SUMS`,
+and compare any assets already attached to the draft. Upload only missing
+assets with `gh release upload v0.4.0 PATH` (never `--clobber`). A conflicting
+asset requires investigation; do not replace it automatically. Extract notes
+with `bash scripts/release-notes.sh v0.4.0`, then publish the verified draft
+with `gh release edit v0.4.0 --draft=false --notes-file PATH`. Run the tap and
+installation steps below directly, because a failed historical workflow still
+causes `release.sh` to stop:
+
+```bash
+bash scripts/update-homebrew.sh v0.4.0
+brew update
+brew upgrade clings # or brew install dan-hart/tap/clings on a fresh machine
+brew test clings
+bash scripts/install-smoke-test.sh "$(brew --prefix clings)/bin/clings" 0.4.0
+```
+
+For an already published release, verify rather than recreate its assets. Resume
+only the incomplete tap/installation steps after confirming checksums and source
+provenance. Never delete a published release or move its tag to recover a run.
+
 After publication, keep maintainer-owned mirrors synchronized. Do not push to
 contributor fork remotes. Verify the source archive checksum and installed
 version before telling users a release is complete. Supersede an incorrect

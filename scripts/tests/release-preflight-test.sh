@@ -44,6 +44,21 @@ expect_failure() {
 }
 
 expect_success v0.4.0
+cp "$SCRIPT_DIR/fixtures/release-agents-invalid.md.txt" AGENTS.md
+git add AGENTS.md
+git commit --quiet -m 'Malformed AGENTS version fixture'
+git update-ref refs/remotes/origin/main HEAD
+expect_failure 'AGENTS version' v0.4.0
+cp "$SCRIPT_DIR/fixtures/release-agents.md.txt" AGENTS.md
+cp "$SCRIPT_DIR/fixtures/release-changelog-invalid.md.txt" CHANGELOG.md
+git add AGENTS.md CHANGELOG.md
+git commit --quiet -m 'Malformed changelog version fixture'
+git update-ref refs/remotes/origin/main HEAD
+expect_failure 'Changelog version' v0.4.0
+cp "$SCRIPT_DIR/fixtures/release-changelog.md.txt" CHANGELOG.md
+git add CHANGELOG.md
+git commit --quiet -m 'Restore valid version fixture'
+git update-ref refs/remotes/origin/main HEAD
 expect_failure 'version' v0.4.1
 expect_failure 'semantic' v0.4
 git switch --quiet -c task/fixture
