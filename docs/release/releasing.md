@@ -37,7 +37,11 @@ The GitHub workflow builds/tests on Apple Silicon and Intel macOS runners.
 Each archive contains the binary, license, bash/zsh/fish completions, and
 `build-info.json` with version/architecture/commit. Archive timestamps and owners
 are normalized; gzip timestamps are disabled. Both archives and `SHA256SUMS`
-must exist before publication. Notes are extracted from the matching changelog
+must exist before publication. The committed `Package.resolved` pins dependency
+revisions; CI, release builds, and Homebrew require that graph without automatic
+resolution. Before updating the tap, the release script downloads both archives,
+checks their SHA256SUMS, required contents, and commit/version/architecture metadata.
+Notes are extracted from the matching changelog
 section with real newlines, not shell-escaped strings.
 
 ## Recovery
@@ -100,6 +104,7 @@ its tag.
 ```bash
 bash scripts/tests/release-preflight-test.sh
 bash scripts/tests/release-ci-test.sh
+bash scripts/tests/release-assets-test.sh
 bash scripts/install-smoke-test.sh .build/release/clings 0.4.0
 ```
 

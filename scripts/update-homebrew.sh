@@ -18,6 +18,10 @@ FORMULA_CONTENT="$(ruby -rjson -rbase64 -e '
   abort "Missing formula checksum" unless formula.sub!(/sha256 "[0-9a-f]{64}"/, "sha256 \"#{ARGV[2]}\"")
   formula.sub!(/depends_on xcode: \["[0-9.]+", :build\]/, "depends_on xcode: [\"16.0\", :build]")
   formula.sub!("depends_on :macos", "depends_on macos: :sonoma")
+  formula.sub!(%q{system "swift", "build", "-c", "release", "--disable-sandbox"}, %q{system "swift", "build", "-c", "release", "--disable-sandbox", "--force-resolved-versions"})
+  unless formula.include?("generate_completions_from_executable")
+    abort "Missing binary installation" unless formula.sub!(%q{bin.install ".build/release/clings"}, %q{bin.install ".build/release/clings"} + "\n    generate_completions_from_executable(bin/\"clings\", \"completions\", shells: [:bash, :zsh, :fish])")
+  end
   puts Base64.strict_encode64(formula)
 ' "$UPDATE_DIRECTORY/formula.json" "$ARCHIVE_URL" "$ARCHIVE_SHA")"
 gh api repos/dan-hart/homebrew-tap/contents/Formula/clings.rb --method PUT \

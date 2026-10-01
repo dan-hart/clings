@@ -27,8 +27,10 @@ gh run watch "$RUN_ID" --repo dan-hart/clings --exit-status --interval 15 || {
   echo "Release workflow $RUN_ID failed. Follow docs/release/releasing.md Recovery; pushing the same tag does not rerun Actions." >&2
   exit 1
 }
-gh release view "$RELEASE_TAG" --repo dan-hart/clings --json assets --jq '.assets[].name' |
-  ruby -e 'a=STDIN.read.lines.map(&:strip); v=ARGV[0]; required=["clings-#{v}-macos-arm64.tar.gz", "clings-#{v}-macos-x86_64.tar.gz", "SHA256SUMS"]; abort "Release assets missing" unless (required-a).empty?' "$RELEASE_TAG"
+ASSET_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/clings-release-assets.XXXXXX")"
+gh release download "$RELEASE_TAG" --repo dan-hart/clings --dir "$ASSET_DIRECTORY" \
+  --pattern "clings-$RELEASE_TAG-macos-*.tar.gz" --pattern SHA256SUMS
+bash scripts/verify-release-assets.sh "$ASSET_DIRECTORY" "$RELEASE_TAG" "$RELEASE_SHA"
 bash scripts/update-homebrew.sh "$RELEASE_TAG"
 brew update
 if brew list --versions clings >/dev/null 2>&1; then
