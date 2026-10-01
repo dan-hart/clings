@@ -14,12 +14,19 @@ struct UndoCommand: AsyncParsableCommand {
         discussion: """
         Reverses the most recent supported write operation recorded by clings.
 
+        Inspect --show first. History keeps up to 20 entries in local config.
+        Bulk writes, project/tag management, and changes made in Things itself
+        are not recorded. Update undo restores title, notes, deadline, and tags;
+        it does not restore scheduling, headings, or project moves.
+        Undo removes the history entry before attempting the reversal; a failed
+        reversal cannot be retried from that entry. It is not a backup system.
+
         EXAMPLES:
           clings undo
           clings undo --show
 
         Supported operations:
-          create     Deletes the newly created todo
+          create     Cancels the newly created todo through automation
           update     Restores the previous snapshot
           complete   Reopens the todo
           cancel     Reopens the todo

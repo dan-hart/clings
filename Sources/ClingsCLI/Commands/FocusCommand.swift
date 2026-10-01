@@ -15,6 +15,11 @@ struct FocusCommand: AsyncParsableCommand {
         Build a short, opinionated working queue from open todos, prioritizing
         overdue work and urgent items first.
 
+        Reads open lists without rescheduling or modifying tasks. Ranking uses
+        overdue/today/soon deadlines, urgent/priority/high tags, and unassigned
+        work. --json returns items with todo, score, and reasons. --format renders
+        just the todos. Use --limit with a positive number.
+
         EXAMPLES:
           clings focus
           clings focus --limit 5

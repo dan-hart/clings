@@ -14,6 +14,11 @@ struct PickCommand: AsyncParsableCommand {
         Search visible todos, choose one interactively, and then run a follow-up
         action without manually copying IDs.
 
+        Enter a displayed number or exact todo ID. An empty/invalid selection
+        stops the command. Write actions select open todos; show also includes
+        Logbook. Selection prompts remain text even with --json, so use direct
+        commands with exact IDs in noninteractive scripts.
+
         EXAMPLES:
           clings pick show release
           clings pick complete docs
@@ -35,6 +40,9 @@ struct PickShowCommand: AsyncParsableCommand {
         abstract: "Pick a todo and show its details",
         discussion: """
         Present matching todos, let you choose one, and render the selected todo.
+
+        Without a query, considers visible open lists and Logbook. --json only
+        formats the final todo; the selection menu is still interactive text.
 
         EXAMPLES:
           clings pick show
@@ -64,6 +72,8 @@ struct PickCompleteCommand: AsyncParsableCommand {
         abstract: "Pick a todo and complete it",
         discussion: """
         Choose an open todo interactively, then mark it complete.
+
+        Enter a number or exact ID at the prompt. The change is recorded for undo.
 
         EXAMPLES:
           clings pick complete
@@ -95,6 +105,8 @@ struct PickCancelCommand: AsyncParsableCommand {
         discussion: """
         Choose an open todo interactively, then cancel it.
 
+        Cancellation keeps the todo as canceled; undo can reopen it.
+
         EXAMPLES:
           clings pick cancel
           clings pick cancel follow-up
@@ -123,7 +135,8 @@ struct PickDeleteCommand: AsyncParsableCommand {
         commandName: "delete",
         abstract: "Pick a todo and delete it",
         discussion: """
-        Choose an open todo interactively, then move it to the trash.
+        Choose an open todo interactively, then cancel it through the automation
+        API. This does not move it to Trash. Undo can reopen the selected todo.
 
         EXAMPLES:
           clings pick delete

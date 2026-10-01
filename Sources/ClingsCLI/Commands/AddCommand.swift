@@ -15,6 +15,19 @@ struct AddCommand: AsyncParsableCommand {
         Supports natural language patterns for capture, scheduling, tags, notes,
         and checklist items.
 
+        Quote the full task so your shell preserves #tags and spaces. --when
+        sets the planned start; --deadline sets the due date. Explicit options
+        override parsed values, while tags are combined and deduplicated.
+        Template defaults are applied before parsing the title and options.
+
+        PREVIEW FIRST:
+          clings add "Draft release notes tomorrow #docs" --parse-only --json
+          clings add "Draft release notes" --when tomorrow --deadline friday
+
+        --parse-only never creates a todo. Unrecognized date options can resolve
+        to no date, so inspect the preview before using unfamiliar expressions.
+        Priority markers are parsed but are not applied as a Things priority.
+
         EXAMPLES:
           clings add "Draft changelog entry tomorrow #docs"
           clings add "Replace air filter by friday !!"
@@ -33,13 +46,13 @@ struct AddCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Add notes to the todo")
     var notes: String?
 
-    @Option(name: .long, help: "Set the when date (today, tomorrow, etc.)")
+    @Option(name: .long, help: "Planned start date, e.g. 'tomorrow' or '2027-01-15'; preview with --parse-only")
     var when: String?
 
-    @Option(name: .long, help: "Set the deadline")
+    @Option(name: .long, help: "Due date, distinct from the planned start; e.g. 'friday' or '2027-01-15'")
     var deadline: String?
 
-    @Option(name: .long, parsing: .upToNextOption, help: "Add tags")
+    @Option(name: .long, parsing: .upToNextOption, help: "Space-separated tag names, combined with parsed/template tags")
     var tags: [String] = []
 
     @Option(name: .long, help: "Add to a project")

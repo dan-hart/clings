@@ -16,12 +16,16 @@ struct CompleteCommand: AsyncParsableCommand {
         Marks a todo as completed by its ID or title search. The todo will
         be moved to the Logbook in Things 3.
 
-        You can complete by ID (exact) or by title search (fuzzy):
+        You can complete by ID (exact) or by a title/notes text search:
           clings complete ABC123           By exact ID
           clings complete --title "milk"   By title search
 
         To find a todo's ID, use the show command or --json output:
-          clings today --json | jq '.[].id'
+          clings today --json | jq -r '.items[].id'
+
+        --title completes only when exactly one open todo matches. Multiple
+        matches are listed without completing anything; choose an exact ID or
+        use clings pick complete. --title takes precedence if an ID is also given.
 
         EXAMPLES:
           clings complete ABC123             Complete by ID
@@ -100,6 +104,9 @@ struct CancelCommand: AsyncParsableCommand {
         Use cancel for tasks that are no longer relevant, as opposed
         to complete which is for finished tasks.
 
+        This writes immediately, without a confirmation prompt. Use show to
+        inspect the ID first; clings undo can reopen the recorded todo.
+
         EXAMPLES:
           clings cancel ABC123          Cancel a specific todo
           clings cancel ABC123 --json   Output result as JSON
@@ -128,17 +135,22 @@ struct CancelCommand: AsyncParsableCommand {
 struct DeleteCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "delete",
-        abstract: "Delete a todo (moves to trash)",
+        abstract: "Cancel a todo through the automation API",
         discussion: """
         Deletes a todo by its ID. In Things 3, this is equivalent to
         canceling the todo (there is no true "delete" in the API).
 
         For permanent deletion, use the Things app directly.
 
+        CURRENT BEHAVIOR:
+          The command runs immediately; --force is accepted for compatibility
+          but no confirmation prompt is implemented. It does not move the todo
+          to Trash. Inspect the ID with show first. undo reopens the todo.
+
         EXAMPLES:
           clings delete ABC123          Delete a specific todo
           clings rm ABC123              Alias for 'delete'
-          clings delete ABC123 -f       Skip confirmation
+          clings delete ABC123 -f       Compatibility flag (same behavior)
 
         SEE ALSO:
           cancel, complete
@@ -149,7 +161,7 @@ struct DeleteCommand: AsyncParsableCommand {
     @Argument(help: "The ID of the todo to delete")
     var id: String
 
-    @Flag(name: .shortAndLong, help: "Skip confirmation prompt")
+    @Flag(name: .shortAndLong, help: "Compatibility flag; deletion currently runs without confirmation")
     var force = false
 
     @OptionGroup var output: OutputOptions
@@ -173,13 +185,17 @@ struct UpdateCommand: AsyncParsableCommand {
         Update one or more properties of a todo by ID.
         Only specified options will be updated.
 
+        --tags replaces the existing tag set; pass separate names, not a comma
+        list. --when and --heading require a configured Things URL auth token.
+        Undo restores name, notes, deadline, and tags, but not scheduling/headings.
+
         EXAMPLES:
           clings update ABC123 --name "New title"
           clings update ABC123 --notes "Updated notes"
-          clings update ABC123 --due 2024-12-25
+          clings update ABC123 --due 2027-01-15
           clings update ABC123 --when tomorrow
           clings update ABC123 --heading "Waiting on them"
-          clings update ABC123 --tags work,urgent
+          clings update ABC123 --tags docs urgent
         """
     )
 

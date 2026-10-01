@@ -15,6 +15,9 @@ struct Clings: AsyncParsableCommand {
         discussion: """
         clings provides fast, scriptable access to Things 3 from the command line.
 
+        Run clings with no arguments to show Today. Reads use the local Things
+        database; writes use Things automation. Things 3 for Mac is required.
+
         USAGE:
           clings <subcommand> [options]
 
@@ -24,6 +27,8 @@ struct Clings: AsyncParsableCommand {
           clings add "Draft changelog entry tomorrow #docs"
           clings views run docs-today
           clings doctor --verbose
+          clings filter "due < today" --json
+          clings bulk complete --list inbox --where "tags CONTAINS 'done'" --dry-run
 
         OUTPUT FORMATS:
           --json                    Machine-readable JSON for scripting
@@ -31,6 +36,15 @@ struct Clings: AsyncParsableCommand {
 
         For more information on a specific command, run:
           clings <command> --help
+          clings <command> <subcommand> --help
+
+        GUIDES:
+          https://github.com/dan-hart/clings#readme
+          https://github.com/dan-hart/clings/tree/main/docs/cli
+
+        Put output options after the command. --json takes precedence over
+        --format. Interactive commands and bulk previews may include text even
+        with --json; use list, search, or filter JSON for pipelines.
         """,
         version: "0.3.1",
         subcommands: [

@@ -12,6 +12,11 @@ struct CompletionsCommand: ParsableCommand {
         discussion: """
         Generate shell completion scripts for bash, zsh, or fish.
 
+        Writes the script to stdout without installing it. Create the destination
+        directory before redirecting. Bash requires sourcing the generated file;
+        zsh requires ~/.zfunc in fpath before compinit. Fish loads its completions
+        directory automatically. See docs/cli/getting-started.md for setup.
+
         EXAMPLES:
           bash:  clings completions bash > ~/.bash_completion.d/clings
           zsh:   clings completions zsh > ~/.zfunc/_clings

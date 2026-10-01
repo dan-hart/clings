@@ -14,7 +14,8 @@ struct ProjectCommand: AsyncParsableCommand {
         commandName: "project",
         abstract: "Manage projects",
         discussion: """
-        List and create projects in Things 3.
+        List, create, and audit projects in Things 3. With no subcommand, lists
+        projects. Auditing is read-only; add creates a real project.
 
         Projects are containers for related todos working toward a specific goal.
 
@@ -22,7 +23,7 @@ struct ProjectCommand: AsyncParsableCommand {
           clings project                    List all projects (same as 'clings projects')
           clings project list               Same as above
           clings project add "Documentation Refresh"  Create a new project
-          clings project add "Writing Refresh" --area "Writing" --deadline 2025-01-31
+          clings project add "Writing Refresh" --area "Writing" --deadline 2027-01-31
 
         SEE ALSO:
           projects, add --project, areas
@@ -43,7 +44,8 @@ struct ProjectListCommand: AsyncParsableCommand {
         commandName: "list",
         abstract: "List all projects",
         discussion: """
-        Show every project currently available in Things.
+        Show visible projects, excluding trashed projects and repeating project
+        templates in SQLite reads. --json uses a count/items envelope.
 
         EXAMPLES:
           clings project list
@@ -75,11 +77,15 @@ struct ProjectAddCommand: AsyncParsableCommand {
         discussion: """
         Creates a new project in Things 3.
 
+        --when and --deadline accept today, tomorrow, or YYYY-MM-DD. --tags takes
+        one comma-separated string (unlike add --tags). Project creation is not
+        recorded by clings undo.
+
         EXAMPLES:
           clings project add "Documentation Refresh"
           clings project add "Reading List" --notes "Collect and organize reference material"
           clings project add "Writing Sprint" --area "Writing" --when today
-          clings project add "Reference Review" --deadline 2025-06-01 --tags "planning,research"
+          clings project add "Reference Review" --deadline 2027-06-01 --tags "planning,research"
         """
     )
 
@@ -161,6 +167,9 @@ struct ProjectAuditCommand: AsyncParsableCommand {
         discussion: """
         Inspect open projects and flag missing next actions, overdue work, and
         other stalled-project signals.
+
+        Generates a report without changing projects or todos. Use --json for
+        structured findings; project names and todo IDs can guide follow-up work.
 
         EXAMPLES:
           clings project audit

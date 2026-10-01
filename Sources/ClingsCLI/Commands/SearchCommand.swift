@@ -17,6 +17,10 @@ struct SearchCommand: AsyncParsableCommand {
         For more complex filtering (by status, tags, dates), use
         the 'filter' command instead.
 
+        Search can include completed/canceled todos. Repeating templates and
+        trashed-project descendants are excluded by SQLite reads. Use exact IDs
+        from --json for follow-up actions; titles are not unique identifiers.
+
         EXAMPLES:
           clings search "meeting"       Find todos containing "meeting"
           clings find "project report"  Alias for 'search'

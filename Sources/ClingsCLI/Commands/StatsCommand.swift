@@ -18,6 +18,10 @@ struct StatsCommand: AsyncParsableCommand {
         - Overdue items
         - Tag distribution
 
+        This is a read-only report from the local database. --days controls the
+        dashboard period; trends/heatmap use their own --weeks option. --json
+        produces a report object rather than the todo-list count/items envelope.
+
         EXAMPLES:
           clings stats
           clings stats --days 7
@@ -331,6 +335,9 @@ struct StatsTrendsCommand: AsyncParsableCommand {
         Shows a weekly breakdown of completed todos as a bar chart.
         Useful for tracking productivity patterns over time.
 
+        --weeks controls this report (default: 4); dashboard --days does not.
+        --json returns a report object. This does not modify Things data.
+
         EXAMPLES:
           clings stats trends           Show 4-week trend
           clings stats trends --weeks 8 Show 8-week trend
@@ -418,6 +425,9 @@ struct StatsHeatmapCommand: AsyncParsableCommand {
         Displays a GitHub-style contribution heatmap showing daily
         completion intensity. Days with more completions are shown
         in darker green.
+
+        --weeks defaults to 12. --json returns the underlying report rather
+        than ANSI chart output. This reads completion history without writes.
 
         EXAMPLES:
           clings stats heatmap            Show 12-week calendar

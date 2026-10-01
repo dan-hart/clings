@@ -14,6 +14,9 @@ struct ViewsCommand: AsyncParsableCommand {
         discussion: """
         Save named filter expressions so you can reuse them without retyping DSL.
 
+        With no subcommand, lists views. Definitions are local to clings, not
+        saved inside Things. Relative dates such as today are evaluated on run.
+
         EXAMPLES:
           clings views save docs "tags CONTAINS 'docs'" --note "Documentation queue"
           clings views list
@@ -37,6 +40,8 @@ struct ViewsListCommand: ParsableCommand {
         discussion: """
         Show every saved view name, the filter expression it runs, and any note you
         stored alongside it.
+
+        --json returns a bare array of view definitions, not an items envelope.
 
         EXAMPLES:
           clings views list
@@ -80,6 +85,9 @@ struct ViewsSaveCommand: ParsableCommand {
         discussion: """
         Store a reusable filter expression under a short name.
 
+        Saving an existing name replaces its definition. Quote the expression
+        as one shell argument. No Things todos are changed by saving a view.
+
         EXAMPLES:
           clings views save docs-today "tags CONTAINS 'docs' AND due <= today"
           clings views save docs "tags CONTAINS 'docs'" --note "Documentation queue"
@@ -108,6 +116,9 @@ struct ViewsRunCommand: AsyncParsableCommand {
         discussion: """
         Load a saved view by name, evaluate its filter expression, and render the
         matching open todos.
+
+        Uses the same open-list scope as filter; Logbook is excluded. --json
+        returns {count, items, list}. --format customizes todo lines only.
 
         EXAMPLES:
           clings views run docs-today
@@ -139,6 +150,8 @@ struct ViewsDeleteCommand: ParsableCommand {
         abstract: "Delete a saved view",
         discussion: """
         Remove a saved view you no longer need.
+
+        Deletes only the local definition, never matching Things todos.
 
         EXAMPLES:
           clings views delete docs-today

@@ -1,455 +1,241 @@
-# clings - a feature-rich cli for Things 3 on macOS
+<div align="center">
 
-> "clings" rhymes with "things"
+# ⚡ clings
 
-> **Disclaimer:** This project is not affiliated with, endorsed by, or sponsored by [Cultured Code](https://culturedcode.com/). Things 3 is a registered trademark of Cultured Code GmbH & Co. KG. clings is an independent, open-source project that provides a command-line interface wrapper for the Things 3 application.
+### Your Things 3 workflow. Your terminal.
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![CI](https://github.com/dan-hart/clings/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/dan-hart/clings/actions/workflows/ci.yml)
-[![Built with Swift](https://img.shields.io/badge/built%20with-Swift-FA7343.svg)](https://swift.org/)
-[![macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos/)
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-ffdd00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/codedbydan)
+Capture in natural language · Query your tasks · Build repeatable workflows
 
-**clings** brings the power of [Things 3](https://culturedcode.com/things/) to your terminal. Manage tasks, projects, and workflows with natural language, bulk operations, and powerful search - all without leaving the command line.
+[![CI](https://img.shields.io/github/actions/workflow/status/dan-hart/clings/ci.yml?branch=main&style=for-the-badge&label=build)](https://github.com/dan-hart/clings/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/dan-hart/clings?style=for-the-badge&color=FF4F00)](https://github.com/dan-hart/clings/releases)
+[![Swift](https://img.shields.io/badge/Swift-6.0%2B-FA7343?style=for-the-badge&logo=swift&logoColor=white)](Package.swift)
+[![macOS](https://img.shields.io/badge/macOS-14%2B-111111?style=for-the-badge&logo=apple&logoColor=white)](Package.swift)
+[![License](https://img.shields.io/badge/license-GPLv3-blue?style=for-the-badge)](LICENSE)
 
-## Features
+[Get started](#get-started) · [Command reference](docs/cli/command-reference.md) · [Workflow cookbook](docs/cli/workflows.md) · [Scripting guide](docs/cli/filtering-and-scripting.md)
 
-### 1. View Commands
+*“clings” rhymes with “things.”*
 
-Access all your Things 3 lists directly:
+</div>
 
-```bash
-clings today             # or: clings t (default command)
-clings inbox             # or: clings i
-clings upcoming          # or: clings u
-clings anytime
-clings someday           # or: clings s
-clings logbook           # or: clings l
-
-# Organization
-clings projects          # List all projects
-clings areas             # List all areas
-clings tags list         # List all tags
-clings show <ID>         # Show details of a specific todo
-```
-
-### 2. Natural Language Task Entry
-
-Add tasks using natural language parsing:
+**clings** brings [Things 3](https://culturedcode.com/things/) to the command line. Read your lists from the local SQLite database, capture tasks with natural language, and write through Things’ automation APIs. Compose the output with your own shell tools.
 
 ```bash
-clings add "draft changelog entry tomorrow #docs"
-clings add "replace air filter friday 3pm #home !high"
-clings add "finish reading list by dec 15 #reading"
-clings add "review PR // needs careful testing - check auth - verify tests"
+# Capture an idea before it disappears
+clings add "Draft release notes tomorrow #docs // include migration steps"
 
-# Supported patterns:
-# - Dates: today, tomorrow, next monday, in 3 days, dec 15
-# - Times: 3pm, 15:00, morning, evening
-# - Tags: #tag1 #tag2
-# - Projects: for <Project Name>
-# - Areas: in AreaName
-# - Deadlines: by friday
-# - Priority: !high, !!, !!!
-# - Notes: // notes at the end
-# - Checklist: - item1 - item2
-```
-
-You can also use explicit flags:
-
-```bash
-clings add "Task title" \
-  --when tomorrow \
-  --deadline "2024-12-31" \
-  --tags docs urgent \
-  --project "Documentation" \
-  --area "Writing" \
-  --notes "Additional context"
-
-# Preview without creating
-clings add "Test task tomorrow #docs" --parse-only
-```
-
-### 3. Search and Filter
-
-Search todos by text, or use the powerful filter command for advanced queries:
-
-```bash
-# Text search (case-insensitive, searches title and notes)
-clings search "meeting"
-clings find "project report"     # alias for search
-clings f "status"                # short alias
-
-# Save and reuse named views
-clings views save docs-today "tags CONTAINS 'docs' AND due <= today"
-clings views run docs-today
-clings views list
-
-# Advanced filtering (SQL-like query language)
-clings filter "status = open"
-clings filter "due < today AND status = open"
-clings filter "tags CONTAINS 'urgent'"
-clings filter "name LIKE '%report%'"
-clings filter "project IS NOT NULL"
-
-# Custom todo-line formatting
-clings today --format "{status} {name} [{project}] {tags}"
-```
-
-**Filter operators:** `=`, `!=`, `<`, `>`, `<=`, `>=`, `LIKE`, `CONTAINS`, `IS NULL`, `IS NOT NULL`, `IN`
-**Logic:** `AND`, `OR`
-**Fields:** `status`, `due`, `tags`, `project`, `area`, `name`, `notes`, `created`
-
-### 4. Todo Management
-
-Manage individual todos:
-
-```bash
-# Show details
-clings show <ID>
-
-# Interactive pick flows
-clings pick show report
-clings pick complete release
-clings pick cancel cleanup
-
-# Update properties
-clings update <ID> --name "New title"
-clings update <ID> --notes "Updated notes"
-clings update <ID> --due 2024-12-25
-clings update <ID> --tags work urgent
-
-# Complete, cancel, or delete
-clings complete <ID>             # or: clings done <ID>
-clings complete --title "milk"   # complete by title search
-clings cancel <ID>
-clings delete <ID>               # or: clings rm <ID>
-clings delete <ID> --force       # skip confirmation
-
-# Undo supported recent changes
-clings undo
-clings undo --show
-```
-
-### 5. Bulk Operations
-
-Perform operations on multiple tasks using powerful filters.
-
-> **Data Safety:** Bulk operations include built-in safety measures. Operations affecting more than 5 items require confirmation. Always use `--dry-run` first to preview changes.
-
-```bash
-# ALWAYS preview changes first with --dry-run
-clings bulk complete --where "tags CONTAINS 'done'" --dry-run
-
-# Complete matching tasks
-clings bulk complete --where "tags CONTAINS 'done'"
-
-# Cancel archive prep tasks
-clings bulk cancel --where "project = 'Archive Prep'"
-
-# Tag matching tasks as urgent
-clings bulk tag "urgent,priority" --where "tags CONTAINS 'docs'"
-
-# Move tasks to a project
-clings bulk move --where "tags CONTAINS 'draft'" --to "Archive"
-```
-
-**Safety options:**
-- `--dry-run` - Preview changes without applying them
-- `--yes` - Skip confirmation prompts (use with caution)
-- `--list` - Specify which list to operate on (default: today)
-
-### 6. Statistics Dashboard
-
-Track your productivity:
-
-```bash
-clings stats              # Show dashboard
-clings stats trends       # Completion trends over time
-clings stats heatmap      # Activity heatmap calendar
-clings stats --days 7     # Limit to last 7 days
-
-# Focus mode
-clings focus
+# Build a working queue
 clings focus --limit 5
-clings focus --format "{name} [{project}]"
+
+# Find open work with a deadline
+clings filter "tags CONTAINS 'docs' AND due IS NOT NULL" --json \
+  | jq -r '.items[] | [.name, (.dueDate // "—")] | @tsv'
+
+# Preview a batch before changing anything
+clings bulk move --list inbox --where "tags CONTAINS 'docs'" \
+  --to "Documentation" --dry-run
 ```
 
-### 7. Weekly Review
+## Why clings?
 
-Guide yourself through a GTD-style weekly review:
+| Capability | What you can do |
+| --- | --- |
+| 📝 Natural-language capture | Parse dates, tags, project names, notes, and checklists; preview before creating |
+| 🔎 Structured queries | Combine `AND`, `OR`, `NOT`, date comparisons, tag matches, and wildcards |
+| 🧩 Reusable workflows | Save named filter views and task templates with relative date defaults |
+| ⚙️ Shell composition | Use JSON and custom todo-line templates with `jq`, scripts, and reports |
+| 🎯 Focus and review | Rank open work, audit projects, and generate weekly review reports |
+| 📦 Bulk actions | Preview and confirm completion, cancellation, tagging, and project moves |
+| ↩️ Limited undo | Reverse supported recent single-todo operations; inspect the history first |
 
-```bash
-clings review             # Start a new review (default)
-clings review start       # Same as above
-clings review status      # Show last review session info
-clings review clear       # Clear review session
+## Get started
 
-# Audit open projects for stalled work
-clings project audit
-clings project audit --json
-```
+You need **macOS 14 or later** and **Things 3 for Mac**. Building from source requires a Swift 6 toolchain. Writes may require macOS Automation permission for the terminal you use.
 
-### 8. Shell Completions
-
-Generate shell completions:
-
-```bash
-clings completions bash > ~/.bash_completion.d/clings
-clings completions zsh > ~/.zfunc/_clings
-clings completions fish > ~/.config/fish/completions/clings.fish
-```
-
-### 9. Configuration
-
-Set up the Things 3 auth token for features that use the Things URL scheme (`--when`, `--heading`):
-
-```bash
-# Get your auth token from Things 3:
-# Settings > General > Enable Things URLs > Copy auth token
-
-# Save it to clings
-clings config set-auth-token <your-token>
-
-# Diagnose local setup
-clings doctor
-clings doctor --verbose
-```
-
-The auth token is stored at `~/.config/clings/auth-token` with restricted permissions (0600).
-
-### 10. Templates
-
-Save reusable task blueprints with tags, notes, checklist items, and relative schedule expressions:
-
-```bash
-clings template save weekly-review "Weekly review" \
-  --project "Documentation" \
-  --when "tomorrow morning" \
-  --checklist "Process inbox" "Review deadlines"
-
-clings template list
-clings template run weekly-review
-
-# You can also combine a template with an explicit add command
-clings add "Weekly review prep" --template weekly-review
-```
-
-## Requirements
-
-- **macOS 10.15 (Catalina) or later**
-- **Things 3 for Mac** - [Mac App Store](https://apps.apple.com/app/things-3/id904280696) or [Cultured Code](https://culturedcode.com/things/)
-- **Automation Permission** - On first run, macOS will prompt you to grant automation permission
-
-## Installation
-
-### Homebrew (Recommended)
+### Install with Homebrew
 
 ```bash
 brew install dan-hart/tap/clings
+clings --version
+clings --help
 ```
 
-To upgrade to the latest version:
+Upgrade with `brew update && brew upgrade clings`. Homebrew installs the published release; examples on `main` describe the current source and may include changes awaiting release.
+
+### Build current source
 
 ```bash
-brew update && brew upgrade clings
-```
-
-### From Source
-
-```bash
-# Clone the repository
-git clone https://github.com/dan-hart/clings
+git clone https://github.com/dan-hart/clings.git
 cd clings
-
-# Build release binary
 swift build -c release
+.build/release/clings --help
 
-# Install to /usr/local/bin
-cp .build/release/clings /usr/local/bin/
+# Optional: install somewhere on your PATH
+mkdir -p "$HOME/.local/bin"
+install .build/release/clings "$HOME/.local/bin/clings"
 ```
 
-## Quick Start
+### Your first five commands
 
 ```bash
-# View today's tasks
-clings today
+clings                         # Today is the default
+clings inbox                   # See captured tasks
+clings add "Draft outline tomorrow #writing" --parse-only
+clings search "outline"        # Find existing tasks
+clings doctor --verbose        # Inspect local setup
+```
 
-# Add a quick task
-clings add "draft changelog entry tomorrow #docs"
+Remove `--parse-only` when the parsed result looks right. For installation, permissions, and shell completion setup, see [Getting started](docs/cli/getting-started.md).
 
-# Save and run a reusable view
-clings views save docs-today "tags CONTAINS 'docs' AND due <= today"
-clings views run docs-today
+## Powerful workflows
 
-# Save and reuse a template
-clings template save weekly-review "Weekly review" --when "tomorrow morning"
-clings template run weekly-review
+### Capture with a start date and a deadline
 
-# View your inbox
-clings inbox
+```bash
+clings add "Publish documentation" \
+  --when tomorrow \
+  --deadline friday \
+  --project "Documentation" \
+  --tags docs release \
+  --notes "Include examples and migration notes" \
+  --parse-only --json
+```
 
-# Search for tasks
-clings search "project"
+The **start date** is when you plan to work; the **deadline** is when it is due. Explicit options override parsed values; tags are combined. Preview unfamiliar dates: an unrecognized date can resolve to no date.
 
-# Filter by status and date
-clings filter "due < today AND status = open"
+### Turn a query into a named view
 
-# Get productivity stats
-clings stats
+```bash
+clings views save docs-due "tags CONTAINS 'docs' AND due <= today" \
+  --note "Documentation due by today"
+clings views run docs-due
+clings views run docs-due --format "{id} {name} [{project}] {due}"
+```
 
-# See your working queue
-clings focus
+Views evaluate relative dates when run. They search open lists, not Logbook, and live in local clings configuration.
 
-# Check local setup
-clings doctor
+### Reuse a checklist without freezing its dates
 
-# Get help on any command
+```bash
+clings template save release-prep "Prepare release" \
+  --when tomorrow --tags release docs \
+  --checklist "Run tests" "Review changelog" "Verify installation"
+
+clings add "Prepare next release" --template release-prep --parse-only --json
+clings template run release-prep
+```
+
+Use template `--when`/`--deadline` options to store relative expressions. Dates embedded in the template title are not retained as schedule defaults.
+
+### Export a report you can use elsewhere
+
+```bash
+# TSV for a spreadsheet or terminal report (requires jq)
+clings today --json | jq -r '
+  ["ID", "Task", "Project", "Deadline"],
+  (.items[] | [.id, .name, (.project // ""), (.dueDate // "")]) | @tsv'
+
+# Completed work only, excluding canceled Logbook entries
+clings logbook --json \
+  | jq -r '.items[] | select(.status == "completed") | .name'
+
+# A compact text queue
+clings focus --limit 5 --format "{name} [{project}] {tags}"
+```
+
+### Triage an inbox with a preview
+
+```bash
+clings bulk move --list inbox --where "tags CONTAINS 'docs'" \
+  --to "Documentation" --dry-run
+
+# After reviewing the selection, repeat without --dry-run
+clings bulk move --list inbox --where "tags CONTAINS 'docs'" \
+  --to "Documentation"
+```
+
+Bulk filters apply **only to the selected list** (default: Today). Without a filter, the entire list is selected. Every nonempty write prompts unless `--yes` is supplied. Bulk writes are sequential, may partially succeed, and are not covered by undo.
+
+## Find the right command
+
+| Command | Purpose |
+| --- | --- |
+| `today` | Today's working list; alias `t`; default command |
+| `inbox` | Captured tasks; alias `i` |
+| `upcoming` | Future scheduled work; alias `u` |
+| `anytime` | Available unscheduled work |
+| `someday` | Someday/maybe tasks; alias `s` |
+| `logbook` | Completed/canceled history; alias `l` |
+| `search` | Title/notes search; aliases `find`, `f` |
+| `filter` | Structured queries over open lists |
+| `show` | Inspect one exact todo ID |
+| `add` | Natural-language capture, templates, parsing preview |
+| `update` | Edit title, notes, deadline, schedule, heading, tags |
+| `complete` | Complete by ID or unambiguous text; alias `done` |
+| `cancel` | Mark a todo canceled |
+| `delete` | Cancel via automation, not Trash movement; alias `rm` |
+| `views` | Local saved queries: `list`, `save`, `run`, `delete` |
+| `template` | Task blueprints: `list`, `save`, `run`, `delete` |
+| `projects` | List visible projects |
+| `project` | `list`, `add`, `audit` |
+| `areas` | List areas of responsibility |
+| `tags` | `list`, `add`, `delete`, `rename` |
+| `bulk` | Preview/execute `complete`, `cancel`, `tag`, `move` |
+| `focus` | Ranked working queue |
+| `pick` | Interactive `show`, `complete`, `cancel`, `delete` |
+| `undo` | Inspect/reverse supported recent single-todo mutations |
+| `doctor` | Local setup diagnostics |
+| `stats` | Dashboard, `trends`, `heatmap` |
+| `review` | Weekly report: `start`, `status`, `clear` |
+| `config` | `set-auth-token` for schedule/heading updates |
+| `completions` | Generate bash/zsh/fish completion scripts |
+| `open` | Currently disabled; returns an error |
+
+```bash
 clings --help
 clings add --help
+clings bulk move --help
+clings template save --help
 ```
 
-## Command Reference
+Most output commands accept `--json` and `--no-color`. Todo renderers also accept `--format` with `{id}`, `{name}`, `{status}`, `{due}`, `{project}`, `{area}`, and `{tags}`. JSON takes precedence over custom formatting. Put options after the command.
 
-### Common Options
+## Know the boundaries
 
-`--help` and `--version` are available at the root command (`clings`).
-Most output-oriented subcommands support:
+- **Reads:** SQLite access is read-only. clings does not write directly to the Things database.
+- **Writes:** Things’ AppleScript/JXA automation APIs perform writes. `update --when` and `update --heading` additionally use Things URLs and need an auth token; `add --when` does not.
+- **Delete:** The automation implementation cancels a todo; it does not move it to Trash. It currently runs without confirmation even when `--force` is omitted. Use Things itself for permanent deletion.
+- **Undo:** Covers supported single-todo changes, not bulk writes or project/tag management. Schedule and heading changes cannot be restored. Inspect `clings undo --show` first.
+- **JSON:** Lists, search, filter, and saved-view results are suitable for pipelines. Interactive picking, bulk previews, and review reports may still emit text despite `--json`.
+- **Priority:** Natural-language priority markers are parsed, but are not applied as a native Things priority. Use tags such as `urgent` with `focus`.
 
-```
---json                   Output as JSON (for scripting)
---no-color               Suppress color output
---format "{name} ..."    Custom todo-line formatting on todo-list commands
-```
+Keep independent backups; synchronization is not a substitute for recoverable backups. Details are in the [command reference](docs/cli/command-reference.md) and [troubleshooting guide](docs/cli/troubleshooting.md).
 
-### Commands
+## Documentation
 
-| Command | Alias | Description |
-|---------|-------|-------------|
-| `today` | `t` | Show today's todos (default) |
-| `inbox` | `i` | Show inbox todos |
-| `upcoming` | `u` | Show upcoming todos |
-| `anytime` | - | Show anytime todos |
-| `someday` | `s` | Show someday todos |
-| `logbook` | `l` | Show completed todos |
-| `add` | - | Add a new todo with natural language |
-| `show` | - | Show details of a todo by ID |
-| `update` | - | Update a todo's properties |
-| `complete` | `done` | Mark a todo as completed |
-| `cancel` | - | Cancel a todo |
-| `delete` | `rm` | Delete a todo (moves to trash) |
-| `search` | `find`, `f` | Search todos by text |
-| `views` | - | Manage saved filter views |
-| `template` | - | Manage reusable task templates |
-| `undo` | - | Undo the most recent supported mutation |
-| `focus` | - | Show a focused queue of high-attention tasks |
-| `pick` | - | Interactively pick a todo for a follow-up action |
-| `doctor` | - | Check clings setup and local environment |
-| `filter` | - | Filter todos using a query expression |
-| `projects` | - | List all projects |
-| `project` | - | Manage projects |
-| `areas` | - | List all areas |
-| `tags` | - | Manage tags |
-| `bulk` | - | Bulk operations on multiple todos |
-| `open` | - | Open Things 3 to a view or item (currently disabled) |
-| `stats` | - | View productivity statistics |
-| `review` | - | GTD weekly review workflow (start, status, clear) |
-| `config` | - | Configure clings settings (auth token) |
-| `completions` | - | Generate shell completions |
+- [Getting started](docs/cli/getting-started.md): installation, permissions, local configuration, completions
+- [Command reference](docs/cli/command-reference.md): every command family, defaults, options, and limitations
+- [Workflow cookbook](docs/cli/workflows.md): capture, planning, templates, bulk triage, and reporting
+- [Filtering and scripting](docs/cli/filtering-and-scripting.md): query syntax, JSON shapes, `jq`, and shell patterns
+- [Troubleshooting](docs/cli/troubleshooting.md): diagnosis, dates, permissions, and unexpected results
+- [Ten proposed improvements](docs/cli/improvement-roadmap.md): source-based ideas for the next iterations
 
-## Output Formats
-
-### Pretty (default)
-
-Human-readable colored output:
-
-```
-Today (3 items)
-──────────────────────────────────────────────
-[ ] Review PR #123        Development   Dec 15   #code
-[ ] Draft changelog entry Docs          Dec 15   #docs
-[x] Archive old notes    Archive       Dec 10   -
-```
-
-### JSON
-
-Machine-readable JSON for scripting:
+## Development and contributions
 
 ```bash
-clings today --json | jq '.items[] | select(.tags | contains(["docs"]))'
+swift build
+swift test
+swift build -c release
+bash scripts/release-docs-check.sh
+bash scripts/asp-preflight.sh --staged --strict
 ```
 
-## Data Safety
+See [CONTRIBUTING.md](CONTRIBUTING.md), [AGENTS.md](AGENTS.md), [testing and coverage](docs/development/testing-and-coverage.md), and the [release documentation checklist](docs/release/help-readme-docs-checklist.md). Contributions that preserve Things terminology, scriptability, and safe automation are welcome.
 
-- **Read operations:** Use direct SQLite access to the Things 3 database (read-only)
-- **Write operations:** Use Apple's JavaScript for Automation (JXA) through the official Things 3 API
-- **Scheduling and headings:** Use the Things 3 URL scheme (requires auth token) since `activationDate` is read-only in JXA
-- **No direct database writes:** clings never writes directly to the Things 3 database
+## License and support
 
-### Best Practices
+GNU General Public License v3.0 — see [LICENSE](LICENSE).
 
-1. **Always use `--dry-run` first** when running bulk operations
-2. **Start with small filters** to verify your filter expression matches what you expect
-3. **Keep Things 3 backups** - Things 3 syncs to iCloud automatically
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy_Me_a_Coffee-support-ffdd00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/codedbydan)
 
-## Troubleshooting
-
-### Automation permission error
-
-```bash
-open "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation"
-```
-
-Then enable Things 3 under your terminal application.
-
-### Things 3 not running
-
-Things 3 must be running for clings to communicate with it via AppleScript/JXA.
-
-### `today` shows too many tasks
-
-This was tracked in [Issue #5](https://github.com/dan-hart/clings/issues/5). The root cause was list filter/date encoding mismatches in SQLite reads.
-
-Details and regression coverage are documented in [docs/issues/issue-5-today-list-overcount.md](docs/issues/issue-5-today-list-overcount.md).
-
-## Development
-
-```bash
-swift build              # Build
-swift run clings today   # Run in debug mode
-swift test               # Run tests
-bash scripts/asp-preflight.sh --staged --strict   # Safety preflight before commit
-bash scripts/release-docs-check.sh                # Help/README/docs pre-release audit
-```
-
-See [AGENTS.md](AGENTS.md) for detailed development guidelines.
-Release checklist: [docs/release/help-readme-docs-checklist.md](docs/release/help-readme-docs-checklist.md)
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make changes following code quality standards
-4. Run safety checks:
-   - `bash scripts/asp-preflight.sh --staged --strict`
-   - `git secrets --scan --cached`
-5. Add tests for new functionality
-6. Ensure all checks pass: `swift build && swift test`
-7. Submit a pull request
-
-Full contributor policy: [CONTRIBUTING.md](CONTRIBUTING.md)
-
-## License
-
-GNU General Public License v3.0 (GPLv3) - see [LICENSE](LICENSE)
-
-## Links
-
-- **Repository:** https://github.com/dan-hart/clings
-- **Things 3:** https://culturedcode.com/things/
-
-## Support
-
-<a href="https://buymeacoffee.com/codedbydan"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" width="217" height="60"></a>
+clings is an independent open-source project, not affiliated with or endorsed by Cultured Code. Things 3 is a registered trademark of Cultured Code GmbH & Co. KG.

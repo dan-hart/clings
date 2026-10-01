@@ -19,6 +19,10 @@ struct ReviewCommand: AsyncParsableCommand {
         4. Review deadlines
         5. Generate summary
 
+        With no subcommand, starts/resumes the report and saves local review
+        progress. It does not automatically process or change Things todos.
+        Review output remains human-readable even when --json is supplied.
+
         EXAMPLES:
           clings review
           clings review status
@@ -42,6 +46,10 @@ struct ReviewStartCommand: AsyncParsableCommand {
         discussion: """
         Walk through inbox, someday, projects, deadlines, and a short weekly
         summary, then persist the review session locally.
+
+        Follow the suggested commands to act on findings. The review itself
+        changes only local session state, not Things data. --no-color is useful
+        for a plain-text report; --json does not convert this report to JSON.
 
         EXAMPLES:
           clings review
@@ -161,6 +169,8 @@ struct ReviewStatusCommand: AsyncParsableCommand {
         Show the last saved review timestamp and whether the core review steps
         have been marked complete.
 
+        This reads local session state. Output is text even with --json.
+
         EXAMPLES:
           clings review status
         """
@@ -201,6 +211,8 @@ struct ReviewClearCommand: AsyncParsableCommand {
         abstract: "Clear the current review session",
         discussion: """
         Delete the saved weekly review session so the next run starts fresh.
+
+        Does not delete or reset any Things todos, projects, views, or templates.
 
         EXAMPLES:
           clings review clear

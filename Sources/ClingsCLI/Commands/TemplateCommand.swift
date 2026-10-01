@@ -15,6 +15,9 @@ struct TemplateCommand: AsyncParsableCommand {
         Save reusable task blueprints with notes, tags, checklist items, and relative
         schedule expressions.
 
+        With no subcommand, lists templates. Saving and deleting definitions
+        changes local clings state; run creates a real Things todo.
+
         EXAMPLES:
           clings template save weekly-review "Weekly review" --when "tomorrow morning"
           clings template list
@@ -37,6 +40,8 @@ struct TemplateListCommand: ParsableCommand {
         abstract: "List saved templates",
         discussion: """
         Show all saved templates and the task title each template creates.
+
+        --json returns a bare array including stored defaults and date expressions.
 
         EXAMPLES:
           clings template list
@@ -75,6 +80,12 @@ struct TemplateSaveCommand: ParsableCommand {
         abstract: "Save a task template",
         discussion: """
         Capture a reusable task skeleton for repeatable work.
+
+        Saving an existing name replaces it. Use --when and --deadline to store
+        date expressions: dates embedded in the title are not retained as template
+        schedule defaults. Relative expressions are resolved when the task is made.
+        --tags and --checklist accept space-separated values; quote each multiword
+        checklist item. Saving does not create a Things todo.
 
         EXAMPLES:
           clings template save weekly-review "Weekly review" --when "tomorrow morning"
@@ -134,6 +145,10 @@ struct TemplateRunCommand: AsyncParsableCommand {
         discussion: """
         Instantiate a saved template as a new todo in Things.
 
+        Relative dates are resolved now. To preview or override defaults, use
+        clings add "Task title" --template NAME --parse-only before creating.
+        Creation is recorded for undo; undo cancels the new todo via automation.
+
         EXAMPLES:
           clings template run weekly-review
           clings template run release-checklist --json
@@ -172,6 +187,8 @@ struct TemplateDeleteCommand: ParsableCommand {
         abstract: "Delete a template",
         discussion: """
         Remove a saved template from local clings state.
+
+        Existing Things todos created from the template are unaffected.
 
         EXAMPLES:
           clings template delete weekly-review

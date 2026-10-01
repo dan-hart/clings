@@ -15,6 +15,9 @@ struct TagsCommand: AsyncParsableCommand {
         discussion: """
         List, create, rename, and delete tags in Things 3.
 
+        With no subcommand, lists tags. Tag management is not recorded by undo.
+        Quote names containing spaces or shell characters such as @.
+
         Tags allow cross-cutting organization across projects and areas.
         Common uses include:
         - Context (e.g., @phone, @computer, @errands)
@@ -50,6 +53,9 @@ struct TagsListCommand: AsyncParsableCommand {
         discussion: """
         Show every tag currently available in Things.
 
+        --json returns a count/items envelope. Use the displayed tag names with
+        add --tags, update --tags, or filter "tags CONTAINS 'docs'".
+
         EXAMPLES:
           clings tags list
           clings tags ls --json
@@ -79,6 +85,9 @@ struct TagsAddCommand: AsyncParsableCommand {
         abstract: "Create a new tag",
         discussion: """
         Creates a new tag in Things 3.
+
+        Creates the tag definition only; use add/update/bulk tag to apply it to
+        todos. This operation is not recorded by undo.
 
         EXAMPLES:
           clings tags add "urgent"
@@ -125,6 +134,9 @@ struct TagsDeleteCommand: AsyncParsableCommand {
 
         WARNING: This will remove the tag from all todos that have it.
         Use --force to skip the confirmation prompt.
+
+        This removes a tag definition, not the tagged todos. Undo cannot restore
+        this operation; review the exact name before confirming.
 
         EXAMPLES:
           clings tags delete "old-tag"
@@ -178,6 +190,9 @@ struct TagsRenameCommand: AsyncParsableCommand {
         Renames an existing tag in Things 3.
 
         All todos with the old tag name will automatically have the new name.
+
+        Quote names containing spaces. The alias is tags mv. This changes the
+        shared tag definition and is not recorded by clings undo.
 
         EXAMPLES:
           clings tags rename "old-name" "new-name"

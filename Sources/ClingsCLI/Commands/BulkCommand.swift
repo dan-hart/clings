@@ -13,6 +13,13 @@ struct BulkCommand: AsyncParsableCommand {
         discussion: """
         Perform operations on multiple todos at once using filters.
 
+        SELECTION AND SAFETY:
+          --where filters only the selected --list, not all Things todos.
+          Without --where, every item in that list is selected. Preview with
+          --dry-run. Every nonempty write prompts unless --yes is supplied.
+          Operations are sequential, not atomic, and are not recorded by undo.
+          --json may still include preview/prompt text; do not pipe it into jq.
+
         All bulk commands support:
         - --where EXPR    Filter expression to select todos
         - --dry-run       Preview changes without applying
@@ -59,6 +66,9 @@ struct BulkCompleteCommand: AsyncParsableCommand {
         abstract: "Mark multiple todos as completed",
         discussion: """
         Marks multiple todos as completed based on filter criteria.
+
+        Preview the selected list before writing. The final message reports
+        both successful and failed writes; failures do not roll back successes.
 
         EXAMPLES:
           clings bulk complete --list today
@@ -145,6 +155,9 @@ struct BulkCancelCommand: AsyncParsableCommand {
         discussion: """
         Cancels multiple todos based on filter criteria.
 
+        Cancellation keeps the todo as canceled. --where is scoped to --list
+        (default: today). Use --dry-run before confirming the selection.
+
         EXAMPLES:
           clings bulk cancel --list inbox
           clings bulk cancel --where "status = open AND tags CONTAINS 'cleanup'"
@@ -224,12 +237,15 @@ struct BulkTagCommand: AsyncParsableCommand {
         discussion: """
         Adds tags to multiple todos based on filter criteria.
 
+        Supply one comma-separated argument. Existing tags are preserved.
+        A failure can stop the command after earlier todos have been updated.
+
         NOTE: This operation has limited support due to Things 3 API
         constraints. Some tags may not be added via automation.
 
         EXAMPLES:
           clings bulk tag "urgent,review" --list today
-          clings bulk tag "done" --where "status = completed"
+          clings bulk tag "done" --list logbook --where "status = completed" --dry-run
           clings bulk tag "important" --dry-run
 
         SEE ALSO:
@@ -308,6 +324,10 @@ struct BulkMoveCommand: AsyncParsableCommand {
         abstract: "Move multiple todos to a project",
         discussion: """
         Moves multiple todos to a project based on filter criteria.
+
+        --to is the target project name. The default source list is today;
+        use --list inbox to organize captured work. Changes are not undoable
+        through clings undo, so check the --dry-run preview first.
 
         EXAMPLES:
           clings bulk move --to "Archive" --list inbox

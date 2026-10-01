@@ -9,21 +9,19 @@ import ClingsCore
 struct OpenCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "open",
-        abstract: "Open a todo or list in Things 3",
+        abstract: "Explain the disabled Things navigation command",
         discussion: """
-        Opens Things 3 and navigates to a specific todo or list.
-        This command is currently disabled because URL schemes are not allowed.
+        This command is currently disabled and exits with an error because
+        URL-based navigation is not enabled. It does not launch or navigate Things.
 
         LISTS:
           today, inbox, upcoming, anytime, someday, logbook
 
         EXAMPLES:
-          clings open today             Open Today list in Things
-          clings open inbox             Open Inbox in Things
-          clings open ABC123            Open a specific todo by ID
+          clings open --help            Explain the current limitation
+          clings show ABC123            Inspect a todo in the terminal instead
 
         NOTE:
-          URL schemes are disabled, so this command is a no-op.
           Open Things 3 manually instead.
 
         SEE ALSO:

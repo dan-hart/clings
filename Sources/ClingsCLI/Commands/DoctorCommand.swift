@@ -15,6 +15,12 @@ struct DoctorCommand: ParsableCommand {
         Run local diagnostics for config storage, database access, automation
         runtime availability, and auth-token configuration.
 
+        Reports whether the database can be opened and osascript is present.
+        It does not prove Things automation permission or perform a test write.
+        Missing auth tokens only affect update --when/--heading. Warnings appear
+        in overallStatus; they do not currently cause a nonzero exit status.
+        Config storage may be created while checking that it is writable.
+
         EXAMPLES:
           clings doctor
           clings doctor --verbose

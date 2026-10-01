@@ -1,6 +1,9 @@
 # clings Command Reference
 
-This guide mirrors the built-in help text and gives quick examples for the main `clings` command families.
+Complete command guide for current source. Published binaries may lag `main`;
+their built-in help is the authoritative list of accepted options.
+
+[Getting started](getting-started.md) · [Workflows](workflows.md) · [Filtering and scripting](filtering-and-scripting.md) · [Troubleshooting](troubleshooting.md)
 
 For the latest option-level details, run:
 
@@ -49,6 +52,15 @@ clings <command> <subcommand> --help
 | `clings areas` | List areas | `clings areas` |
 | `clings tags list` | List tags | `clings tags ls --json` |
 | `clings show <id>` | Show one todo in detail | `clings show abc123 --json` |
+
+Aliases: `today` → `t`, `inbox` → `i`, `upcoming` → `u`, `someday` → `s`,
+`logbook` → `l`. Running `clings` without arguments selects Today. Logbook can
+include canceled tasks as well as completed work. Project lists exclude trashed
+projects and repeating project templates in the SQLite read path.
+
+All of these commands read Things data without modifying it. `--format` applies
+to todo renderers, not project/area/tag tables. List JSON uses `{count, items}`
+with an optional `list` label. `show --json` returns one object.
 
 ## Capture, Search, and Reuse
 
@@ -109,7 +121,7 @@ clings pick delete cleanup
 
 ```bash
 clings project list
-clings project add "Writing Sprint" --area "Writing" --deadline 2025-06-01
+clings project add "Writing Sprint" --area "Writing" --deadline 2027-06-01
 clings project audit
 clings project audit --json
 
@@ -154,7 +166,172 @@ clings doctor
 clings doctor --verbose
 clings config set-auth-token <token>
 clings completions zsh > ~/.zfunc/_clings
-clings open today
+clings open --help
 ```
 
-`open` is intentionally disabled in the current CLI build, so use it only if that behavior changes in a future release.
+`open` is intentionally disabled and returns an error. Use `show` in the
+terminal or navigate Things manually.
+
+## Options and exact behavior
+
+### Shared output options
+
+| Option | Behavior |
+| --- | --- |
+| `--json` | JSON where implemented; takes precedence over `--format` |
+| `--no-color` | Suppress ANSI colors in output paths that use them |
+| `--format TEMPLATE` | Custom todo line: `{id}`, `{name}`, `{status}`, `{due}`, `{project}`, `{area}`, `{tags}` |
+
+Put options after the command, such as `clings inbox --json`. Although many
+commands accept the shared option group, not all renderers honor every option.
+Review remains text; pick and bulk can mix prompts/previews with JSON. There
+are no root-level global output options shared across all commands.
+
+### add TITLE
+
+| Option | Meaning |
+| --- | --- |
+| `--template NAME` | Load local task defaults before parsing TITLE |
+| `--notes TEXT` | Override parsed/template notes |
+| `--when DATE` | Planned start, resolved by the natural-language date parser |
+| `--deadline DATE` | Due date, independently resolved |
+| `--tags TAG...` | Separate values; append to parsed/template tags and deduplicate |
+| `--project NAME`, `--area NAME` | Set assignments by name |
+| `--parse-only` | Preview parsed fields without creating a todo |
+
+TITLE is one shell argument. Dates, `#tags`, `for Project`, `in Area`, `// notes`,
+and `- checklist item` patterns may be extracted. Preview whenever literal title
+text overlaps parser syntax. Explicit scalar options override parsed values;
+tags combine. Priority markers are parsed but are not sent as a Things priority.
+Unrecognized explicit dates can resolve to no date without a validation error.
+`add --when/--deadline` does not require a URL auth token. Creation records undo.
+
+### update ID
+
+Accepts `--name TEXT`, `--notes TEXT`, `--due DATE`, `--when DATE`,
+`--heading NAME`, and `--tags TAG...`. At least one property is required.
+Tags replace the existing set; `--tags docs urgent` is two tags, while
+`--tags docs,urgent` is one tag value.
+
+`--when` recognizes `today`, `tomorrow`, `evening`, `anytime`, `someday`, or a
+parseable date. `--when`/`--heading` require a Things URL token, validated before
+mutations begin. Name/notes/deadline/tags updates use automation. Update records
+a snapshot for undo, but scheduling/headings are not restored by undo.
+
+### complete [ID], cancel ID, delete ID
+
+- `complete` (alias `done`) accepts `--title`/`-t` instead of an ID. It searches
+  text and completes only when one open todo matches. Multiple matches print
+  candidates without a write; `--title` takes precedence over a supplied ID.
+- `cancel` marks the todo canceled immediately, without confirmation.
+- `delete` (alias `rm`) also cancels through the current automation API. It
+  does not move to Trash. `--force`/`-f` is accepted but no confirmation prompt
+  is implemented; the write happens immediately.
+
+All three record supported undo entries. Use exact IDs from a list or `show`,
+not an assumed unique title. These commands accept shared output options, but
+`--format` does not apply to success messages.
+
+### search QUERY and filter EXPRESSION
+
+`search` aliases are `find` and `f`. It searches title/notes case-insensitively
+and can return completed/canceled todos. SQLite search excludes repeating
+templates and descendants of trashed projects.
+
+`filter` reads open lists only, deduplicates todos, then evaluates its DSL.
+Supported fields/operators and date boundaries are documented in
+[Filtering and scripting](filtering-and-scripting.md). No arbitrary SQL runs.
+
+### views
+
+| Subcommand | Arguments/options | Effect |
+| --- | --- | --- |
+| `list` (`ls`, default) | Shared output options | List definitions; JSON is a bare array |
+| `save` | `NAME EXPRESSION [--note TEXT]` | Save/replace local definition; does not validate the full DSL until run |
+| `run` | `NAME` plus output options | Query open tasks; relative dates resolve now |
+| `delete` (`rm`) | `NAME` | Delete only the local definition |
+
+Views are stored in `saved-views.json` under the clings config directory.
+They do not create smart lists inside Things.
+
+### template
+
+| Subcommand | Arguments/options | Effect |
+| --- | --- | --- |
+| `list` (`ls`, default) | Shared output options | List definitions; JSON is a bare array |
+| `save` | `NAME TITLE` plus defaults below | Save/replace a local task blueprint |
+| `run` | `NAME` plus output options | Create a Things todo and record creation undo |
+| `delete` (`rm`) | `NAME` | Remove definition; existing todos remain |
+
+Save defaults: `--notes`, `--when`, `--deadline`, `--project`, `--area`,
+`--tags TAG...`, `--checklist ITEM...`. Quote each multiword checklist item.
+Dates embedded in TITLE are not retained as schedule defaults; use the explicit
+date options. Their relative expressions resolve when run. With template save,
+explicit tags replace parsed tags; with add --template, tags combine.
+
+### bulk
+
+Actions: `complete`, `cancel`, `tag TAGS`, and `move --to PROJECT`.
+Shared options: `--list LIST` (default `today`), `--where EXPRESSION`,
+`--dry-run`, `--yes`/`-y`, and output options. List values are `today`, `inbox`,
+`upcoming`, `anytime`, `someday`, and `logbook` (not their CLI aliases).
+
+`--where` narrows the selected list; omitting it selects the whole list. Every
+nonempty write prompts unless `--yes` is supplied. `--dry-run` previews and exits
+before the prompt or writes. `tag` takes one comma-separated argument and merges
+existing tags. Complete/cancel/move report successful and failed writes; tagging
+can stop on a failure. There is no atomic rollback or bulk undo history. Even
+`--json` can include text previews. Inspect reported counts, not just exit status.
+
+### project, projects, areas, tags
+
+`projects` and `project list` (`ls`, default) provide the same list behavior.
+`project add TITLE` accepts `--notes`, `--area`, `--when`, `--deadline`,
+`--tags "docs,release"`, and output options. Dates accept `today`, `tomorrow`,
+or `YYYY-MM-DD`. `project audit` reports open-project health without writes.
+`areas` lists areas but does not create or rename them.
+
+`tags list` (`ls`, default) lists definitions. `tags add NAME`
+creates one; `tags rename OLD NEW` (`mv`) renames it; `tags delete NAME` (`rm`) removes
+it from tagged todos and prompts unless `--force`/`-f` is passed. Tag deletion
+does not delete todos. Project/tag management is not covered by undo.
+
+### focus, pick, undo
+
+- `focus --limit N` defaults to 10. It ranks open tasks using deadlines, urgency
+  tags, and unassigned work. Use a positive limit. JSON returns ranking items
+  with `todo`, `score`, and `reasons`; custom formatting shows todo lines.
+- `pick show|complete|cancel|delete [QUERY]` prompts for a displayed number or
+  exact ID. Show includes historical work; writes restrict candidates to open
+  tasks. An empty or invalid choice stops the command. `pick delete` cancels,
+  matching direct delete. Prompts remain text with `--json`.
+- `undo --show` inspects the latest entry; `undo` attempts its reversal. History
+  holds up to 20 entries. Supported operations: creation, update, completion,
+  cancellation, deletion. Creation undo cancels; status undo reopens; update
+  undo restores name/notes/deadline/tags. It does not restore schedule/headings,
+  nor cover bulk writes or project/tag management. Entries are popped before
+  reversal, so failures consume them.
+
+### stats and review
+
+`stats --days N` defaults to 30. `stats trends --weeks N` defaults to 4;
+`stats heatmap --weeks N` defaults to 12. All read the local database and accept
+JSON report output. `--days` belongs to the dashboard, not its subcommands.
+
+`review start` (default) generates a weekly report and saves local session
+progress; it does not mutate Things todos. `review status` reads progress and
+`review clear` clears that session only. Review reports/status stay text despite
+accepting `--json`. Progress is stored as `review-session.json` in the config
+directory, with a legacy fallback path under `~/.clings`.
+
+### doctor, config, completions, open
+
+`doctor [--verbose] [--json]` checks config storage, database opening,
+`osascript` availability, and auth-token presence. It does not test automation
+permission; warnings appear in the report without a failing process status.
+
+`config set-auth-token TOKEN` stores the secret with mode 0600 for update
+scheduling/headings. See [Getting started](getting-started.md) for token handling
+and `CLINGS_CONFIG_DIR`. `completions bash|zsh|fish` prints a completion script;
+installation and shell initialization are separate steps. `open TARGET` is
+currently disabled and always raises an error.
