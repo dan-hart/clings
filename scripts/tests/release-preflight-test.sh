@@ -80,4 +80,10 @@ expect_failure 'version' v9.9.9
 git switch --quiet --detach v0.4.0
 expect_failure 'main' v0.4.0
 expect_success v0.4.0 --tag-checkout
+git switch --quiet main
+# A same-tree orphan commit must not pass just because versions match.
+MISSING_HISTORY_SHA="$(git commit-tree "$(git rev-parse 'HEAD^{tree}')" -m 'Missing reviewed history fixture')"
+git update-ref refs/heads/main "$MISSING_HISTORY_SHA"
+git update-ref refs/remotes/origin/main "$MISSING_HISTORY_SHA"
+expect_failure 'missing required reviewed commit' v0.4.0
 echo "Release preflight: $pass cases passed"
