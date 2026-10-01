@@ -315,6 +315,59 @@ public enum JXAScripts {
         """
     }
 
+    /// Build an AppleScript date value without invoking AppleScript's locale-sensitive
+    /// `date "..."` parser. The input format is generated internally using en_US_POSIX.
+    private static func appleScriptDateSetup(variableName: String, dateString: String?) -> String {
+        guard let dateString else { return "" }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = TimeZone.current
+        formatter.dateFormat = "MMMM d, yyyy HH:mm:ss"
+        formatter.isLenient = false
+
+        guard let date = formatter.date(from: dateString) else {
+            return "error \"Invalid date value: \(dateString.appleScriptEscaped)\""
+        }
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone.current
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+
+        guard
+            let year = components.year,
+            let month = components.month,
+            let day = components.day,
+            let hour = components.hour,
+            let minute = components.minute,
+            let second = components.second,
+            (1...12).contains(month)
+        else {
+            return "error \"Invalid date components\""
+        }
+
+        let monthNames = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ]
+        // Work at noon while changing calendar fields, then assign wall-clock
+        // components. AppleScript's `set time` can cross back into the previous
+        // day when the target date starts with a DST gap (e.g. Santiago).
+        // Set the hour last so half-hour DST gaps do not affect intermediate times.
+        return """
+        set \(variableName) to current date
+        set hours of \(variableName) to 12
+        set day of \(variableName) to 1
+        set year of \(variableName) to \(year)
+        set month of \(variableName) to \(monthNames[month - 1])
+        set day of \(variableName) to \(day)
+        set minutes of \(variableName) to \(minute)
+        set seconds of \(variableName) to \(second)
+        set hours of \(variableName) to \(hour)
+        """
+    }
+
     /// Create a new todo with the given properties via AppleScript.
     public static func createTodo(
         name: String,
@@ -328,6 +381,8 @@ public enum JXAScripts {
     ) -> String {
         _ = tags  // Tags are applied separately via AppleScript.
         let checklistArray = checklistItems.map { "\"\($0.appleScriptEscaped)\"" }.joined(separator: ", ")
+        let whenDateSetup = appleScriptDateSetup(variableName: "scheduledDate", dateString: when)
+        let deadlineDateSetup = appleScriptDateSetup(variableName: "deadlineDate", dateString: deadline)
 
         var propsCode = "name: \"\(name.appleScriptEscaped)\""
         if let notes = notes, !notes.isEmpty {
@@ -350,8 +405,11 @@ public enum JXAScripts {
             end if
             """ : "")
 
-            \(when != nil ? "schedule newTodo for date \"\(when!.appleScriptEscaped)\"" : "")
-            \(deadline != nil ? "set due date of newTodo to date \"\(deadline!.appleScriptEscaped)\"" : "")
+            \(whenDateSetup)
+            \(when != nil ? "schedule newTodo for scheduledDate" : "")
+
+            \(deadlineDateSetup)
+            \(deadline != nil ? "set due date of newTodo to deadlineDate" : "")
 
             set checklistItems to {\(checklistArray)}
             repeat with itemName in checklistItems
