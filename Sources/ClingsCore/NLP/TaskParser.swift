@@ -166,9 +166,13 @@ public struct TaskParser: Sendable {
             remaining.removeSubrange(fullRange)
         }
 
-        // Extract deadline (by friday, by dec 15, by dec 15 3pm)
-        let timeSuffix = #"(?:\s+\d+(?::\d+)(?:\s*(?:am|pm))?|\s+\d+\s*(?:am|pm))?"#
-        let deadlinePattern = #"\bby\s+((?:\d{4}-\d{2}-\d{2}|next\s+\w+|this evening|tomorrow morning|tomorrow evening|in\s+\d+\s+days?|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{1,2}|\w+)"# + timeSuffix + ")"
+        // Use one complete expression grammar for starts and deadlines. Capture
+        // numeric time suffixes in full before validating, even malformed ones.
+        let timeSuffix = #"(?:\s*\d+:\d+(?:\s*(?:am|pm))?|\s*\d+\s*(?:am|pm))?"#
+        let weekday = #"(?:monday|mon|tuesday|tue|wednesday|wed|thursday|thu|friday|fri|saturday|sat|sunday|sun)"#
+        let monthDate = #"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{1,2}(?:\s+\d{4}\b)?"#
+        let dateStem = #"(?:\d{4}-\d{2}-\d{2}|tomorrow\s+(?:morning|evening|night)|this\s+evening|next\s+\w+|in\s+\d+\s+days?|"# + monthDate + #"|tomorrow|today|tonight|morning|evening|"# + weekday + ")"
+        let deadlinePattern = #"\bby\s+("# + dateStem + timeSuffix + #"|\w+"# + timeSuffix + #")\b"#
         if let regex = try? NSRegularExpression(pattern: deadlinePattern, options: .caseInsensitive),
            let match = regex.firstMatch(in: remaining, options: [], range: NSRange(remaining.startIndex..., in: remaining)),
            let dateRange = Range(match.range(at: 1), in: remaining),
@@ -183,34 +187,19 @@ public struct TaskParser: Sendable {
             remaining.removeSubrange(fullRange)
         }
 
-        // Extract when date (tomorrow, next monday, dec 15, dec 15 3pm)
-        let whenPatterns = [
-            #"\b(?:tomorrow\s+(?:morning|evening)|this\s+evening|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{1,2})\s+\d+(?::\d+)(?:\s*(?:am|pm))?\b"#,
-            #"\b(?:today|tomorrow|next\s+\w+|in\s+\d+\s+days?|(?:monday|mon|tuesday|tue|wednesday|wed|thursday|thu|friday|fri|saturday|sat|sunday|sun))\s+\d+(?::\d+)(?:\s*(?:am|pm))?\b"#,
-            #"\btomorrow\s+(?:morning|evening|\d{1,2}(?::\d{2})?\s*(?:am|pm))\b"#,
-            #"\btoday\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)\b"#,
-            #"\bthis evening\b"#,
-            #"\btomorrow\b"#,
-            #"\btoday\b"#,
-            #"\bnext\s+\w+\b"#,
-            #"\bin\s+\d+\s+days?\b"#,
-            #"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{1,2}(?:\s+\d{1,2}(?::\d{2})?\s*(?:am|pm))?\b"#,
-            #"\b(?:monday|mon|tuesday|tue|wednesday|wed|thursday|thu|friday|fri|saturday|sat|sunday|sun)(?:\s+\d{1,2}(?::\d{2})?\s*(?:am|pm))?\b"#,
-        ]
-        for pattern in whenPatterns {
-            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
-               let match = regex.firstMatch(in: remaining, options: [], range: NSRange(remaining.startIndex..., in: remaining)),
-               let range = Range(match.range, in: remaining)
-            {
-                let dateStr = String(remaining[range])
-                whenExpression = dateStr
-                whenDate = dateParser.parse(dateStr)
-                if whenDate == nil {
-                    invalidDates.append(dateStr)
-                }
-                remaining.removeSubrange(range)
-                break
+        let whenPattern = #"\b(?:on\s+)?("# + dateStem + timeSuffix + #")\b"#
+        if let regex = try? NSRegularExpression(pattern: whenPattern, options: .caseInsensitive),
+           let match = regex.firstMatch(in: remaining, options: [], range: NSRange(remaining.startIndex..., in: remaining)),
+           let dateRange = Range(match.range(at: 1), in: remaining),
+           let fullRange = Range(match.range, in: remaining)
+        {
+            let dateStr = String(remaining[dateRange])
+            whenExpression = dateStr
+            whenDate = dateParser.parse(dateStr)
+            if whenDate == nil {
+                invalidDates.append(dateStr)
             }
+            remaining.removeSubrange(fullRange)
         }
 
         // Clean up title

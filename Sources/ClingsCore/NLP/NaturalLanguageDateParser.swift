@@ -100,36 +100,39 @@ public struct NaturalLanguageDateParser: Sendable {
             return calendar.startOfDay(for: date)
         }
 
-        for format in ["MMM d yyyy", "MMMM d yyyy", "MMM d", "MMMM d"] {
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.calendar = calendar
-            formatter.timeZone = calendar.timeZone
-            formatter.isLenient = false
-            formatter.dateFormat = format
+        // Construct English month/day expressions directly. DateFormatter's
+        // default year and Calendar.date(from:) can otherwise normalize Feb 29.
+        let pattern = #"^([a-z]+)\s+(\d{1,2})(?:\s+(\d{4}))?$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: lower, range: NSRange(lower.startIndex..., in: lower)),
+              let monthRange = Range(match.range(at: 1), in: lower),
+              let dayRange = Range(match.range(at: 2), in: lower),
+              let day = Int(lower[dayRange]) else { return nil }
+        let months = [
+            "jan": 1, "january": 1, "feb": 2, "february": 2,
+            "mar": 3, "march": 3, "apr": 4, "april": 4, "may": 5,
+            "jun": 6, "june": 6, "jul": 7, "july": 7, "aug": 8, "august": 8,
+            "sep": 9, "sept": 9, "september": 9, "oct": 10, "october": 10,
+            "nov": 11, "november": 11, "dec": 12, "december": 12,
+        ]
+        guard let month = months[String(lower[monthRange])] else { return nil }
+        let explicitYear = Range(match.range(at: 3), in: lower).flatMap { Int(lower[$0]) }
+        var year = explicitYear ?? calendar.component(.year, from: referenceDate)
 
-            if format.contains("yyyy"), let date = formatter.date(from: lower) {
-                return calendar.startOfDay(for: date)
-            }
-
-            if let date = formatter.date(from: lower) {
-                let components = calendar.dateComponents([.month, .day], from: date)
-                var merged = calendar.dateComponents([.year], from: referenceDate)
-                merged.month = components.month
-                merged.day = components.day
-                if let candidate = calendar.date(from: merged) {
-                    let candidateStart = calendar.startOfDay(for: candidate)
-                    if candidateStart < calendar.startOfDay(for: referenceDate),
-                       let nextYear = calendar.date(byAdding: .year, value: 1, to: candidateStart)
-                    {
-                        return nextYear
-                    }
-                    return candidateStart
-                }
-            }
+        func candidate(year: Int) -> Date? {
+            let components = DateComponents(year: year, month: month, day: day)
+            guard let date = calendar.date(from: components) else { return nil }
+            let actual = calendar.dateComponents([.year, .month, .day], from: date)
+            guard actual.year == year, actual.month == month, actual.day == day else { return nil }
+            return calendar.startOfDay(for: date)
         }
 
-        return nil
+        guard let date = candidate(year: year) else { return nil }
+        if explicitYear == nil, date < calendar.startOfDay(for: referenceDate) {
+            year += 1
+            return candidate(year: year)
+        }
+        return date
     }
 
     private func weekdayFromName(_ name: String) -> Int? {

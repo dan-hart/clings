@@ -5,19 +5,36 @@ import Foundation
 import Testing
 
 struct QueryDateTests {
+    @Test func invalidTimesAcrossSchedulingStemsRejectBeforeWrites() async throws {
+        let client = RecordingThingsClient()
+        let stems = ["next friday", "tomorrow", "in 2 days", "on friday", "2027-01-15", "dec 15", "this evening", "tomorrow morning"]
+        try await CommandTestSupport.withRuntime(client: client) {
+            for stem in stems {
+                for suffix in [" 13pm", " 999pm", " 25:00", "999pm"] {
+                    for prefix in ["", "by "] {
+                        let command = try AddCommand.parse(["Task \(prefix)\(stem)\(suffix)", "--parse-only", "--json"])
+                        await #expect(throws: (any Error).self) { try await command.run() }
+                    }
+                }
+            }
+        }
+        #expect(client.createdTodos.isEmpty)
+    }
+
     @Test func templateRetainsEmbeddedRelativeDateExpressions() async throws {
         try await CommandTestSupport.withTemporaryConfigDirectory { _ in
             let save = try TemplateSaveCommand.parse(["relative", "Task tomorrow by friday"])
-            let _ = try CommandTestSupport.captureStandardOutput { try save.run() }
+            _ = try CommandTestSupport.captureStandardOutput { try save.run() }
             let saved = try #require(try TemplateStore.load(name: "relative"))
             #expect(saved.title == "Task")
             #expect(saved.whenExpression == "tomorrow")
             #expect(saved.deadlineExpression == "friday")
             let parser = NaturalLanguageDateParser()
             let reference = try #require(parser.parse("2027-01-01"))
-            #expect(parser.parse(try #require(saved.whenExpression), referenceDate: reference) == parser.parse("2027-01-02"))
+            #expect(try parser.parse(#require(saved.whenExpression), referenceDate: reference) == parser.parse("2027-01-02"))
         }
     }
+
     @Test func queryScopesAndDeterministicOrdering() async throws {
         let client = RecordingThingsClient()
         let a = Todo(id: "a", name: "alpha")
