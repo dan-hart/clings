@@ -11,6 +11,16 @@ import Testing
 /// Regression coverage for https://github.com/dan-hart/clings/issues/5
 @Suite("ThingsDatabase")
 struct ThingsDatabaseTests {
+    @Test func searchReturnsAllMatchesForQueryProcessing() throws {
+        let fixture = try makeFixtureDatabase()
+        try fixture.db.write { db in
+            for index in 0 ... 120 {
+                try insertTask(db, id: "match-\(index)", title: "Findable \(index)", start: 1, startDate: nil, index: index)
+            }
+        }
+        let database = ThingsDatabase(dbPath: fixture.path)
+        #expect(try database.search(query: "Findable").count == 121)
+    }
     @Test func scheduledStartSurvivesSQLiteProjection() throws {
         let fixture = try makeFixtureDatabase()
         let code = thingsDateCode(Date())

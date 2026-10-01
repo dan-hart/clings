@@ -284,7 +284,6 @@ public final class ThingsDatabase: Sendable {
                   AND rt1_recurrenceRule IS NULL
                   AND (title LIKE ? OR notes LIKE ?)
             ORDER BY todayIndex, "index"
-            LIMIT 100
             """
 
             let pattern = "%\(query)%"

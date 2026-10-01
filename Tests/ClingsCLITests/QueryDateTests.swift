@@ -5,6 +5,19 @@ import Foundation
 import Testing
 
 struct QueryDateTests {
+    @Test func templateRetainsEmbeddedRelativeDateExpressions() async throws {
+        try await CommandTestSupport.withTemporaryConfigDirectory { _ in
+            let save = try TemplateSaveCommand.parse(["relative", "Task tomorrow by friday"])
+            let _ = try CommandTestSupport.captureStandardOutput { try save.run() }
+            let saved = try #require(try TemplateStore.load(name: "relative"))
+            #expect(saved.title == "Task")
+            #expect(saved.whenExpression == "tomorrow")
+            #expect(saved.deadlineExpression == "friday")
+            let parser = NaturalLanguageDateParser()
+            let reference = try #require(parser.parse("2027-01-01"))
+            #expect(parser.parse(try #require(saved.whenExpression), referenceDate: reference) == parser.parse("2027-01-02"))
+        }
+    }
     @Test func queryScopesAndDeterministicOrdering() async throws {
         let client = RecordingThingsClient()
         let a = Todo(id: "a", name: "alpha")
@@ -62,7 +75,7 @@ struct QueryDateTests {
     @Test func invalidAddDateDoesNotWrite() async throws {
         let client = RecordingThingsClient()
         try await CommandTestSupport.withRuntime(client: client) {
-            for args in [["Task", "--when", "2027-02-30"], ["Task tomorrow 13pm"], ["Task", "--deadline", "today 9:99"]] {
+            for args in [["Task", "--when", "2027-02-30"], ["Task tomorrow 13pm"], ["Task by tomorrow 13pm", "--parse-only", "--json"], ["Task tomorrow 25:00"], ["Task dec 15 25:00"], ["Task by 2027-02-30"], ["Task", "--deadline", "today 9:99"]] {
                 let command = try AddCommand.parse(args)
                 await #expect(throws: (any Error).self) { try await command.run() }
             }

@@ -82,8 +82,8 @@ struct TemplateSaveCommand: ParsableCommand {
         Capture a reusable task skeleton for repeatable work.
 
         Saving an existing name replaces it. Use --when and --deadline to store
-        date expressions: dates embedded in the title are not retained as template
-        schedule defaults. Relative expressions are resolved when the task is made.
+        date expressions; dates embedded in the title are retained when explicit
+        options are absent. Relative expressions are resolved when the task is made.
         --tags and --checklist accept space-separated values; quote each multiword
         checklist item. Saving does not create a Things todo.
 
@@ -134,8 +134,8 @@ struct TemplateSaveCommand: ParsableCommand {
             tags: Array(NSOrderedSet(array: parsed.tags + tags)) as? [String] ?? parsed.tags + tags,
             project: project ?? parsed.project,
             area: area ?? parsed.area,
-            whenExpression: when,
-            deadlineExpression: deadline,
+            whenExpression: when ?? parsed.whenExpression,
+            deadlineExpression: deadline ?? parsed.deadlineExpression,
             checklistItems: checklist.isEmpty ? parsed.checklistItems : checklist
         )
         try TemplateStore.save(template)

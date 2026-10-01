@@ -47,6 +47,11 @@ struct SearchCommand: AsyncParsableCommand {
             todos = todos.filter { scopeIDs.contains($0.id) }
         }
         todos = queryOptions.apply(todos)
+        // Preserve the historical default display cap, but scope/sort/limit
+        // processing must see every matching row before choosing results.
+        if queryOptions.list == nil, queryOptions.sort == nil, queryOptions.limit == nil, !queryOptions.includeLogbook {
+            todos = Array(todos.prefix(100))
+        }
         print(renderTodos(todos, list: "Search", output: output))
     }
 }

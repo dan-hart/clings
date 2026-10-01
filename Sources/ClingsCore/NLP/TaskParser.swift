@@ -8,6 +8,8 @@ import Foundation
 /// Result of parsing a natural language task description.
 public struct ParsedTask: Sendable {
     public var invalidDateExpressions: [String] = []
+    public var whenExpression: String?
+    public var deadlineExpression: String?
     public var title: String
     public var notes: String?
     public var tags: [String]
@@ -51,6 +53,8 @@ public struct TaskParser: Sendable {
     public func parse(_ input: String) -> ParsedTask {
         var remaining = input
         var invalidDates: [String] = []
+        var whenExpression: String?
+        var deadlineExpression: String?
         var tags: [String] = []
         var project: String?
         var area: String?
@@ -163,13 +167,15 @@ public struct TaskParser: Sendable {
         }
 
         // Extract deadline (by friday, by dec 15, by dec 15 3pm)
-        let deadlinePattern = #"\bby\s+((?:next\s+\w+|today|tomorrow|this evening|tomorrow morning|tomorrow evening|in\s+\d+\s+days?|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{1,2}(?:\s+\d{1,2}(?::\d{2})?\s*(?:am|pm))?|\w+(?:\s+\d{1,2}(?::\d{2})?\s*(?:am|pm))?))"#
+        let timeSuffix = #"(?:\s+\d+(?::\d+)(?:\s*(?:am|pm))?|\s+\d+\s*(?:am|pm))?"#
+        let deadlinePattern = #"\bby\s+((?:\d{4}-\d{2}-\d{2}|next\s+\w+|this evening|tomorrow morning|tomorrow evening|in\s+\d+\s+days?|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{1,2}|\w+)"# + timeSuffix + ")"
         if let regex = try? NSRegularExpression(pattern: deadlinePattern, options: .caseInsensitive),
            let match = regex.firstMatch(in: remaining, options: [], range: NSRange(remaining.startIndex..., in: remaining)),
            let dateRange = Range(match.range(at: 1), in: remaining),
            let fullRange = Range(match.range, in: remaining)
         {
             let dateStr = String(remaining[dateRange])
+            deadlineExpression = dateStr
             dueDate = dateParser.parse(dateStr)
             if dueDate == nil {
                 invalidDates.append(dateStr)
@@ -179,6 +185,8 @@ public struct TaskParser: Sendable {
 
         // Extract when date (tomorrow, next monday, dec 15, dec 15 3pm)
         let whenPatterns = [
+            #"\b(?:tomorrow\s+(?:morning|evening)|this\s+evening|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{1,2})\s+\d+(?::\d+)(?:\s*(?:am|pm))?\b"#,
+            #"\b(?:today|tomorrow|next\s+\w+|in\s+\d+\s+days?|(?:monday|mon|tuesday|tue|wednesday|wed|thursday|thu|friday|fri|saturday|sat|sunday|sun))\s+\d+(?::\d+)(?:\s*(?:am|pm))?\b"#,
             #"\btomorrow\s+(?:morning|evening|\d{1,2}(?::\d{2})?\s*(?:am|pm))\b"#,
             #"\btoday\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)\b"#,
             #"\bthis evening\b"#,
@@ -195,6 +203,7 @@ public struct TaskParser: Sendable {
                let range = Range(match.range, in: remaining)
             {
                 let dateStr = String(remaining[range])
+                whenExpression = dateStr
                 whenDate = dateParser.parse(dateStr)
                 if whenDate == nil {
                     invalidDates.append(dateStr)
@@ -222,6 +231,8 @@ public struct TaskParser: Sendable {
             priority: priority
         )
         parsed.invalidDateExpressions = invalidDates
+        parsed.whenExpression = whenExpression
+        parsed.deadlineExpression = deadlineExpression
         return parsed
     }
 
