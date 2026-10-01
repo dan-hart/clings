@@ -45,7 +45,7 @@ public final class ThingsDatabase: Sendable {
             throw ThingsError.operationFailed("Things 3 database not found. Is Things 3 installed?")
         }
 
-        self.dbPath = path
+        dbPath = path
     }
 
     /// Initialize with an explicit database path.
@@ -73,91 +73,91 @@ public final class ThingsDatabase: Sendable {
             switch list {
             case .inbox:
                 sql = """
-                    SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, heading, area
-                    FROM TMTask
-                    WHERE status = 0 AND trashed = 0 AND type = 0
-                          AND start = 0 AND project IS NULL AND startDate IS NULL
-                          AND rt1_recurrenceRule IS NULL
-                    ORDER BY "index"
-                    """
+                SELECT uuid, title, notes, status, stopDate, deadline, startDate, creationDate,
+                       userModificationDate, project, heading, area
+                FROM TMTask
+                WHERE status = 0 AND trashed = 0 AND type = 0
+                      AND start = 0 AND project IS NULL AND startDate IS NULL
+                      AND rt1_recurrenceRule IS NULL
+                ORDER BY "index"
+                """
                 arguments = []
 
             case .today:
                 let todayCode = thingsDateCode(Date())
                 sql = """
-                    SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, heading, area
-                    FROM TMTask
-                    WHERE status = 0 AND trashed = 0 AND type = 0
-                          AND rt1_recurrenceRule IS NULL
-                          AND (
-                              (start = 1 AND startDate IS NOT NULL AND startDate <= ?)
-                              OR (start = 2 AND startDate IS NOT NULL AND startDate <= ?)
-                              OR (startDate IS NULL AND deadline IS NOT NULL AND deadline <= ? AND deadlineSuppressionDate IS NULL)
-                          )
-                    ORDER BY todayIndex IS NULL, todayIndex, "index"
-                    """
+                SELECT uuid, title, notes, status, stopDate, deadline, startDate, creationDate,
+                       userModificationDate, project, heading, area
+                FROM TMTask
+                WHERE status = 0 AND trashed = 0 AND type = 0
+                      AND rt1_recurrenceRule IS NULL
+                      AND (
+                          (start = 1 AND startDate IS NOT NULL AND startDate <= ?)
+                          OR (start = 2 AND startDate IS NOT NULL AND startDate <= ?)
+                          OR (startDate IS NULL AND deadline IS NOT NULL AND deadline <= ? AND deadlineSuppressionDate IS NULL)
+                      )
+                ORDER BY todayIndex IS NULL, todayIndex, "index"
+                """
                 arguments = [todayCode, todayCode, todayCode]
 
             case .upcoming:
                 let todayCode = thingsDateCode(Date())
                 sql = """
-                    SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, heading, area
-                    FROM TMTask
-                    WHERE status = 0 AND trashed = 0 AND type = 0 AND startDate > ?
-                          AND rt1_recurrenceRule IS NULL
-                    ORDER BY startDate, "index"
-                    """
+                SELECT uuid, title, notes, status, stopDate, deadline, startDate, creationDate,
+                       userModificationDate, project, heading, area
+                FROM TMTask
+                WHERE status = 0 AND trashed = 0 AND type = 0 AND startDate > ?
+                      AND rt1_recurrenceRule IS NULL
+                ORDER BY startDate, "index"
+                """
                 arguments = [todayCode]
 
             case .anytime:
                 let todayCode = thingsDateCode(Date())
                 sql = """
-                    SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, heading, area
-                    FROM TMTask
-                    WHERE status = 0 AND trashed = 0 AND type = 0 AND start = 1
-                          AND (startDate IS NULL OR startDate <= ?)
-                          AND rt1_recurrenceRule IS NULL
-                    ORDER BY "index"
-                    """
+                SELECT uuid, title, notes, status, stopDate, deadline, startDate, creationDate,
+                       userModificationDate, project, heading, area
+                FROM TMTask
+                WHERE status = 0 AND trashed = 0 AND type = 0 AND start = 1
+                      AND (startDate IS NULL OR startDate <= ?)
+                      AND rt1_recurrenceRule IS NULL
+                ORDER BY "index"
+                """
                 arguments = [todayCode]
 
             case .someday:
                 sql = """
-                    SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, heading, area
-                    FROM TMTask
-                    WHERE status = 0 AND trashed = 0 AND type = 0 AND start = 2
-                          AND startDate IS NULL
-                          AND rt1_recurrenceRule IS NULL
-                    ORDER BY "index"
-                    """
+                SELECT uuid, title, notes, status, stopDate, deadline, startDate, creationDate,
+                       userModificationDate, project, heading, area
+                FROM TMTask
+                WHERE status = 0 AND trashed = 0 AND type = 0 AND start = 2
+                      AND startDate IS NULL
+                      AND rt1_recurrenceRule IS NULL
+                ORDER BY "index"
+                """
                 arguments = []
 
             case .logbook:
                 sql = """
-                    SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, heading, area
-                    FROM TMTask
-                    WHERE status = 3 AND trashed = 0 AND type = 0
-                          AND rt1_recurrenceRule IS NULL
-                    ORDER BY stopDate DESC
-                    LIMIT 500
-                    """
+                SELECT uuid, title, notes, status, stopDate, deadline, startDate, creationDate,
+                       userModificationDate, project, heading, area
+                FROM TMTask
+                WHERE status = 3 AND trashed = 0 AND type = 0
+                      AND rt1_recurrenceRule IS NULL
+                ORDER BY stopDate DESC
+                LIMIT 500
+                """
                 arguments = []
 
             case .trash:
                 sql = """
-                    SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, heading, area
-                    FROM TMTask
-                    WHERE trashed = 1 AND type = 0
-                          AND rt1_recurrenceRule IS NULL
-                    ORDER BY "index"
-                    """
+                SELECT uuid, title, notes, status, stopDate, deadline, startDate, creationDate,
+                       userModificationDate, project, heading, area
+                FROM TMTask
+                WHERE trashed = 1 AND type = 0
+                      AND rt1_recurrenceRule IS NULL
+                ORDER BY "index"
+                """
                 arguments = []
             }
 
@@ -184,12 +184,12 @@ public final class ThingsDatabase: Sendable {
 
         return try db.read { db in
             let sql = """
-                SELECT uuid, title, notes, status, stopDate, deadline, creationDate, area
-                FROM TMTask
-                WHERE type = 1 AND trashed = 0 AND status = 0
-                      AND rt1_recurrenceRule IS NULL
-                ORDER BY "index"
-                """
+            SELECT uuid, title, notes, status, stopDate, deadline, creationDate, area
+            FROM TMTask
+            WHERE type = 1 AND trashed = 0 AND status = 0
+                  AND rt1_recurrenceRule IS NULL
+            ORDER BY "index"
+            """
 
             let rows = try Row.fetchAll(db, sql: sql)
             return try rows.map { row in
@@ -257,11 +257,11 @@ public final class ThingsDatabase: Sendable {
 
         return try db.read { db in
             let sql = """
-                SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                       userModificationDate, project, heading, area
-                FROM TMTask
-                WHERE uuid = ? AND type = 0
-                """
+                SELECT uuid, title, notes, status, stopDate, deadline, startDate, creationDate,
+                   userModificationDate, project, heading, area
+            FROM TMTask
+            WHERE uuid = ? AND type = 0
+            """
 
             guard let row = try Row.fetchOne(db, sql: sql, arguments: [id]) else {
                 throw ThingsError.notFound(id)
@@ -277,15 +277,15 @@ public final class ThingsDatabase: Sendable {
 
         return try db.read { db in
             let sql = """
-                SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                       userModificationDate, project, heading, area
-                FROM TMTask
-                WHERE type = 0 AND trashed = 0
-                      AND rt1_recurrenceRule IS NULL
-                      AND (title LIKE ? OR notes LIKE ?)
-                ORDER BY todayIndex, "index"
-                LIMIT 100
-                """
+                SELECT uuid, title, notes, status, stopDate, deadline, startDate, creationDate,
+                   userModificationDate, project, heading, area
+            FROM TMTask
+            WHERE type = 0 AND trashed = 0
+                  AND rt1_recurrenceRule IS NULL
+                  AND (title LIKE ? OR notes LIKE ?)
+            ORDER BY todayIndex, "index"
+            LIMIT 100
+            """
 
             let pattern = "%\(query)%"
             let rows = try Row.fetchAll(db, sql: sql, arguments: [pattern, pattern])
@@ -338,6 +338,7 @@ public final class ThingsDatabase: Sendable {
             notes: notes,
             status: statusFromInt(statusInt),
             dueDate: deadline,
+            scheduledDate: decodeDeadline(row["startDate"] as Int?),
             tags: tags,
             project: project,
             area: area,
@@ -396,33 +397,33 @@ public final class ThingsDatabase: Sendable {
 
     private func fetchTagsForTask(uuid: String, db: Database) throws -> [Tag] {
         let sql = """
-            SELECT tag.uuid, tag.title
-            FROM TMTaskTag AS tt
-            JOIN TMTag AS tag ON tt.tags = tag.uuid
-            WHERE tt.tasks = ?
-            """
+        SELECT tag.uuid, tag.title
+        FROM TMTaskTag AS tt
+        JOIN TMTag AS tag ON tt.tags = tag.uuid
+        WHERE tt.tasks = ?
+        """
         let rows = try Row.fetchAll(db, sql: sql, arguments: [uuid])
         return rows.map { Tag(id: $0["uuid"], name: $0["title"]) }
     }
 
     private func fetchTagsForArea(uuid: String, db: Database) throws -> [Tag] {
         let sql = """
-            SELECT tag.uuid, tag.title
-            FROM TMAreaTag AS at
-            JOIN TMTag AS tag ON at.tags = tag.uuid
-            WHERE at.areas = ?
-            """
+        SELECT tag.uuid, tag.title
+        FROM TMAreaTag AS at
+        JOIN TMTag AS tag ON at.tags = tag.uuid
+        WHERE at.areas = ?
+        """
         let rows = try Row.fetchAll(db, sql: sql, arguments: [uuid])
         return rows.map { Tag(id: $0["uuid"], name: $0["title"]) }
     }
 
     private func fetchChecklistItems(uuid: String, db: Database) throws -> [ChecklistItem] {
         let sql = """
-            SELECT uuid, title, status
-            FROM TMChecklistItem
-            WHERE task = ?
-            ORDER BY "index"
-            """
+        SELECT uuid, title, status
+        FROM TMChecklistItem
+        WHERE task = ?
+        ORDER BY "index"
+        """
         let rows = try Row.fetchAll(db, sql: sql, arguments: [uuid])
         return rows.map { row in
             ChecklistItem(

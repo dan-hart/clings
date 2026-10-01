@@ -3,14 +3,26 @@
 // Copyright (C) 2024 Dan Hart
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+@testable import ClingsCore
 import Foundation
 import GRDB
 import Testing
-@testable import ClingsCore
 
 /// Regression coverage for https://github.com/dan-hart/clings/issues/5
 @Suite("ThingsDatabase")
 struct ThingsDatabaseTests {
+    @Test func scheduledStartSurvivesSQLiteProjection() throws {
+        let fixture = try makeFixtureDatabase()
+        let code = thingsDateCode(Date())
+        try fixture.db.write { db in
+            try insertTask(db, id: "scheduled", title: "Scheduled", start: 1, startDate: code, index: 0)
+        }
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let todos = try database.fetchList(.today)
+        #expect(try FilterParser.parse("when IS NOT NULL").matches(#require(todos.first)))
+        #expect(try FilterParser.parse("due IS NULL").matches(#require(todos.first)))
+    }
+
     @Test("Today list includes start=1 tasks on or before today")
     func todayListIncludesCurrentAndOverdueStartOneTasks() throws {
         let fixture = try makeFixtureDatabase()
@@ -28,7 +40,7 @@ struct ThingsDatabaseTests {
         }
 
         let database = ThingsDatabase(dbPath: fixture.path)
-        let todoIDs = Set(try database.fetchList(.today).map(\.id))
+        let todoIDs = try Set(database.fetchList(.today).map(\.id))
         #expect(todoIDs.contains("today-task"))
         #expect(todoIDs.contains("yesterday-task"))
         #expect(!todoIDs.contains("tomorrow-task"))
@@ -52,7 +64,7 @@ struct ThingsDatabaseTests {
         }
 
         let database = ThingsDatabase(dbPath: fixture.path)
-        let todoIDs = Set(try database.fetchList(.today).map(\.id))
+        let todoIDs = try Set(database.fetchList(.today).map(\.id))
 
         #expect(todoIDs.contains("scheduled-yesterday"))
         #expect(!todoIDs.contains("scheduled-tomorrow"))
@@ -130,7 +142,7 @@ struct ThingsDatabaseTests {
         }
 
         let database = ThingsDatabase(dbPath: fixture.path)
-        let todoIDs = Set(try database.fetchList(.anytime).map(\.id))
+        let todoIDs = try Set(database.fetchList(.anytime).map(\.id))
 
         #expect(todoIDs.contains("anytime-no-date"))
         #expect(todoIDs.contains("anytime-yesterday"))
@@ -152,7 +164,7 @@ struct ThingsDatabaseTests {
         }
 
         let database = ThingsDatabase(dbPath: fixture.path)
-        let todoIDs = Set(try database.fetchList(.upcoming).map(\.id))
+        let todoIDs = try Set(database.fetchList(.upcoming).map(\.id))
 
         #expect(!todoIDs.contains("start-today-task"))
         #expect(todoIDs.contains("start-tomorrow-task"))
@@ -170,7 +182,7 @@ struct ThingsDatabaseTests {
         }
 
         let database = ThingsDatabase(dbPath: fixture.path)
-        let todoIDs = Set(try database.fetchList(.today).map(\.id))
+        let todoIDs = try Set(database.fetchList(.today).map(\.id))
         #expect(todoIDs == ["open-today"])
     }
 
@@ -178,7 +190,7 @@ struct ThingsDatabaseTests {
         let fixture = try makeFixtureDatabase()
         let deadlineComponents = DateComponents(year: 2030, month: 6, day: 15)
         let deadline = (2030 << 16) | (6 << 12) | (15 << 7)
-        let createdAt = 4_567.0
+        let createdAt = 4567.0
 
         try fixture.db.write { db in
             try insertArea(db, id: "area-work", title: "Work", index: 0)
@@ -231,7 +243,7 @@ struct ThingsDatabaseTests {
         }
 
         let database = ThingsDatabase(dbPath: fixture.path)
-        let projectIDs = Set(try database.fetchProjects().map(\.id))
+        let projectIDs = try Set(database.fetchProjects().map(\.id))
 
         #expect(!projectIDs.contains("recurring-project-template"))
         #expect(projectIDs.contains("real-project"))
@@ -294,11 +306,11 @@ struct ThingsDatabaseTests {
             try insertTaskTag(db, taskID: "todo-1", tagID: "tag-docs")
             try db.execute(
                 sql: """
-                    INSERT INTO TMChecklistItem (uuid, title, status, task, "index")
-                    VALUES
-                        ('check-1', 'Draft outline', 3, 'todo-1', 0),
-                        ('check-2', 'Publish examples', 0, 'todo-1', 1)
-                    """
+                INSERT INTO TMChecklistItem (uuid, title, status, task, "index")
+                VALUES
+                    ('check-1', 'Draft outline', 3, 'todo-1', 0),
+                    ('check-2', 'Publish examples', 0, 'todo-1', 1)
+                """
             )
         }
 
@@ -361,8 +373,8 @@ struct ThingsDatabaseTests {
         }
 
         let database = ThingsDatabase(dbPath: fixture.path)
-        let somedayIDs = Set(try database.fetchList(.someday).map(\.id))
-        let anytimeIDs = Set(try database.fetchList(.anytime).map(\.id))
+        let somedayIDs = try Set(database.fetchList(.someday).map(\.id))
+        let anytimeIDs = try Set(database.fetchList(.anytime).map(\.id))
 
         #expect(!somedayIDs.contains("recurring-template"))
         #expect(somedayIDs.contains("real-someday-task"))
@@ -380,7 +392,7 @@ struct ThingsDatabaseTests {
         }
 
         let database = ThingsDatabase(dbPath: fixture.path)
-        let somedayIDs = Set(try database.fetchList(.someday).map(\.id))
+        let somedayIDs = try Set(database.fetchList(.someday).map(\.id))
 
         #expect(somedayIDs.contains("someday-no-date"))
         #expect(!somedayIDs.contains("someday-with-date"))
@@ -401,7 +413,7 @@ struct ThingsDatabaseTests {
         }
 
         let database = ThingsDatabase(dbPath: fixture.path)
-        let somedayIDs = Set(try database.fetchList(.someday).map(\.id))
+        let somedayIDs = try Set(database.fetchList(.someday).map(\.id))
 
         #expect(somedayIDs.contains("task-in-live-project"))
         #expect(!somedayIDs.contains("task-in-trashed-project"))
@@ -439,7 +451,7 @@ struct ThingsDatabaseTests {
         }
 
         let database = ThingsDatabase(dbPath: fixture.path)
-        let resultIDs = Set(try database.search(query: "Findable").map(\.id))
+        let resultIDs = try Set(database.search(query: "Findable").map(\.id))
 
         #expect(resultIDs == ["task-in-live-project"])
     }
@@ -458,55 +470,55 @@ struct ThingsDatabaseTests {
             .appendingPathComponent("clings-thingsdb-tests-\(UUID().uuidString).sqlite")
         let dbQueue = try DatabaseQueue(path: tempURL.path)
 
-            try dbQueue.write { db in
-                try db.execute(
-                    sql: """
-                        CREATE TABLE TMTask (
-                        uuid TEXT PRIMARY KEY,
-                        title TEXT NOT NULL,
-                        notes TEXT,
-                        status INTEGER NOT NULL,
-                        stopDate REAL,
-                        deadline INTEGER,
-                        deadlineSuppressionDate INTEGER,
-                        creationDate REAL NOT NULL,
-                        userModificationDate REAL NOT NULL,
-                        project TEXT,
-                        heading TEXT,
-                        area TEXT,
-                        trashed INTEGER NOT NULL,
-                        type INTEGER NOT NULL,
-                        start INTEGER,
-                        startDate INTEGER,
-                        todayIndex INTEGER,
-                        rt1_recurrenceRule TEXT,
-                        "index" INTEGER NOT NULL
-                        )
-                        """
+        try dbQueue.write { db in
+            try db.execute(
+                sql: """
+                CREATE TABLE TMTask (
+                uuid TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                notes TEXT,
+                status INTEGER NOT NULL,
+                stopDate REAL,
+                deadline INTEGER,
+                deadlineSuppressionDate INTEGER,
+                creationDate REAL NOT NULL,
+                userModificationDate REAL NOT NULL,
+                project TEXT,
+                heading TEXT,
+                area TEXT,
+                trashed INTEGER NOT NULL,
+                type INTEGER NOT NULL,
+                start INTEGER,
+                startDate INTEGER,
+                todayIndex INTEGER,
+                rt1_recurrenceRule TEXT,
+                "index" INTEGER NOT NULL
                 )
+                """
+            )
 
             try db.execute(
                 sql: """
-                    CREATE TABLE TMArea (
-                        uuid TEXT PRIMARY KEY,
-                        title TEXT NOT NULL,
-                        "index" INTEGER NOT NULL DEFAULT 0
-                    )
-                    """
+                CREATE TABLE TMArea (
+                    uuid TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    "index" INTEGER NOT NULL DEFAULT 0
+                )
+                """
             )
             try db.execute(sql: "CREATE TABLE TMTag (uuid TEXT PRIMARY KEY, title TEXT NOT NULL)")
             try db.execute(sql: "CREATE TABLE TMTaskTag (tasks TEXT NOT NULL, tags TEXT NOT NULL)")
             try db.execute(sql: "CREATE TABLE TMAreaTag (areas TEXT NOT NULL, tags TEXT NOT NULL)")
             try db.execute(
                 sql: """
-                    CREATE TABLE TMChecklistItem (
-                        uuid TEXT PRIMARY KEY,
-                        title TEXT NOT NULL,
-                        status INTEGER NOT NULL,
-                        task TEXT NOT NULL,
-                        "index" INTEGER NOT NULL DEFAULT 0
-                    )
-                    """
+                CREATE TABLE TMChecklistItem (
+                    uuid TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    status INTEGER NOT NULL,
+                    task TEXT NOT NULL,
+                    "index" INTEGER NOT NULL DEFAULT 0
+                )
+                """
             )
         }
 
@@ -536,11 +548,11 @@ struct ThingsDatabaseTests {
     ) throws {
         try db.execute(
             sql: """
-                INSERT INTO TMTask (
-                    uuid, title, notes, status, stopDate, deadline, deadlineSuppressionDate, creationDate, userModificationDate,
-                    project, heading, area, trashed, type, start, startDate, todayIndex, rt1_recurrenceRule, "index"
-                ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
+            INSERT INTO TMTask (
+                uuid, title, notes, status, stopDate, deadline, deadlineSuppressionDate, creationDate, userModificationDate,
+                project, heading, area, trashed, type, start, startDate, todayIndex, rt1_recurrenceRule, "index"
+            ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
             arguments: [
                 id,
                 title,

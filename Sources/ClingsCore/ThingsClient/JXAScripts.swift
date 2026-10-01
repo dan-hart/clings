@@ -7,7 +7,6 @@ import Foundation
 
 /// JavaScript for Automation (JXA) script templates for Things 3.
 public enum JXAScripts {
-
     // MARK: - List Queries
 
     /// Fetch all todos from a specific list view.
@@ -57,6 +56,7 @@ public enum JXAScripts {
                     notes: todo.notes() || null,
                     status: todo.status(),
                     dueDate: todo.dueDate() ? todo.dueDate().toISOString() : null,
+                    scheduledDate: (() => { try { const date = todo.activationDate(); return date ? date.toISOString() : null; } catch (e) { return null; } })(),
                     tags: todo.tags().map(t => ({ id: t.id(), name: t.name() })),
                     project: proj,
                     area: ar,
@@ -118,6 +118,7 @@ public enum JXAScripts {
                 notes: todo.notes() || null,
                 status: todo.status(),
                 dueDate: todo.dueDate() ? todo.dueDate().toISOString() : null,
+                scheduledDate: (() => { try { const date = todo.activationDate(); return date ? date.toISOString() : null; } catch (e) { return null; } })(),
                 tags: todo.tags().map(t => ({ id: t.id(), name: t.name() })),
                 project: proj,
                 area: ar,
@@ -295,7 +296,7 @@ public enum JXAScripts {
         let dueDateISO = dueDate.map { ISO8601DateFormatter().string(from: $0) }
 
         // Tags are handled via AppleScript for reliability.
-        _ = tags  // Tags are applied separately.
+        _ = tags // Tags are applied separately.
 
         return """
         (() => {
@@ -342,14 +343,14 @@ public enum JXAScripts {
             let hour = components.hour,
             let minute = components.minute,
             let second = components.second,
-            (1...12).contains(month)
+            (1 ... 12).contains(month)
         else {
             return "error \"Invalid date components\""
         }
 
         let monthNames = [
             "January", "February", "March", "April", "May", "June",
-            "July", "August", "September", "October", "November", "December"
+            "July", "August", "September", "October", "November", "December",
         ]
         // Work at noon while changing calendar fields, then assign wall-clock
         // components. AppleScript's `set time` can cross back into the previous
@@ -379,7 +380,7 @@ public enum JXAScripts {
         area: String? = nil,
         checklistItems: [String] = []
     ) -> String {
-        _ = tags  // Tags are applied separately via AppleScript.
+        _ = tags // Tags are applied separately via AppleScript.
         let checklistArray = checklistItems.map { "\"\($0.appleScriptEscaped)\"" }.joined(separator: ", ")
         let whenDateSetup = appleScriptDateSetup(variableName: "scheduledDate", dateString: when)
         let deadlineDateSetup = appleScriptDateSetup(variableName: "deadlineDate", dateString: deadline)
@@ -501,6 +502,7 @@ public enum JXAScripts {
                     notes: todo.notes() || null,
                     status: todo.status(),
                     dueDate: todo.dueDate() ? todo.dueDate().toISOString() : null,
+                    scheduledDate: (() => { try { const date = todo.activationDate(); return date ? date.toISOString() : null; } catch (e) { return null; } })(),
                     tags: todo.tags().map(t => ({ id: t.id(), name: t.name() })),
                     project: proj,
                     creationDate: creationDate.toISOString(),
@@ -613,7 +615,7 @@ public enum JXAScripts {
 extension String {
     /// Escape a string for safe use in JXA single-quoted strings.
     var jxaEscaped: String {
-        self.replacingOccurrences(of: "\\", with: "\\\\")
+        replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "'", with: "\\'")
             .replacingOccurrences(of: "\n", with: "\\n")
             .replacingOccurrences(of: "\r", with: "\\r")
@@ -622,7 +624,7 @@ extension String {
 
     /// Escape a string for safe use in AppleScript double-quoted strings.
     var appleScriptEscaped: String {
-        self.replacingOccurrences(of: "\\", with: "\\\\")
+        replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
     }
 }

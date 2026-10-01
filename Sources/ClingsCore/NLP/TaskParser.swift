@@ -7,6 +7,7 @@ import Foundation
 
 /// Result of parsing a natural language task description.
 public struct ParsedTask: Sendable {
+    public var invalidDateExpressions: [String] = []
     public var title: String
     public var notes: String?
     public var tags: [String]
@@ -49,6 +50,7 @@ public struct TaskParser: Sendable {
     /// Parse a natural language task string.
     public func parse(_ input: String) -> ParsedTask {
         var remaining = input
+        var invalidDates: [String] = []
         var tags: [String] = []
         var project: String?
         var area: String?
@@ -106,7 +108,8 @@ public struct TaskParser: Sendable {
         for (pattern, p) in priorityPatterns {
             if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
                let match = regex.firstMatch(in: remaining, options: [], range: NSRange(remaining.startIndex..., in: remaining)),
-               let range = Range(match.range, in: remaining) {
+               let range = Range(match.range, in: remaining)
+            {
                 priority = p
                 remaining.removeSubrange(range)
                 break
@@ -118,7 +121,8 @@ public struct TaskParser: Sendable {
         if let regex = try? NSRegularExpression(pattern: quotedProjectPattern, options: []),
            let match = regex.firstMatch(in: remaining, options: [], range: NSRange(remaining.startIndex..., in: remaining)),
            let projectRange = Range(match.range(at: 1), in: remaining),
-           let fullRange = Range(match.range, in: remaining) {
+           let fullRange = Range(match.range, in: remaining)
+        {
             project = String(remaining[projectRange]).trimmingCharacters(in: .whitespaces)
             remaining.removeSubrange(fullRange)
         }
@@ -129,7 +133,8 @@ public struct TaskParser: Sendable {
            let regex = try? NSRegularExpression(pattern: projectPattern, options: []),
            let match = regex.firstMatch(in: remaining, options: [], range: NSRange(remaining.startIndex..., in: remaining)),
            let projectRange = Range(match.range(at: 1), in: remaining),
-           let fullRange = Range(match.range, in: remaining) {
+           let fullRange = Range(match.range, in: remaining)
+        {
             project = String(remaining[projectRange]).trimmingCharacters(in: .whitespaces)
             remaining.removeSubrange(fullRange)
         }
@@ -139,7 +144,8 @@ public struct TaskParser: Sendable {
         if let regex = try? NSRegularExpression(pattern: quotedAreaPattern, options: []),
            let match = regex.firstMatch(in: remaining, options: [], range: NSRange(remaining.startIndex..., in: remaining)),
            let areaRange = Range(match.range(at: 1), in: remaining),
-           let fullRange = Range(match.range, in: remaining) {
+           let fullRange = Range(match.range, in: remaining)
+        {
             area = String(remaining[areaRange]).trimmingCharacters(in: .whitespaces)
             remaining.removeSubrange(fullRange)
         }
@@ -150,7 +156,8 @@ public struct TaskParser: Sendable {
            let regex = try? NSRegularExpression(pattern: areaPattern, options: []),
            let match = regex.firstMatch(in: remaining, options: [], range: NSRange(remaining.startIndex..., in: remaining)),
            let areaRange = Range(match.range(at: 1), in: remaining),
-           let fullRange = Range(match.range, in: remaining) {
+           let fullRange = Range(match.range, in: remaining)
+        {
             area = String(remaining[areaRange]).trimmingCharacters(in: .whitespaces)
             remaining.removeSubrange(fullRange)
         }
@@ -160,9 +167,13 @@ public struct TaskParser: Sendable {
         if let regex = try? NSRegularExpression(pattern: deadlinePattern, options: .caseInsensitive),
            let match = regex.firstMatch(in: remaining, options: [], range: NSRange(remaining.startIndex..., in: remaining)),
            let dateRange = Range(match.range(at: 1), in: remaining),
-           let fullRange = Range(match.range, in: remaining) {
+           let fullRange = Range(match.range, in: remaining)
+        {
             let dateStr = String(remaining[dateRange])
             dueDate = dateParser.parse(dateStr)
+            if dueDate == nil {
+                invalidDates.append(dateStr)
+            }
             remaining.removeSubrange(fullRange)
         }
 
@@ -181,9 +192,13 @@ public struct TaskParser: Sendable {
         for pattern in whenPatterns {
             if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
                let match = regex.firstMatch(in: remaining, options: [], range: NSRange(remaining.startIndex..., in: remaining)),
-               let range = Range(match.range, in: remaining) {
+               let range = Range(match.range, in: remaining)
+            {
                 let dateStr = String(remaining[range])
                 whenDate = dateParser.parse(dateStr)
+                if whenDate == nil {
+                    invalidDates.append(dateStr)
+                }
                 remaining.removeSubrange(range)
                 break
             }
@@ -195,7 +210,7 @@ public struct TaskParser: Sendable {
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .replacingOccurrences(of: "\\#", with: "#") // Unescape literal #
 
-        return ParsedTask(
+        var parsed = ParsedTask(
             title: title,
             notes: notes,
             tags: tags,
@@ -206,6 +221,8 @@ public struct TaskParser: Sendable {
             checklistItems: checklistItems,
             priority: priority
         )
+        parsed.invalidDateExpressions = invalidDates
+        return parsed
     }
 
     /// Parse a date string into a Date.

@@ -81,7 +81,8 @@ public struct JSONOutputFormatter: OutputFormatter {
 
     private func encode<T: Encodable>(_ value: T) -> String {
         guard let data = try? encoder.encode(value),
-              let string = String(data: data, encoding: .utf8) else {
+              let string = String(data: data, encoding: .utf8)
+        else {
             return "{}"
         }
         return string
@@ -109,7 +110,7 @@ public struct TextOutputFormatter: OutputFormatter {
         return lines.joined(separator: "\n")
     }
 
-    public func format(todos: [Todo], list: String) -> String {
+    public func format(todos: [Todo], list _: String) -> String {
         format(todos: todos)
     }
 
@@ -281,13 +282,33 @@ public struct TextOutputFormatter: OutputFormatter {
         return "\u{001B}[\(code)m\(text)\u{001B}[0m"
     }
 
-    private func bold(_ text: String) -> String { color(text, code: "1") }
-    private func dim(_ text: String) -> String { color(text, code: "2") }
-    private func strikethrough(_ text: String) -> String { color(text, code: "9") }
-    private func red(_ text: String) -> String { color(text, code: "31") }
-    private func green(_ text: String) -> String { color(text, code: "32") }
-    private func yellow(_ text: String) -> String { color(text, code: "33") }
-    private func cyan(_ text: String) -> String { color(text, code: "36") }
+    private func bold(_ text: String) -> String {
+        color(text, code: "1")
+    }
+
+    private func dim(_ text: String) -> String {
+        color(text, code: "2")
+    }
+
+    private func strikethrough(_ text: String) -> String {
+        color(text, code: "9")
+    }
+
+    private func red(_ text: String) -> String {
+        color(text, code: "31")
+    }
+
+    private func green(_ text: String) -> String {
+        color(text, code: "32")
+    }
+
+    private func yellow(_ text: String) -> String {
+        color(text, code: "33")
+    }
+
+    private func cyan(_ text: String) -> String {
+        color(text, code: "36")
+    }
 }
 
 // MARK: - Response Types for JSON
@@ -312,6 +333,7 @@ struct TodoJSON: Encodable {
     let notes: String
     let status: String
     let dueDate: String?
+    let scheduledDate: String?
     let tags: [String]
     let project: String?
     let area: String?
@@ -320,24 +342,25 @@ struct TodoJSON: Encodable {
     let modificationDate: String
 
     enum CodingKeys: String, CodingKey {
-        case id, name, notes, status, dueDate, tags, project, area
+        case id, name, notes, status, dueDate, scheduledDate, tags, project, area
         case checklistItems, creationDate, modificationDate
     }
 
     init(from todo: Todo) {
         let formatter = ISO8601DateFormatter()
 
-        self.id = todo.id
-        self.name = todo.name
-        self.notes = todo.notes ?? ""
-        self.status = todo.status.rawValue
-        self.dueDate = todo.dueDate.map { formatter.string(from: $0) }
-        self.tags = todo.tags.map { $0.name }
-        self.project = todo.project?.name
-        self.area = todo.area?.name
-        self.checklistItems = todo.checklistItems.map { ChecklistItemJSON(from: $0) }
-        self.creationDate = formatter.string(from: todo.creationDate)
-        self.modificationDate = formatter.string(from: todo.modificationDate)
+        id = todo.id
+        name = todo.name
+        notes = todo.notes ?? ""
+        status = todo.status.rawValue
+        dueDate = todo.dueDate.map { formatter.string(from: $0) }
+        scheduledDate = todo.scheduledDate.map { formatter.string(from: $0) }
+        tags = todo.tags.map { $0.name }
+        project = todo.project?.name
+        area = todo.area?.name
+        checklistItems = todo.checklistItems.map { ChecklistItemJSON(from: $0) }
+        creationDate = formatter.string(from: todo.creationDate)
+        modificationDate = formatter.string(from: todo.modificationDate)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -346,6 +369,7 @@ struct TodoJSON: Encodable {
         try container.encode(checklistItems, forKey: .checklistItems)
         try container.encode(creationDate, forKey: .creationDate)
         try container.encode(dueDate, forKey: .dueDate)
+        try container.encode(scheduledDate, forKey: .scheduledDate)
         try container.encode(id, forKey: .id)
         try container.encode(modificationDate, forKey: .modificationDate)
         try container.encode(name, forKey: .name)
@@ -362,9 +386,9 @@ struct ChecklistItemJSON: Encodable {
     let completed: Bool
 
     init(from item: ChecklistItem) {
-        self.id = item.id
-        self.name = item.name
-        self.completed = item.completed
+        id = item.id
+        name = item.name
+        completed = item.completed
     }
 }
 
@@ -391,14 +415,14 @@ struct ProjectJSON: Encodable {
     init(from project: Project) {
         let formatter = ISO8601DateFormatter()
 
-        self.id = project.id
-        self.name = project.name
-        self.notes = project.notes ?? ""
-        self.status = project.status.rawValue
-        self.area = project.area?.name
-        self.tags = project.tags.map { $0.name }
-        self.dueDate = project.dueDate.map { formatter.string(from: $0) }
-        self.creationDate = project.creationDate.map { formatter.string(from: $0) }
+        id = project.id
+        name = project.name
+        notes = project.notes ?? ""
+        status = project.status.rawValue
+        area = project.area?.name
+        tags = project.tags.map { $0.name }
+        dueDate = project.dueDate.map { formatter.string(from: $0) }
+        creationDate = project.creationDate.map { formatter.string(from: $0) }
     }
 }
 
@@ -418,9 +442,9 @@ struct AreaJSON: Encodable {
     let tags: [String]
 
     init(from area: Area) {
-        self.id = area.id
-        self.name = area.name
-        self.tags = area.tags.map { $0.name }
+        id = area.id
+        name = area.name
+        tags = area.tags.map { $0.name }
     }
 }
 
@@ -439,8 +463,8 @@ struct TagJSON: Encodable {
     let name: String
 
     init(from tag: Tag) {
-        self.id = tag.id
-        self.name = tag.name
+        id = tag.id
+        name = tag.name
     }
 }
 

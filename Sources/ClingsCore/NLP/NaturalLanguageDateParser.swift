@@ -7,17 +7,22 @@ import Foundation
 
 /// Parses lightweight natural-language scheduling phrases into dates.
 public struct NaturalLanguageDateParser: Sendable {
-    public init() {}
+    private var calendar: Calendar
+
+    public init(timeZone: TimeZone = .current) {
+        calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+    }
 
     public func parse(_ input: String, referenceDate: Date = Date()) -> Date? {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
         let lower = trimmed.lowercased()
-        let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: referenceDate)
 
         let extractedTime = extractTime(from: lower)
+        guard extractedTime.valid else { return nil }
         var datePhrase = extractedTime.remaining
 
         let implicitHour: Int?
@@ -59,12 +64,15 @@ public struct NaturalLanguageDateParser: Sendable {
         let minute = extractedTime.minute ?? 0
         guard let hour else { return calendar.startOfDay(for: baseDate) }
 
-        return calendar.date(
+        let result = calendar.date(
             bySettingHour: hour,
             minute: minute,
             second: 0,
             of: calendar.startOfDay(for: baseDate)
         )
+        guard let result, calendar.component(.hour, from: result) == hour,
+              calendar.component(.minute, from: result) == minute else { return nil }
+        return result
     }
 
     private func parseRelativeDays(_ input: String, calendar: Calendar, startOfDay: Date) -> Date? {
@@ -72,28 +80,32 @@ public struct NaturalLanguageDateParser: Sendable {
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
               let match = regex.firstMatch(in: input, range: NSRange(input.startIndex..., in: input)),
               let range = Range(match.range(at: 1), in: input),
-              let days = Int(input[range]) else {
+              let days = Int(input[range])
+        else {
             return nil
         }
         return calendar.date(byAdding: .day, value: days, to: startOfDay)
     }
 
     private func parseAbsoluteDate(_ input: String, referenceDate: Date) -> Date? {
-        let calendar = Calendar.current
         let lower = input.lowercased()
 
         let isoFormatter = DateFormatter()
         isoFormatter.locale = Locale(identifier: "en_US_POSIX")
-        isoFormatter.timeZone = TimeZone.current
+        isoFormatter.calendar = calendar
+        isoFormatter.timeZone = calendar.timeZone
+        isoFormatter.isLenient = false
         isoFormatter.dateFormat = "yyyy-MM-dd"
-        if let date = isoFormatter.date(from: lower) {
+        if let date = isoFormatter.date(from: lower), isoFormatter.string(from: date) == lower {
             return calendar.startOfDay(for: date)
         }
 
         for format in ["MMM d yyyy", "MMMM d yyyy", "MMM d", "MMMM d"] {
             let formatter = DateFormatter()
             formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.timeZone = TimeZone.current
+            formatter.calendar = calendar
+            formatter.timeZone = calendar.timeZone
+            formatter.isLenient = false
             formatter.dateFormat = format
 
             if format.contains("yyyy"), let date = formatter.date(from: lower) {
@@ -108,7 +120,8 @@ public struct NaturalLanguageDateParser: Sendable {
                 if let candidate = calendar.date(from: merged) {
                     let candidateStart = calendar.startOfDay(for: candidate)
                     if candidateStart < calendar.startOfDay(for: referenceDate),
-                       let nextYear = calendar.date(byAdding: .year, value: 1, to: candidateStart) {
+                       let nextYear = calendar.date(byAdding: .year, value: 1, to: candidateStart)
+                    {
                         return nextYear
                     }
                     return candidateStart
@@ -133,7 +146,6 @@ public struct NaturalLanguageDateParser: Sendable {
     }
 
     private func nextOccurrence(of weekday: Int, from date: Date, forceNextWeek: Bool) -> Date? {
-        let calendar = Calendar.current
         let todayWeekday = calendar.component(.weekday, from: date)
         var daysToAdd = weekday - todayWeekday
         if daysToAdd < 0 || (daysToAdd == 0 && forceNextWeek) {
@@ -145,7 +157,7 @@ public struct NaturalLanguageDateParser: Sendable {
         return calendar.date(byAdding: .day, value: daysToAdd == 0 ? 7 : daysToAdd, to: calendar.startOfDay(for: date))
     }
 
-    private func extractTime(from input: String) -> (remaining: String, hour: Int?, minute: Int?) {
+    private func extractTime(from input: String) -> (remaining: String, hour: Int?, minute: Int?, valid: Bool) {
         let patterns = [
             #"(?:\s|^)(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b"#,
             #"(?:\s|^)(\d{1,2}):(\d{2})\b"#,
@@ -155,7 +167,8 @@ public struct NaturalLanguageDateParser: Sendable {
             guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
                   let match = regex.firstMatch(in: input, range: NSRange(input.startIndex..., in: input)),
                   let fullRange = Range(match.range, in: input),
-                  let hourRange = Range(match.range(at: 1), in: input) else {
+                  let hourRange = Range(match.range(at: 1), in: input)
+            else {
                 continue
             }
 
@@ -175,6 +188,11 @@ public struct NaturalLanguageDateParser: Sendable {
             }
 
             var hour = rawHour
+            guard (0 ... 59).contains(rawMinute),
+                  meridiem == nil ? (0 ... 23).contains(rawHour) : (1 ... 12).contains(rawHour)
+            else {
+                return (input, nil, nil, false)
+            }
             if let meridiem {
                 if meridiem == "pm", hour < 12 {
                     hour += 12
@@ -188,9 +206,9 @@ public struct NaturalLanguageDateParser: Sendable {
                 .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
 
-            return (remaining, hour, rawMinute)
+            return (remaining, hour, rawMinute, true)
         }
 
-        return (input.trimmingCharacters(in: .whitespacesAndNewlines), nil, nil)
+        return (input.trimmingCharacters(in: .whitespacesAndNewlines), nil, nil, true)
     }
 }

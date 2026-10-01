@@ -221,6 +221,8 @@ struct UpdateCommand: AsyncParsableCommand {
     var tags: [String] = []
 
     @OptionGroup var output: OutputOptions
+    @Flag(name: .long, help: "Preview final fields and undo capabilities without writing or requiring an auth token")
+    var parseOnly = false
 
     func run() async throws {
         // Check if any update options provided
@@ -228,11 +230,22 @@ struct UpdateCommand: AsyncParsableCommand {
             throw ThingsError.invalidState("No update options provided. Use --name, --notes, --due, --when, --heading, or --tags.")
         }
 
+        let dueDate = try resolveDate(due)
+        var resolvedWhen = when
+        var scheduledDate: Date?
         // Validate --when value if provided
         if let when = when {
             let validKeywords = Set(["today", "tomorrow", "evening", "anytime", "someday"])
             let isKeyword = validKeywords.contains(when.lowercased())
-            let isDate = parseFlexibleDate(when) != nil
+            scheduledDate = isKeyword ? (try? resolveDate(when)) : try resolveDate(when)
+            let isDate = scheduledDate != nil
+            if !isKeyword, let scheduledDate {
+                let formatter = DateFormatter()
+                formatter.calendar = Calendar(identifier: .gregorian)
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.dateFormat = "yyyy-MM-dd@HH:mm"
+                resolvedWhen = formatter.string(from: scheduledDate)
+            }
             guard isKeyword || isDate else {
                 throw ThingsError.invalidState(
                     "Invalid --when value: '\(when)'. Use 'today', 'tomorrow', 'evening', 'anytime', 'someday', or YYYY-MM-DD."
@@ -255,6 +268,21 @@ struct UpdateCommand: AsyncParsableCommand {
             resolvedHeading = nil
         }
 
+        let client = CommandRuntime.makeClient()
+        if parseOnly {
+            let previous = try await client.fetchTodo(id: id)
+            let preview = TaskPreview(
+                id: id, title: name ?? previous.name, notes: notes ?? previous.notes,
+                tags: tags.isEmpty ? previous.tags.map(\.name) : tags,
+                project: previous.project?.name, area: previous.area?.name,
+                when: when == nil ? previous.scheduledDate : scheduledDate,
+                deadline: dueDate ?? previous.dueDate, scheduleExpression: resolvedWhen,
+                heading: resolvedHeading,
+                undo: "Restores title, notes, deadline and tags; scheduling and heading are not restored."
+            )
+            try print(preview.render(json: output.json))
+            return
+        }
         // Pre-validate auth token before any mutations to avoid partial updates
         let needsURLScheme = when != nil || resolvedHeading != nil
         var prevalidatedToken: String? = nil
@@ -274,17 +302,7 @@ struct UpdateCommand: AsyncParsableCommand {
             }
         }
 
-        let client = CommandRuntime.makeClient()
         let previousSnapshot = try? await client.fetchTodo(id: id)
-
-        // Parse due date if provided
-        var dueDate: Date? = nil
-        if let dueStr = due {
-            dueDate = parseFlexibleDate(dueStr)
-            if dueDate == nil {
-                throw ThingsError.invalidState("Invalid date format: \(dueStr). Use YYYY-MM-DD, 'today', or 'tomorrow'.")
-            }
-        }
 
         // Update via JXA (name, notes, dueDate, tags)
         let hasJXAUpdates = name != nil || notes != nil || dueDate != nil || !tags.isEmpty
@@ -301,11 +319,11 @@ struct UpdateCommand: AsyncParsableCommand {
         // Handle when and heading via Things URL scheme (activationDate is read-only in JXA)
         if needsURLScheme, let token = prevalidatedToken {
             do {
-                try updateViaURLScheme(id: id, when: when, heading: resolvedHeading, token: token)
+                try updateViaURLScheme(id: id, when: resolvedWhen, heading: resolvedHeading, token: token)
             } catch {
                 if hasJXAUpdates {
                     let jxaFields = [name != nil ? "name" : nil, notes != nil ? "notes" : nil,
-                                   dueDate != nil ? "due date" : nil, !tags.isEmpty ? "tags" : nil]
+                                     dueDate != nil ? "due date" : nil, !tags.isEmpty ? "tags" : nil]
                         .compactMap { $0 }.joined(separator: ", ")
                     throw ThingsError.operationFailed(
                         "Partial update: \(jxaFields) updated, but --when/--heading failed: \(error.localizedDescription)"

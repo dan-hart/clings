@@ -22,6 +22,8 @@ public struct TodoLineFormatter: Sendable {
             "name": todo.name,
             "status": todo.status.rawValue,
             "due": todo.dueDate.map { formatter.string(from: $0) } ?? "",
+            "when": todo.scheduledDate.map { formatter.string(from: $0) } ?? "",
+            "start": todo.scheduledDate.map { formatter.string(from: $0) } ?? "",
             "project": todo.project?.name ?? "",
             "area": todo.area?.name ?? "",
             "tags": todo.tags.map { "#\($0.name)" }.joined(separator: " "),

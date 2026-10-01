@@ -122,11 +122,16 @@ struct TemplateSaveCommand: ParsableCommand {
 
     func run() throws {
         let parsed = TaskParser().parse(title)
+        for expression in parsed.invalidDateExpressions {
+            _ = try resolveDate(expression)
+        }
+        _ = try resolveDate(when)
+        _ = try resolveDate(deadline)
         let template = TaskTemplate(
             name: name,
             title: parsed.title,
             notes: notes ?? parsed.notes,
-            tags: tags.isEmpty ? parsed.tags : tags,
+            tags: Array(NSOrderedSet(array: parsed.tags + tags)) as? [String] ?? parsed.tags + tags,
             project: project ?? parsed.project,
             area: area ?? parsed.area,
             whenExpression: when,
@@ -165,12 +170,14 @@ struct TemplateRunCommand: AsyncParsableCommand {
             throw ValidationError("Template not found: \(name)")
         }
 
+        let resolvedWhen = try resolveDate(template.whenExpression)
+        let resolvedDeadline = try resolveDate(template.deadlineExpression)
         let client = CommandRuntime.makeClient()
         let id = try await client.createTodo(
             name: template.title,
             notes: template.notes,
-            when: parseFlexibleDate(template.whenExpression),
-            deadline: parseFlexibleDate(template.deadlineExpression),
+            when: resolvedWhen,
+            deadline: resolvedDeadline,
             tags: template.tags,
             project: template.project,
             area: template.area,

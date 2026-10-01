@@ -131,6 +131,7 @@ struct ViewsRunCommand: AsyncParsableCommand {
     var name: String
 
     @OptionGroup var output: OutputOptions
+    @OptionGroup var queryOptions: QueryOptions
 
     func run() async throws {
         guard let view = try SavedViewStore.load(name: name) else {
@@ -139,7 +140,7 @@ struct ViewsRunCommand: AsyncParsableCommand {
 
         let filter = try FilterParser.parse(view.expression)
         let client = CommandRuntime.makeClient()
-        let todos = try await fetchOpenTodos(client: client).filter { filter.matches($0) }
+        let todos = try queryOptions.apply(await queryOptions.fetch(client: client).filter { filter.matches($0) })
         print(renderTodos(todos, list: view.name, output: output))
     }
 }

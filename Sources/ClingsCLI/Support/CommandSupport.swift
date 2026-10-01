@@ -48,7 +48,7 @@ func fetchOpenTodos(client: any ThingsClientProtocol) async throws -> [Todo] {
     let lists: [ListView] = [.today, .inbox, .upcoming, .anytime, .someday]
     var todos: [Todo] = []
     for list in lists {
-        todos.append(contentsOf: try await client.fetchList(list))
+        try todos.append(contentsOf: await client.fetchList(list))
     }
     return uniqueTodos(todos)
 }
@@ -56,7 +56,7 @@ func fetchOpenTodos(client: any ThingsClientProtocol) async throws -> [Todo] {
 func fetchVisibleTodos(client: any ThingsClientProtocol, includeLogbook: Bool = false) async throws -> [Todo] {
     var todos = try await fetchOpenTodos(client: client)
     if includeLogbook {
-        todos.append(contentsOf: try await client.fetchList(.logbook))
+        try todos.append(contentsOf: await client.fetchList(.logbook))
     }
     return uniqueTodos(todos)
 }
@@ -74,6 +74,14 @@ func uniqueTodos(_ todos: [Todo]) -> [Todo] {
 func parseFlexibleDate(_ expression: String?) -> Date? {
     guard let expression else { return nil }
     return NaturalLanguageDateParser().parse(expression)
+}
+
+func resolveDate(_ expression: String?) throws -> Date? {
+    guard let expression else { return nil }
+    guard let date = NaturalLanguageDateParser().parse(expression) else {
+        throw ThingsError.invalidState("Invalid date: '\(expression)'. Use a valid YYYY-MM-DD date or a supported expression such as tomorrow or next friday.")
+    }
+    return date
 }
 
 func promptForTodoSelection(
@@ -97,7 +105,8 @@ func promptForTodoSelection(
     print("Enter a number or todo ID:", terminator: " ")
 
     guard let rawSelection = inputReader()?.trimmingCharacters(in: .whitespacesAndNewlines),
-          !rawSelection.isEmpty else {
+          !rawSelection.isEmpty
+    else {
         return nil
     }
 

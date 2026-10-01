@@ -40,6 +40,7 @@ struct FilterCommand: AsyncParsableCommand {
         FIELDS:
           status         open, completed, canceled
           due            Due date (YYYY-MM-DD or: today, tomorrow)
+          when, start    Planned start date, distinct from due
           tags           Tag list
           project        Project name
           area           Area name
@@ -67,23 +68,20 @@ struct FilterCommand: AsyncParsableCommand {
     var expression: String
 
     @OptionGroup var output: OutputOptions
+    @OptionGroup var queryOptions: QueryOptions
 
     func run() async throws {
         let filter = try FilterParser.parse(expression)
         let client = CommandRuntime.makeClient()
 
         // Fetch all open todos and filter
-        var todos: [Todo] = []
-        for list in [ListView.today, .inbox, .upcoming, .anytime, .someday] {
-            let listTodos = try await client.fetchList(list)
-            todos.append(contentsOf: listTodos)
-        }
+        let todos = try await queryOptions.fetch(client: client)
 
         // Remove duplicates (same todo might appear in multiple lists)
-        let uniqueTodos = Array(Set(todos))
+        let uniqueTodos = uniqueTodos(todos)
 
         // Apply filter
-        let filtered = uniqueTodos.filter { filter.matches($0) }
+        let filtered = queryOptions.apply(uniqueTodos.filter { filter.matches($0) })
         print(renderTodos(filtered, list: "Filter", output: output))
     }
 }
