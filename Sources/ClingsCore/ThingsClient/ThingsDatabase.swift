@@ -64,6 +64,15 @@ public final class ThingsDatabase: Sendable {
 
     /// Fetch todos from a specific list view.
     public func fetchList(_ list: ListView) throws -> [Todo] {
+        try fetchList(list, queryMode: false)
+    }
+
+    /// Query scope includes all closed tasks before filters and limits are applied.
+    public func fetchQueryList(_ list: ListView) throws -> [Todo] {
+        try fetchList(list, queryMode: true)
+    }
+
+    private func fetchList(_ list: ListView, queryMode: Bool) throws -> [Todo] {
         let db = try openDatabase()
 
         return try db.read { db in
@@ -142,10 +151,10 @@ public final class ThingsDatabase: Sendable {
                 SELECT uuid, title, notes, status, stopDate, deadline, startDate, creationDate,
                        userModificationDate, project, heading, area
                 FROM TMTask
-                WHERE status = 3 AND trashed = 0 AND type = 0
+                WHERE \(queryMode ? "status IN (2, 3)" : "status = 3") AND trashed = 0 AND type = 0
                       AND rt1_recurrenceRule IS NULL
                 ORDER BY stopDate DESC
-                LIMIT 500
+                \(queryMode ? "" : "LIMIT 500")
                 """
                 arguments = []
 

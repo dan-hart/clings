@@ -26,13 +26,18 @@ struct QueryOptions: ParsableArguments {
 
     func fetch(client: any ThingsClientProtocol) async throws -> [Todo] {
         if let list, let scope = ListView(rawValue: list.lowercased()) {
-            var todos = try await client.fetchList(scope)
+            var todos = try await client.fetchQueryList(scope)
             if includeLogbook && scope != .logbook {
-                todos += try await client.fetchList(.logbook)
+                todos += try await client.fetchQueryList(.logbook)
             }
             return uniqueTodos(todos)
         }
-        return try await fetchVisibleTodos(client: client, includeLogbook: includeLogbook)
+        var todos: [Todo] = []
+        for scope in [ListView.today, .inbox, .upcoming, .anytime, .someday] {
+            todos += try await client.fetchQueryList(scope)
+        }
+        if includeLogbook { todos += try await client.fetchQueryList(.logbook) }
+        return uniqueTodos(todos)
     }
 
     func apply(_ todos: [Todo]) -> [Todo] {

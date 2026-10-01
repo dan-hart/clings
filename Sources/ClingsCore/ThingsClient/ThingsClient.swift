@@ -32,6 +32,8 @@ public enum ThingsError: Error, LocalizedError {
 public protocol ThingsClientProtocol: Sendable {
     // Lists
     func fetchList(_ list: ListView) async throws -> [Todo]
+    /// Complete candidates for scope/filter/sort/limit processing, without display caps.
+    func fetchQueryList(_ list: ListView) async throws -> [Todo]
     func fetchProjects() async throws -> [Project]
     func fetchAreas() async throws -> [Area]
     func fetchTags() async throws -> [Tag]
@@ -80,11 +82,24 @@ public protocol ThingsClientProtocol: Sendable {
 
 public protocol ThingsDatabaseReadable: Sendable {
     func fetchList(_ list: ListView) throws -> [Todo]
+    func fetchQueryList(_ list: ListView) throws -> [Todo]
     func fetchProjects() throws -> [Project]
     func fetchAreas() throws -> [Area]
     func fetchTags() throws -> [Tag]
     func fetchTodo(id: String) throws -> Todo
     func search(query: String) throws -> [Todo]
+}
+
+public extension ThingsClientProtocol {
+    func fetchQueryList(_ list: ListView) async throws -> [Todo] {
+        try await fetchList(list)
+    }
+}
+
+public extension ThingsDatabaseReadable {
+    func fetchQueryList(_ list: ListView) throws -> [Todo] {
+        try fetchList(list)
+    }
 }
 
 /// Result from a mutation operation.

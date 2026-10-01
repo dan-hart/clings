@@ -31,6 +31,10 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         try database.fetchList(list)
     }
 
+    public func fetchQueryList(_ list: ListView) async throws -> [Todo] {
+        try database.fetchQueryList(list)
+    }
+
     public func fetchProjects() async throws -> [Project] {
         try database.fetchProjects()
     }
