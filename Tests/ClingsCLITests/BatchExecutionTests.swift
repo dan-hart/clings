@@ -4,6 +4,63 @@ import Foundation
 import Testing
 
 struct BatchExecutionTests {
+    @Test(arguments: [1, 20])
+    func savedPlanUndoFollowsExecutionAndSurvivesNewerHistory(interveningCount: Int) async throws {
+        try await CommandTestSupport.withTemporaryConfigDirectory { root in
+            let client = RecordingThingsClient()
+            let path = try plan(client: client, root: root, ids: ["a"])
+            var saved = try BatchPlan.load(path: path)
+            saved.createdAt = Date(timeIntervalSinceReferenceDate: 1)
+            try saved.save(path: path)
+            try await CommandTestSupport.withRuntime(client: client) {
+                for index in 0..<interveningCount {
+                    let id = "intervening-\(index)"
+                    client.todosByID[id] = Todo(id: id, name: id)
+                    _ = try await CommandTestSupport.captureStandardOutput {
+                        try await CompleteCommand.parse([id]).run()
+                    }
+                }
+                _ = try await CommandTestSupport.captureStandardOutput {
+                    try await BulkCompleteCommand.parse(["--execute-plan", path, "--yes"]).run()
+                }
+                #expect(try UndoStore.latest()?.todoID == saved.id)
+                #expect(try UndoStore.list().count == min(interveningCount + 1, 20))
+                #expect(try BatchPlan.load(path: path).items[0].undoRecorded)
+                _ = try await CommandTestSupport.captureStandardOutput { try await UndoCommand.parse([]).run() }
+                #expect(client.reopenedIDs == ["a"])
+                #expect(client.todosByID["a"]?.status == .open)
+                #expect(client.todosByID["intervening-\(interveningCount - 1)"]?.status == .completed)
+            }
+        }
+    }
+
+    @Test func resumedBatchUndoFollowsItsNewWritesWithoutReorderingNoOpRetries() async throws {
+        try await CommandTestSupport.withTemporaryConfigDirectory { root in
+            let client = RecordingThingsClient()
+            let path = try plan(client: client, root: root)
+            client.failedIDs = ["b"]
+            try await CommandTestSupport.withRuntime(client: client) {
+                let command = try BulkCompleteCommand.parse(["--execute-plan", path, "--yes"])
+                await #expect(throws: (any Error).self) { try await command.run() }
+                let originalGroup = try #require(try UndoStore.latest())
+                client.todosByID["intervening"] = Todo(id: "intervening", name: "Intervening")
+                _ = try await CommandTestSupport.captureStandardOutput { try await CompleteCommand.parse(["intervening"]).run() }
+                client.failedIDs = []
+                _ = try await CommandTestSupport.captureStandardOutput { try await command.run() }
+                let resumedGroup = try #require(try UndoStore.latest())
+                #expect(resumedGroup.id == originalGroup.id)
+                #expect(resumedGroup.members?.map { $0.snapshot.id } == ["a", "b"])
+                #expect(resumedGroup.createdAt > originalGroup.createdAt)
+                _ = try await CommandTestSupport.captureStandardOutput { try await command.run() }
+                #expect(try UndoStore.latest()?.createdAt == resumedGroup.createdAt)
+                #expect(client.completedIDs == ["a", "intervening", "b"])
+                _ = try await CommandTestSupport.captureStandardOutput { try await UndoCommand.parse([]).run() }
+                #expect(client.reopenedIDs == ["a", "b"])
+                #expect(client.todosByID["intervening"]?.status == .completed)
+            }
+        }
+    }
+
     @Test func journalFailureResumeRecordsUndoWithoutRepeatingSucceededWrite() async throws {
         try await CommandTestSupport.withTemporaryConfigDirectory { root in
             let client = RecordingThingsClient()

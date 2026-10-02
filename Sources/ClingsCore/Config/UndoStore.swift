@@ -72,7 +72,7 @@ public struct UndoEntry: Codable, Equatable, Sendable {
     public let operation: UndoOperation
     public let todoID: String
     public let snapshot: TodoSnapshot?
-    public let createdAt: Date
+    public var createdAt: Date
     public var members: [UndoMember]? = nil
 
     public init(operation: UndoOperation, todoID: String, snapshot: TodoSnapshot?, createdAt: Date = Date()) {

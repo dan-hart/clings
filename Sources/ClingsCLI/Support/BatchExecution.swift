@@ -79,7 +79,7 @@ private func executeBatch(operation: BatchOperation, list: String?, tags: String
         return
     }
 
-    var entry = try UndoStore.list().first { $0.todoID == plan.id } ?? UndoEntry(operation: .update, todoID: plan.id, snapshot: nil, createdAt: plan.createdAt)
+    var entry = try UndoStore.list().first { $0.todoID == plan.id } ?? UndoEntry(operation: .update, todoID: plan.id, snapshot: nil)
     entry.members = entry.members ?? []
 
     func save() throws {
@@ -91,6 +91,9 @@ private func executeBatch(operation: BatchOperation, list: String?, tags: String
         guard operation != .move else { return }
         if entry.members?.contains(where: { $0.snapshot.id == item.id }) != true {
             entry.members?.append(UndoMember(operation: operation == .complete ? .complete : operation == .cancel ? .cancel : .update, snapshot: item.snapshot))
+            // Order undo by applied changes, including newly completed retry members.
+            // A fully succeeded plan retry must not reorder the journal.
+            entry.createdAt = Date()
         }
         try UndoStore.replace(entry)
     }
