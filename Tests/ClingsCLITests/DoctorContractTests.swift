@@ -140,6 +140,51 @@ struct DoctorContractTests {
             }
         }
     }
+
+    @Test func configFileIsNotAcceptedAsDirectory() async throws {
+        try await CommandTestSupport.withTemporaryConfigDirectory { directory in
+            try Data("not a directory".utf8).write(to: directory)
+            try await CommandTestSupport.withRuntime(database: MockThingsDatabase()) {
+                let report = await DoctorReport.generate(probe: false)
+                #expect(!report.healthy)
+                #expect(report.checks.contains { $0.id == "config" && $0.required && $0.status == "error" })
+            }
+        }
+    }
+
+    @Test func unavailableAndUnknownAutomationFailuresAreActionableAndRedacted() async throws {
+        try await CommandTestSupport.withTemporaryConfigDirectory { _ in
+            try await CommandTestSupport.withRuntime(database: MockThingsDatabase()) {
+                await DoctorRuntime.$probeAutomation.withValue({ throw JXAError.thingsNotRunning }) {
+                    let report = await DoctorReport.generate(probe: true)
+                    #expect(!report.healthy)
+                    #expect(report.checks.contains { $0.id == "automation-unavailable" && $0.message.contains("Open Things") })
+                }
+                await DoctorRuntime.$probeAutomation.withValue({ throw ThingsError.operationFailed("secret task at /private/example") }) {
+                    let report = await DoctorReport.generate(probe: true)
+                    #expect(!report.healthy)
+                    #expect(report.checks.contains { $0.id == "automation-unavailable" && $0.message.contains("installed") })
+                    let json = try? JSONEncoder().encode(report)
+                    #expect(json.map { !String(decoding: $0, as: UTF8.self).contains("secret task") } == true)
+                }
+            }
+        }
+    }
+
+    @Test func humanOutputIncludesChecksBeforeRequiredFailure() async throws {
+        try await CommandTestSupport.withTemporaryConfigDirectory { directory in
+            try await CommandRuntime.$makeDatabase.withValue({ throw ThingsError.operationFailed("private error") }) {
+                let (_, output) = try await CommandTestSupport.captureStandardOutput {
+                    do { try await DoctorCommand.parse(["--verbose"]).run() }
+                    catch let failure as CommandFailure { #expect(failure.exitStatus == 2) }
+                }
+                #expect(output.contains("Things database"))
+                #expect(output.contains("Overall: needs-attention"))
+                #expect(output.contains(directory.path))
+                #expect(!output.contains("private error"))
+            }
+        }
+    }
 }
 
 private actor ProbeCounter {
