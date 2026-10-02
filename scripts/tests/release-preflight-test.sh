@@ -7,11 +7,13 @@ PREFLIGHT="$SOURCE_ROOT/scripts/release-preflight.sh"
 TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/clings-release-tests.XXXXXX")"
 # Keep fixtures on failure for investigation. Never remove a broad directory.
 echo "Release test fixtures: $TEST_ROOT"
-git clone --quiet --shared "$SOURCE_ROOT" "$TEST_ROOT/repo"
+git clone --quiet --shared --no-tags --config core.hooksPath=/dev/null "$SOURCE_ROOT" "$TEST_ROOT/repo"
 cd "$TEST_ROOT/repo"
 git switch --quiet -C main 97d28c125726f365a392554a2ef921b222828029
 git config user.name 'Release Tests'
 git config user.email 'release-tests@example.invalid'
+git config commit.gpgsign false
+git config tag.gpgsign false
 cp "$SCRIPT_DIR/fixtures/release-version.swift.txt" Sources/ClingsCLI/Clings.swift
 cp "$SCRIPT_DIR/fixtures/release-agents.md.txt" AGENTS.md
 cp "$SCRIPT_DIR/fixtures/release-changelog.md.txt" CHANGELOG.md
@@ -35,7 +37,7 @@ expect_failure() {
     echo "Expected failure: $expected" >&2
     exit 1
   fi
-  if ! rg -q "$expected" "$TEST_ROOT/output.log"; then
+  if ! grep -qE "$expected" "$TEST_ROOT/output.log"; then
     echo "Wrong failure, expected $expected" >&2
     tail -15 "$TEST_ROOT/output.log" >&2
     exit 1
