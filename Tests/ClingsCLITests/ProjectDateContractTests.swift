@@ -22,7 +22,7 @@ struct ProjectDateContractTests {
 
     @Test func impossibleDatesAreRejectedBeforeProjectCreation() async throws {
         for option in ["--when", "--deadline"] {
-            for expression in ["2026-02-30", "2026-02-29", "2026-04-31", "not-a-date"] {
+            for expression in ["2026-02-30", "2026-02-29", "2026-04-31", "not-a-date", "next monday", "evening", "2026-01-01T12:00:00Z"] {
                 let client = RecordingThingsClient()
                 try await CommandTestSupport.withRuntime(client: client) {
                     await #expect(throws: (any Error).self) {
