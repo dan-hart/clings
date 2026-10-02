@@ -28,8 +28,8 @@ struct MutationAutomationTests {
             for tagFailure in [false, true] {
                 let bridge = MockJXAExecutor()
                 bridge.jsonResponses = [.success(tagFailure
-                    ? #"{"success":true,"id":"project-id","appliedFields":["create"]}"#
-                    : #"{"success":false,"id":"project-id","appliedFields":["create","schedule"],"error":"deadline rejected"}"#)]
+                        ? #"{"success":true,"id":"project-id","appliedFields":["create"]}"#
+                        : #"{"success":false,"id":"project-id","appliedFields":["create","schedule"],"error":"deadline rejected"}"#)]
                 bridge.appleScriptResponses = [.failure(ThingsError.operationFailed("tags rejected"))]
                 let client: any ThingsClientProtocol = hybrid ? HybridThingsClient(database: MockThingsDatabaseReader(), jxaBridge: bridge) : ThingsClient(bridge: bridge)
                 do {
