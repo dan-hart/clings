@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Automation deadlines and output**: Run subprocess waits off Swift's cooperative workers, drain stdout/stderr concurrently, and cancel expired operations without late launches. Large responses no longer fill an unread pipe while the CLI waits for exit.
 - **Partial project creation**: Preserve the created project ID and completed assignments when a later property or tagging step fails, so retries do not blindly duplicate an applied write.
 - **Gregorian automation dates**: Includes the reviewed locale/calendar-safe creation fix and DST runtime regressions from PR #13.
 - **`someday`/`anytime`/etc. list drift from Things**: `ThingsDatabase` list queries (`fetchList`, `search`) no longer include Things' internal repeating-task templates, which are hidden generator rows (identified by a non-null `rt1_recurrenceRule`) rather than real todos.

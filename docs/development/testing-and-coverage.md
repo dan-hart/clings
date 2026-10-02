@@ -72,4 +72,4 @@ bash scripts/release-docs-check.sh
 
 - Prefer source-only coverage when discussing the project target. Dependency coverage from `swift-argument-parser`, GRDB, and SwiftDate will otherwise dilute the total.
 - Keep command help and `docs/` aligned. If you add a new command family, update the command reference and rerun the docs check script.
-- `coverage-check.sh` reads SwiftPM's exported report and rejects source-only line coverage below 80%, or database/shared query-validation/JSON-error-boundary coverage below 95%. Run an instrumented test suite first so the report is current. Error paths also need explicit failure/partial-result tests; aggregate line coverage is not proof of safety.
+- `coverage-check.sh` reads SwiftPM's exported report and rejects source-only line coverage below 80%, or database/automation-process/shared query-validation/JSON-error-boundary coverage below 95%. Run an instrumented test suite first so the report is current. Error paths also need explicit failure/partial-result tests; aggregate line coverage is not proof of safety.
