@@ -15,11 +15,11 @@ struct UndoCommand: AsyncParsableCommand {
         Reverses the most recent supported write operation recorded by clings.
 
         Inspect --show first. History keeps up to 20 entries in local config.
-        Bulk writes, project/tag management, and changes made in Things itself
-        are not recorded. Update undo restores title, notes, deadline, and tags;
+        Supported bulk status/tag writes are grouped. Project/tag management
+        and changes made in Things itself are not recorded. Update undo restores title, notes, deadline, and tags;
         it does not restore scheduling, headings, or project moves.
-        Undo removes the history entry before attempting the reversal; a failed
-        reversal cannot be retried from that entry. It is not a backup system.
+        Failed reversals retain the entry and unreversed group members for retry.
+        This is not a backup system.
 
         EXAMPLES:
           clings undo
@@ -28,9 +28,9 @@ struct UndoCommand: AsyncParsableCommand {
         Supported operations:
           create     Cancels the newly created todo through automation
           update     Restores the previous snapshot
-          complete   Reopens the todo
-          cancel     Reopens the todo
-          delete     Reopens the todo
+          complete   Restores the prior status
+          cancel     Restores the prior status
+          delete     Restores the prior status
         """
     )
 
@@ -41,6 +41,13 @@ struct UndoCommand: AsyncParsableCommand {
 
     func run() async throws {
         if show {
+            try await perform(); return
+        }
+        try await MutationLock.withLock { try await perform() }
+    }
+
+    private func perform() async throws {
+        if show {
             guard let entry = try UndoStore.latest() else {
                 print(renderMessage("No undo history available", output: output))
                 return
@@ -49,31 +56,60 @@ struct UndoCommand: AsyncParsableCommand {
             return
         }
 
-        guard let entry = try UndoStore.popLatest() else {
+        guard var entry = try UndoStore.latest() else {
             print(renderMessage("Nothing to undo", output: output))
             return
         }
 
         let client = CommandRuntime.makeClient()
-        switch entry.operation {
-        case .create:
-            try await client.deleteTodo(id: entry.todoID)
-        case .update:
-            guard let snapshot = entry.snapshot else {
-                throw ValidationError("Undo entry is missing update snapshot data")
+        if var members = entry.members {
+            while let member = members.first {
+                do {
+                    if member.operation == .update {
+                        try await client.updateTodo(id: member.snapshot.id, name: nil, notes: nil, dueDate: nil, tags: member.snapshot.tags)
+                    } else {
+                        switch member.snapshot.status {
+                        case .open: try await client.reopenTodo(id: member.snapshot.id)
+                        case .completed: try await client.completeTodo(id: member.snapshot.id)
+                        case .canceled: try await client.cancelTodo(id: member.snapshot.id)
+                        }
+                    }
+                } catch {
+                    throw try CommandFailure(exitStatus: 2, code: "undo_partial", message: "Undo stopped; remaining members retained: \(error.localizedDescription)", dataJSON: payloadJSON(entry))
+                }
+                members.removeFirst()
+                entry.members = members
+                do { try UndoStore.replace(entry) }
+                catch { throw try CommandFailure(exitStatus: 2, code: "undo_storage_failed", message: "Undo applied but journal update failed: \(error.localizedDescription)", dataJSON: payloadJSON(MutationOutcome(applied: true, undoRecorded: false, message: "Undo applied"))) }
             }
-            try await client.updateTodo(
-                id: entry.todoID,
-                name: snapshot.name,
-                notes: snapshot.notes,
-                dueDate: snapshot.dueDate,
-                tags: snapshot.tags
-            )
-        case .complete, .cancel, .delete:
-            try await client.reopenTodo(id: entry.todoID)
+            do { try UndoStore.remove(id: entry.id) }
+            catch { throw try CommandFailure(exitStatus: 2, code: "undo_storage_failed", message: "Undo applied but journal removal failed", dataJSON: payloadJSON(MutationOutcome(applied: true, undoRecorded: false, message: "Undo applied"))) }
+            try printOutcome(MutationOutcome(applied: true, undoRecorded: false, message: "Undid grouped changes"), output: output)
+            return
         }
-
-        print(renderMessage("Undid \(entry.operation.rawValue) for \(entry.todoID)", output: output))
+        do {
+            switch entry.operation {
+            case .create:
+                try await client.deleteTodo(id: entry.todoID)
+            case .update:
+                guard let snapshot = entry.snapshot else {
+                    throw ValidationError("Undo entry is missing update snapshot data")
+                }
+                try await client.restoreTodo(snapshot)
+            case .complete, .cancel, .delete:
+                guard let snapshot = entry.snapshot else { throw ValidationError("Undo entry is missing prior status") }
+                switch snapshot.status {
+                case .open: try await client.reopenTodo(id: entry.todoID)
+                case .completed: try await client.completeTodo(id: entry.todoID)
+                case .canceled: try await client.cancelTodo(id: entry.todoID)
+                }
+            }
+        } catch let error as AppliedMutationError {
+            throw try CommandFailure(exitStatus: 2, code: "undo_partial", message: error.localizedDescription, dataJSON: payloadJSON(MutationOutcome(id: error.id, applied: true, undoRecorded: false, appliedFields: error.fields, message: "Undo partially applied; entry retained")))
+        }
+        do { try UndoStore.remove(id: entry.id) }
+        catch { throw try CommandFailure(exitStatus: 2, code: "undo_storage_failed", message: "Undo applied but journal could not be updated", dataJSON: payloadJSON(MutationOutcome(applied: true, undoRecorded: false, message: "Undo applied"))) }
+        try printOutcome(MutationOutcome(applied: true, undoRecorded: false, message: "Undid \(entry.operation.rawValue) for \(entry.todoID)"), output: output)
     }
 
     private func renderUndoEntry(_ entry: UndoEntry) -> String {

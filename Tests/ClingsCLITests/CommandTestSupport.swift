@@ -3,11 +3,11 @@
 // Copyright (C) 2024 Dan Hart
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+@testable import ClingsCLI
 import ClingsCore
 import Darwin
 import Foundation
 import Testing
-@testable import ClingsCLI
 
 enum CommandTestSupport {
     private static let stdoutSemaphore = DispatchSemaphore(value: 1)
@@ -46,60 +46,44 @@ enum CommandTestSupport {
         }
     }
 
+    private static func beginCapture() throws -> (URL, Int32, FileHandle) {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("clings-stdout-\(UUID().uuidString)")
+        guard FileManager.default.createFile(atPath: url.path, contents: nil) else { throw ThingsError.operationFailed("Cannot create stdout capture") }
+        let handle = try FileHandle(forWritingTo: url)
+        let original = dup(STDOUT_FILENO)
+        fflush(stdout)
+        dup2(handle.fileDescriptor, STDOUT_FILENO)
+        return (url, original, handle)
+    }
+
+    private static func finishCapture(_ capture: (URL, Int32, FileHandle)) throws -> String {
+        fflush(stdout)
+        dup2(capture.1, STDOUT_FILENO)
+        close(capture.1)
+        try capture.2.close()
+        return try String(decoding: Data(contentsOf: capture.0), as: UTF8.self)
+    }
+
     static func captureStandardOutput<T>(_ body: () throws -> T) throws -> (T, String) {
         acquire(stdoutSemaphore)
         defer { release(stdoutSemaphore) }
-
-        let pipe = Pipe()
-        let originalStdout = dup(STDOUT_FILENO)
-        precondition(originalStdout >= 0, "Failed to duplicate stdout")
-
-        fflush(stdout)
-        dup2(pipe.fileHandleForWriting.fileDescriptor, STDOUT_FILENO)
-
-        do {
-            let result = try body()
-            fflush(stdout)
-            dup2(originalStdout, STDOUT_FILENO)
-            close(originalStdout)
-            try pipe.fileHandleForWriting.close()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            return (result, String(data: data, encoding: .utf8) ?? "")
-        } catch {
-            fflush(stdout)
-            dup2(originalStdout, STDOUT_FILENO)
-            close(originalStdout)
-            try? pipe.fileHandleForWriting.close()
-            throw error
-        }
+        let capture = try beginCapture()
+        defer { try? FileManager.default.removeItem(at: capture.0) }
+        let result: T
+        do { result = try body() }
+        catch { _ = try? finishCapture(capture); throw error }
+        return try (result, finishCapture(capture))
     }
 
     static func captureStandardOutput<T>(_ body: () async throws -> T) async throws -> (T, String) {
         acquire(stdoutSemaphore)
         defer { release(stdoutSemaphore) }
-
-        let pipe = Pipe()
-        let originalStdout = dup(STDOUT_FILENO)
-        precondition(originalStdout >= 0, "Failed to duplicate stdout")
-
-        fflush(stdout)
-        dup2(pipe.fileHandleForWriting.fileDescriptor, STDOUT_FILENO)
-
-        do {
-            let result = try await body()
-            fflush(stdout)
-            dup2(originalStdout, STDOUT_FILENO)
-            close(originalStdout)
-            try pipe.fileHandleForWriting.close()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            return (result, String(data: data, encoding: .utf8) ?? "")
-        } catch {
-            fflush(stdout)
-            dup2(originalStdout, STDOUT_FILENO)
-            close(originalStdout)
-            try? pipe.fileHandleForWriting.close()
-            throw error
-        }
+        let capture = try beginCapture()
+        defer { try? FileManager.default.removeItem(at: capture.0) }
+        let result: T
+        do { result = try await body() }
+        catch { _ = try? finishCapture(capture); throw error }
+        return try (result, finishCapture(capture))
     }
 
     static func withRuntime<T>(
@@ -107,6 +91,7 @@ enum CommandTestSupport {
         database: (any ThingsDatabaseReadable)? = nil,
         inputs: [String] = [],
         openedURLs: URLRecorder? = nil,
+        terminal: Bool? = nil,
         body: () async throws -> T
     ) async throws -> T {
         let feeder = InputFeeder(inputs: inputs)
@@ -144,11 +129,13 @@ enum CommandTestSupport {
             try currentOpenURLScheme(url)
         }
 
-        return try await CommandRuntime.$makeClient.withValue(clientFactory) {
-            try await CommandRuntime.$makeDatabase.withValue(databaseFactory) {
-                try await CommandRuntime.$inputReader.withValue(inputReader) {
-                    try await CommandRuntime.$openURLScheme.withValue(openURLScheme) {
-                        try await body()
+        return try await CommandRuntime.$isTerminal.withValue({ terminal ?? !inputs.isEmpty }) {
+            try await CommandRuntime.$makeClient.withValue(clientFactory) {
+                try await CommandRuntime.$makeDatabase.withValue(databaseFactory) {
+                    try await CommandRuntime.$inputReader.withValue(inputReader) {
+                        try await CommandRuntime.$openURLScheme.withValue(openURLScheme) {
+                            try await body()
+                        }
                     }
                 }
             }
@@ -204,12 +191,40 @@ struct MockThingsDatabase: ThingsDatabaseReadable {
         return todo
     }
 
-    func search(query: String) throws -> [Todo] {
+    func search(query _: String) throws -> [Todo] {
         searchResults
     }
 }
 
 final class RecordingThingsClient: ThingsClientProtocol, @unchecked Sendable {
+    var failedIDs: Set<String> = []
+    private(set) var restoredSnapshots: [TodoSnapshot] = []
+    func restoreTodo(_ snapshot: TodoSnapshot) async throws {
+        if let error {
+            throw error
+        }
+        if failedIDs.contains(snapshot.id) {
+            throw ThingsError.operationFailed("Failed: \(snapshot.id)")
+        }
+        restoredSnapshots.append(snapshot)
+        updatedTodos.append((snapshot.id, snapshot.name, snapshot.notes, snapshot.dueDate, snapshot.tags))
+        var todo = todosByID[snapshot.id] ?? Todo(id: snapshot.id, name: snapshot.name)
+        todo.name = snapshot.name; todo.notes = snapshot.notes; todo.dueDate = snapshot.dueDate
+        todo.tags = snapshot.tags.map { ClingsCore.Tag(id: $0, name: $0) }; todo.status = snapshot.status
+        todosByID[snapshot.id] = todo
+    }
+
+    func moveTodo(id: String, toProjectID: String) async throws {
+        if let error {
+            throw error
+        }
+        if failedIDs.contains(id) {
+            throw ThingsError.operationFailed("Failed: \(id)")
+        }
+        movedTodos.append((id, toProjectID))
+        todosByID[id]?.project = projects.first { $0.id == toProjectID }
+    }
+
     var todosForList: [ListView: [Todo]] = [:]
     var projects: [Project] = []
     var areas: [Area] = []
@@ -235,28 +250,41 @@ final class RecordingThingsClient: ThingsClientProtocol, @unchecked Sendable {
     private(set) var renamedTags: [(String, String)] = []
 
     func fetchList(_ list: ListView) async throws -> [Todo] {
-        if let error { throw error }
+        if let error {
+            throw error
+        }
         fetchedLists.append(list)
-        return todosForList[list] ?? []
+        return (todosForList[list] ?? []).map { todosByID[$0.id] ?? $0 }
     }
 
     func fetchProjects() async throws -> [Project] {
-        if let error { throw error }
+        if let error {
+            throw error
+        }
         return projects
     }
 
     func fetchAreas() async throws -> [Area] {
-        if let error { throw error }
+        if let error {
+            throw error
+        }
         return areas
     }
 
     func fetchTags() async throws -> [ClingsCore.Tag] {
-        if let error { throw error }
+        if let error {
+            throw error
+        }
         return tags
     }
 
     func fetchTodo(id: String) async throws -> Todo {
-        if let error { throw error }
+        if let error {
+            throw error
+        }
+        if todosByID[id] == nil, let todo = (Array(todosForList.values).flatMap { $0 } + searchResults).first(where: { $0.id == id }) {
+            todosByID[id] = todo
+        }
         guard let todo = todosByID[id] else {
             throw ThingsError.notFound(id)
         }
@@ -273,7 +301,9 @@ final class RecordingThingsClient: ThingsClientProtocol, @unchecked Sendable {
         area: String?,
         checklistItems: [String]
     ) async throws -> String {
-        if let error { throw error }
+        if let error {
+            throw error
+        }
         createdTodos.append((name, notes, when, deadline, tags, project, area, checklistItems))
         return createTodoID
     }
@@ -286,65 +316,114 @@ final class RecordingThingsClient: ThingsClientProtocol, @unchecked Sendable {
         tags: [String],
         area: String?
     ) async throws -> String {
-        if let error { throw error }
+        if let error {
+            throw error
+        }
         createdProjects.append((name, notes, when, deadline, tags, area))
         return createProjectID
     }
 
     func completeTodo(id: String) async throws {
-        if let error { throw error }
+        if let error {
+            throw error
+        }
+        if failedIDs.contains(id) {
+            throw ThingsError.operationFailed("Failed: \(id)")
+        }
         completedIDs.append(id)
+        todosByID[id]?.status = .completed
     }
 
     func reopenTodo(id: String) async throws {
-        if let error { throw error }
+        if let error {
+            throw error
+        }
+        if failedIDs.contains(id) {
+            throw ThingsError.operationFailed("Failed: \(id)")
+        }
         reopenedIDs.append(id)
+        todosByID[id]?.status = .open
     }
 
     func cancelTodo(id: String) async throws {
-        if let error { throw error }
+        if let error {
+            throw error
+        }
+        if failedIDs.contains(id) {
+            throw ThingsError.operationFailed("Failed: \(id)")
+        }
         canceledIDs.append(id)
+        todosByID[id]?.status = .canceled
     }
 
     func deleteTodo(id: String) async throws {
-        if let error { throw error }
+        if let error {
+            throw error
+        }
         deletedIDs.append(id)
     }
 
     func moveTodo(id: String, toProject projectName: String) async throws {
-        if let error { throw error }
+        if let error {
+            throw error
+        }
         movedTodos.append((id, projectName))
     }
 
     func updateTodo(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?) async throws {
-        if let error { throw error }
+        if let error {
+            throw error
+        }
+        if failedIDs.contains(id) {
+            throw ThingsError.operationFailed("Failed: \(id)")
+        }
         updatedTodos.append((id, name, notes, dueDate, tags))
+        if let name {
+            todosByID[id]?.name = name
+        }
+        if let notes {
+            todosByID[id]?.notes = notes
+        }
+        if let dueDate {
+            todosByID[id]?.dueDate = dueDate
+        }
+        if let tags {
+            todosByID[id]?.tags = tags.map { ClingsCore.Tag(id: $0, name: $0) }
+        }
     }
 
     func search(query: String) async throws -> [Todo] {
-        if let error { throw error }
+        if let error {
+            throw error
+        }
         searchQueries.append(query)
         return searchResults
     }
 
     func createTag(name: String) async throws -> ClingsCore.Tag {
-        if let error { throw error }
+        if let error {
+            throw error
+        }
         createdTags.append(name)
         return ClingsCore.Tag(id: "tag-\(name)", name: name)
     }
 
     func deleteTag(name: String) async throws {
-        if let error { throw error }
+        if let error {
+            throw error
+        }
         deletedTags.append(name)
     }
 
     func renameTag(oldName: String, newName: String) async throws {
-        if let error { throw error }
+        if let error {
+            throw error
+        }
         renamedTags.append((oldName, newName))
     }
 
-    func openInThings(id: String) throws {}
-    func openInThings(list: ListView) throws {}
+    func openInThings(id _: String) throws {}
+    func openInThings(list _: ListView) throws {}
 }
 
 enum CommandFixtures {

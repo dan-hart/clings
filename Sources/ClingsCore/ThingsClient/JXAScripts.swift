@@ -7,6 +7,34 @@ import Foundation
 
 /// JavaScript for Automation (JXA) script templates for Things 3.
 public enum JXAScripts {
+    public static func moveTodoToProjectID(id: String, projectID: String) -> String {
+        """
+        tell application "Things3"
+            set targetTodo to to do id "\(id.appleScriptEscaped)"
+            set project of targetTodo to project id "\(projectID.appleScriptEscaped)"
+        end tell
+        """
+    }
+
+    public static func restoreTodoAppleScript(_ snapshot: TodoSnapshot) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = .current
+        formatter.dateFormat = "MMMM d, yyyy HH:mm:ss"
+        let setup = appleScriptDateSetup(variableName: "restoredDeadline", dateString: snapshot.dueDate.map { formatter.string(from: $0) })
+        let status = snapshot.status == .open ? "open" : snapshot.status == .completed ? "completed" : "canceled"
+        return """
+        tell application "Things3"
+            set targetTodo to to do id "\(snapshot.id.appleScriptEscaped)"
+            set name of targetTodo to "\(snapshot.name.appleScriptEscaped)"
+            set notes of targetTodo to "\((snapshot.notes ?? "").appleScriptEscaped)"
+            \(setup)
+            set due date of targetTodo to \(snapshot.dueDate == nil ? "missing value" : "restoredDeadline")
+            set status of targetTodo to \(status)
+        end tell
+        """
+    }
     // MARK: - List Queries
 
     /// Fetch all todos from a specific list view.
@@ -245,7 +273,7 @@ public enum JXAScripts {
         """
     }
 
-    /// Delete a todo by ID (moves to Trash).
+    /// Cancel a todo by ID through the supported API; this never moves it to Trash.
     public static func deleteTodo(id: String) -> String {
         """
         (() => {

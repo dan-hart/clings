@@ -3,20 +3,20 @@
 // Copyright (C) 2024 Dan Hart
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+@testable import ClingsCore
 import Foundation
 import Testing
-@testable import ClingsCore
 
 @Suite("ThingsClient")
 struct ThingsClientTests {
     @Test func fetchCollectionMethodsDecodeJSONResponses() async throws {
         let bridge = MockJXAExecutor()
-        bridge.jsonResponses = [
-            .success(try encodeJSON([TestData.todoOpen])),
-            .success(try encodeJSON([TestData.projectAlpha])),
-            .success(try encodeJSON([TestData.workArea])),
-            .success(try encodeJSON([TestData.workTag])),
-            .success(try encodeJSON([TestData.todoNoProject])),
+        bridge.jsonResponses = try [
+            .success(encodeJSON([TestData.todoOpen])),
+            .success(encodeJSON([TestData.projectAlpha])),
+            .success(encodeJSON([TestData.workArea])),
+            .success(encodeJSON([TestData.workTag])),
+            .success(encodeJSON([TestData.todoNoProject])),
         ]
 
         let client = ThingsClient(bridge: bridge)
@@ -60,14 +60,14 @@ struct ThingsClientTests {
 
     @Test func fetchTodoHandlesSuccessNotFoundAndDecodeFailures() async throws {
         let validBridge = MockJXAExecutor()
-        validBridge.executeResponses = [.success(try encodeJSON(TestData.todoOpen))]
+        validBridge.executeResponses = try [.success(encodeJSON(TestData.todoOpen))]
 
         let validClient = ThingsClient(bridge: validBridge)
         let todo = try await validClient.fetchTodo(id: TestData.todoOpen.id)
         #expect(todo == TestData.todoOpen)
 
         let notFoundBridge = MockJXAExecutor()
-        notFoundBridge.executeResponses = [.success(try errorResponseJSON(error: "missing", id: TestData.todoOpen.id))]
+        notFoundBridge.executeResponses = try [.success(errorResponseJSON(error: "missing", id: TestData.todoOpen.id))]
 
         let notFoundClient = ThingsClient(bridge: notFoundBridge)
         do {
@@ -75,7 +75,7 @@ struct ThingsClientTests {
             Issue.record("Expected notFound error")
         } catch let error as ThingsError {
             switch error {
-            case .notFound(let id):
+            case let .notFound(id):
                 #expect(id == TestData.todoOpen.id)
             default:
                 Issue.record("Unexpected error: \(error)")
@@ -93,7 +93,7 @@ struct ThingsClientTests {
             Issue.record("Expected decode failure")
         } catch let error as ThingsError {
             switch error {
-            case .operationFailed(let message):
+            case let .operationFailed(message):
                 #expect(message.contains("Failed to decode todo"))
             default:
                 Issue.record("Unexpected error: \(error)")
@@ -146,7 +146,7 @@ struct ThingsClientTests {
             Issue.record("Expected missing ID error")
         } catch let error as ThingsError {
             switch error {
-            case .operationFailed(let message):
+            case let .operationFailed(message):
                 #expect(message.contains("Missing created todo ID"))
             default:
                 Issue.record("Unexpected error: \(error)")
@@ -180,7 +180,7 @@ struct ThingsClientTests {
 
     @Test func createProjectHandlesJSONResponsesAndTagUpdates() async throws {
         let bridge = MockJXAExecutor()
-        bridge.jsonResponses = [.success(try creationResultJSON(success: true, id: "project-id", name: "Ops"))]
+        bridge.jsonResponses = try [.success(creationResultJSON(success: true, id: "project-id", name: "Ops"))]
         bridge.appleScriptResponses = [.success("ok")]
 
         let client = ThingsClient(bridge: bridge)
@@ -199,7 +199,7 @@ struct ThingsClientTests {
         #expect(bridge.appleScriptScripts[0].contains("ops"))
 
         let failingBridge = MockJXAExecutor()
-        failingBridge.jsonResponses = [.success(try creationResultJSON(success: false, error: "project failed"))]
+        failingBridge.jsonResponses = try [.success(creationResultJSON(success: false, error: "project failed"))]
         let failingClient = ThingsClient(bridge: failingBridge)
         do {
             _ = try await failingClient.createProject(
@@ -213,7 +213,7 @@ struct ThingsClientTests {
             Issue.record("Expected createProject failure")
         } catch let error as ThingsError {
             switch error {
-            case .operationFailed(let message):
+            case let .operationFailed(message):
                 #expect(message == "project failed")
             default:
                 Issue.record("Unexpected error: \(error)")
@@ -225,13 +225,13 @@ struct ThingsClientTests {
 
     @Test func mutationMethodsAndUpdateTodoHandleSuccessAndFailurePaths() async throws {
         let bridge = MockJXAExecutor()
-        bridge.jsonResponses = [
-            .success(try mutationResultJSON(success: true)),
-            .success(try mutationResultJSON(success: true)),
-            .success(try mutationResultJSON(success: true)),
-            .success(try mutationResultJSON(success: true)),
-            .success(try mutationResultJSON(success: true)),
-            .success(try mutationResultJSON(success: true)),
+        bridge.jsonResponses = try [
+            .success(mutationResultJSON(success: true)),
+            .success(mutationResultJSON(success: true)),
+            .success(mutationResultJSON(success: true)),
+            .success(mutationResultJSON(success: true)),
+            .success(mutationResultJSON(success: true)),
+            .success(mutationResultJSON(success: true)),
         ]
         bridge.appleScriptResponses = [
             .success("ok"),
@@ -266,7 +266,7 @@ struct ThingsClientTests {
         #expect(bridge.appleScriptScripts[1].contains("solo-tag"))
 
         let failureBridge = MockJXAExecutor()
-        failureBridge.jsonResponses = [.success(try mutationResultJSON(success: false, error: "mutation failed"))]
+        failureBridge.jsonResponses = try [.success(mutationResultJSON(success: false, error: "mutation failed"))]
         let failureClient = ThingsClient(bridge: failureBridge)
 
         do {
@@ -274,7 +274,7 @@ struct ThingsClientTests {
             Issue.record("Expected mutation failure")
         } catch let error as ThingsError {
             switch error {
-            case .operationFailed(let message):
+            case let .operationFailed(message):
                 #expect(message == "mutation failed")
             default:
                 Issue.record("Unexpected error: \(error)")
@@ -314,7 +314,7 @@ struct ThingsClientTests {
             Issue.record("Expected openInThings(id:) to throw")
         } catch let error as ThingsError {
             switch error {
-            case .invalidState(let message):
+            case let .invalidState(message):
                 #expect(message.contains("Open command is disabled"))
             default:
                 Issue.record("Unexpected error: \(error)")
@@ -328,7 +328,7 @@ struct ThingsClientTests {
             Issue.record("Expected openInThings(list:) to throw")
         } catch let error as ThingsError {
             switch error {
-            case .invalidState(let message):
+            case let .invalidState(message):
                 #expect(message.contains("Open command is disabled"))
             default:
                 Issue.record("Unexpected error: \(error)")
@@ -345,9 +345,12 @@ struct ThingsClientTests {
         do {
             try await operation()
             Issue.record("Expected JXA-backed ThingsError")
+        } catch let error as AppliedMutationError {
+            #expect(error.message.contains(fragment))
+            #expect(!error.id.isEmpty)
         } catch let error as ThingsError {
             switch error {
-            case .jxaError(let jxaError):
+            case let .jxaError(jxaError):
                 #expect(jxaError.localizedDescription.contains(fragment))
             default:
                 Issue.record("Unexpected error: \(error)")

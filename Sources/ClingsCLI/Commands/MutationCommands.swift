@@ -49,6 +49,10 @@ struct CompleteCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
+        try await MutationLock.withLock { try await perform() }
+    }
+
+    private func perform() async throws {
         let client = CommandRuntime.makeClient()
 
         // Determine which mode to use
@@ -64,9 +68,9 @@ struct CompleteCommand: AsyncParsableCommand {
             case 1:
                 // Exactly one match - complete it
                 let todo = openTodos[0]
+                let snapshot = try await client.fetchTodo(id: todo.id)
                 try await client.completeTodo(id: todo.id)
-                try UndoStore.record(UndoEntry(operation: .complete, todoID: todo.id, snapshot: TodoSnapshot(todo: todo)))
-                print(renderMessage("Completed: \(todo.name)", output: output))
+                try printOutcome(recordApplied(UndoEntry(operation: .complete, todoID: todo.id, snapshot: TodoSnapshot(todo: snapshot)), message: "Completed: \(todo.name)"), output: output)
 
             default:
                 // Multiple matches - show list with IDs
@@ -81,10 +85,9 @@ struct CompleteCommand: AsyncParsableCommand {
             }
         } else if let todoId = id {
             // Original ID-based completion
-            let snapshot = try? await client.fetchTodo(id: todoId)
+            let snapshot = try await client.fetchTodo(id: todoId)
             try await client.completeTodo(id: todoId)
-            try UndoStore.record(UndoEntry(operation: .complete, todoID: todoId, snapshot: snapshot.map { TodoSnapshot(todo: $0) }))
-            print(renderMessage("Completed todo: \(todoId)", output: output))
+            try printOutcome(recordApplied(UndoEntry(operation: .complete, todoID: todoId, snapshot: TodoSnapshot(todo: snapshot)), message: "Completed todo: \(todoId)"), output: output)
         } else {
             throw ValidationError("Provide either a todo ID or --title flag")
         }
@@ -122,11 +125,14 @@ struct CancelCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
+        try await MutationLock.withLock { try await perform() }
+    }
+
+    private func perform() async throws {
         let client = CommandRuntime.makeClient()
-        let snapshot = try? await client.fetchTodo(id: id)
+        let snapshot = try await client.fetchTodo(id: id)
         try await client.cancelTodo(id: id)
-        try UndoStore.record(UndoEntry(operation: .cancel, todoID: id, snapshot: snapshot.map { TodoSnapshot(todo: $0) }))
-        print(renderMessage("Canceled todo: \(id)", output: output))
+        try printOutcome(recordApplied(UndoEntry(operation: .cancel, todoID: id, snapshot: TodoSnapshot(todo: snapshot)), message: "Canceled todo: \(id)"), output: output)
     }
 }
 
@@ -143,9 +149,9 @@ struct DeleteCommand: AsyncParsableCommand {
         For permanent deletion, use the Things app directly.
 
         CURRENT BEHAVIOR:
-          The command runs immediately; --force is accepted for compatibility
-          but no confirmation prompt is implemented. It does not move the todo
-          to Trash. Inspect the ID with show first. undo reopens the todo.
+          Requires confirmation unless --force is supplied. Noninteractive
+          use requires --force. This cancels the todo, never moves it to Trash.
+          Undo restores the previous status, including completed or canceled.
 
         EXAMPLES:
           clings delete ABC123          Delete a specific todo
@@ -161,17 +167,24 @@ struct DeleteCommand: AsyncParsableCommand {
     @Argument(help: "The ID of the todo to delete")
     var id: String
 
-    @Flag(name: .shortAndLong, help: "Compatibility flag; deletion currently runs without confirmation")
+    @Flag(name: .shortAndLong, help: "Authorize cancellation without prompting (never moves to Trash)")
     var force = false
 
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
+        try await MutationLock.withLock { try await perform() }
+    }
+
+    private func perform() async throws {
         let client = CommandRuntime.makeClient()
-        let snapshot = try? await client.fetchTodo(id: id)
+        let snapshot = try await client.fetchTodo(id: id)
+        guard try confirmMutation("Cancel '\(snapshot.name)' [\(id)]? This does not move it to Trash.", authorized: force) else {
+            try printOutcome(MutationOutcome(applied: false, undoRecorded: false, message: "Canceled request; no change applied"), output: output)
+            return
+        }
         try await client.deleteTodo(id: id)
-        try UndoStore.record(UndoEntry(operation: .delete, todoID: id, snapshot: snapshot.map { TodoSnapshot(todo: $0) }))
-        print(renderMessage("Deleted todo: \(id)", output: output))
+        try printOutcome(recordApplied(UndoEntry(operation: .delete, todoID: id, snapshot: TodoSnapshot(todo: snapshot)), message: "Canceled todo: \(id) (not moved to Trash)"), output: output)
     }
 }
 
@@ -225,6 +238,13 @@ struct UpdateCommand: AsyncParsableCommand {
     var parseOnly = false
 
     func run() async throws {
+        if parseOnly {
+            try await perform(); return
+        }
+        try await MutationLock.withLock { try await perform() }
+    }
+
+    private func perform() async throws {
         // Check if any update options provided
         guard name != nil || notes != nil || due != nil || when != nil || heading != nil || !tags.isEmpty else {
             throw ThingsError.invalidState("No update options provided. Use --name, --notes, --due, --when, --heading, or --tags.")
@@ -278,12 +298,14 @@ struct UpdateCommand: AsyncParsableCommand {
                 when: when == nil ? previous.scheduledDate : scheduledDate,
                 deadline: dueDate ?? previous.dueDate, scheduleExpression: resolvedWhen,
                 heading: resolvedHeading,
-                undo: "Restores title, notes, deadline and tags; scheduling and heading are not restored."
+                undo: "Restores title, notes, deadline and tags; scheduling and heading are not restored.",
+                unsupportedUndo: [when != nil ? "schedule" : nil, heading != nil ? "heading" : nil].compactMap { $0 }
             )
             try print(preview.render(json: output.json))
             return
         }
         // Pre-validate auth token before any mutations to avoid partial updates
+        warnUnsupported([when != nil ? "schedule" : nil, resolvedHeading != nil ? "heading" : nil].compactMap { $0 })
         let needsURLScheme = when != nil || resolvedHeading != nil
         var prevalidatedToken: String? = nil
         if needsURLScheme {
@@ -302,18 +324,20 @@ struct UpdateCommand: AsyncParsableCommand {
             }
         }
 
-        let previousSnapshot = try? await client.fetchTodo(id: id)
+        let previousSnapshot = try await client.fetchTodo(id: id)
 
         // Update via JXA (name, notes, dueDate, tags)
         let hasJXAUpdates = name != nil || notes != nil || dueDate != nil || !tags.isEmpty
         if hasJXAUpdates {
-            try await client.updateTodo(
+            do { try await client.updateTodo(
                 id: id,
                 name: name,
                 notes: notes,
                 dueDate: dueDate,
                 tags: tags.isEmpty ? nil : tags
-            )
+            ) } catch let error as AppliedMutationError {
+                try reportPartial(error, entry: UndoEntry(operation: .update, todoID: id, snapshot: TodoSnapshot(todo: previousSnapshot)))
+            }
         }
 
         // Handle when and heading via Things URL scheme (activationDate is read-only in JXA)
@@ -325,19 +349,19 @@ struct UpdateCommand: AsyncParsableCommand {
                     let jxaFields = [name != nil ? "name" : nil, notes != nil ? "notes" : nil,
                                      dueDate != nil ? "due date" : nil, !tags.isEmpty ? "tags" : nil]
                         .compactMap { $0 }.joined(separator: ", ")
-                    throw ThingsError.operationFailed(
-                        "Partial update: \(jxaFields) updated, but --when/--heading failed: \(error.localizedDescription)"
-                    )
+                    let result = try recordApplied(UndoEntry(operation: .update, todoID: id, snapshot: TodoSnapshot(todo: previousSnapshot)), message: "Partial update: \(jxaFields) updated, but URL update failed", unsupported: ["schedule", "heading"])
+                    throw try CommandFailure(exitStatus: 2, code: "mutation_partial", message: "Partial update: \(jxaFields) applied, but --when/--heading failed: \(error.localizedDescription)", dataJSON: payloadJSON(result))
                 }
                 throw error
             }
         }
 
         let urlSchemeNote = needsURLScheme ? " (--when/--heading sent via URL scheme; verify in Things)" : ""
-        if let previousSnapshot {
-            try UndoStore.record(UndoEntry(operation: .update, todoID: id, snapshot: TodoSnapshot(todo: previousSnapshot)))
+        if !hasJXAUpdates {
+            try printOutcome(MutationOutcome(applied: true, undoRecorded: false, unsupportedUndo: [when != nil ? "schedule" : nil, heading != nil ? "heading" : nil].compactMap { $0 }, message: "Updated todo: \(id)\(urlSchemeNote)"), output: output)
+            return
         }
-        print(renderMessage("Updated todo: \(id)\(urlSchemeNote)", output: output))
+        try printOutcome(recordApplied(UndoEntry(operation: .update, todoID: id, snapshot: TodoSnapshot(todo: previousSnapshot)), message: "Updated todo: \(id)\(urlSchemeNote)", unsupported: [when != nil ? "schedule" : nil, heading != nil ? "heading" : nil].compactMap { $0 }), output: output)
     }
 
     private func updateViaURLScheme(id: String, when: String?, heading: String?, token: String) throws {

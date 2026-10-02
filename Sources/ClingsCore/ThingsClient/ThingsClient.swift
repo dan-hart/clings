@@ -5,6 +5,15 @@
 
 import Foundation
 
+public struct AppliedMutationError: LocalizedError, Sendable {
+    public let id: String
+    public let fields: [String]
+    public let message: String
+    public var errorDescription: String? {
+        "Change applied to \(id) (\(fields.joined(separator: ", "))), but a later step failed: \(message)"
+    }
+}
+
 /// Errors that can occur when interacting with Things 3.
 public enum ThingsError: Error, LocalizedError {
     case notFound(String)
@@ -14,13 +23,13 @@ public enum ThingsError: Error, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .notFound(let id):
+        case let .notFound(id):
             return "Item not found: \(id)"
-        case .operationFailed(let msg):
+        case let .operationFailed(msg):
             return "Operation failed: \(msg)"
-        case .invalidState(let msg):
+        case let .invalidState(msg):
             return "Invalid state: \(msg)"
-        case .jxaError(let error):
+        case let .jxaError(error):
             return error.localizedDescription
         }
     }
@@ -30,7 +39,7 @@ public enum ThingsError: Error, LocalizedError {
 ///
 /// This protocol allows for mocking in tests.
 public protocol ThingsClientProtocol: Sendable {
-    // Lists
+    /// Lists
     func fetchList(_ list: ListView) async throws -> [Todo]
     /// Complete candidates for scope/filter/sort/limit processing, without display caps.
     func fetchQueryList(_ list: ListView) async throws -> [Todo]
@@ -38,10 +47,10 @@ public protocol ThingsClientProtocol: Sendable {
     func fetchAreas() async throws -> [Area]
     func fetchTags() async throws -> [Tag]
 
-    // Single item
+    /// Single item
     func fetchTodo(id: String) async throws -> Todo
 
-    // Mutations
+    /// Mutations
     func createTodo(
         name: String,
         notes: String?,
@@ -66,8 +75,10 @@ public protocol ThingsClientProtocol: Sendable {
     func deleteTodo(id: String) async throws
     func moveTodo(id: String, toProject: String) async throws
     func updateTodo(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?) async throws
+    func restoreTodo(_ snapshot: TodoSnapshot) async throws
+    func moveTodo(id: String, toProjectID: String) async throws
 
-    // Search
+    /// Search
     func search(query: String) async throws -> [Todo]
 
     // Tag management
@@ -91,6 +102,14 @@ public protocol ThingsDatabaseReadable: Sendable {
 }
 
 public extension ThingsClientProtocol {
+    func restoreTodo(_: TodoSnapshot) async throws {
+        throw ThingsError.invalidState("This client cannot restore nullable todo fields")
+    }
+
+    func moveTodo(id _: String, toProjectID _: String) async throws {
+        throw ThingsError.invalidState("This client cannot move to an exact project ID")
+    }
+
     func fetchQueryList(_ list: ListView) async throws -> [Todo] {
         try await fetchList(list)
     }
@@ -231,8 +250,8 @@ public actor ThingsClient: ThingsClientProtocol {
             let tagScript = JXAScripts.setTodoTagsAppleScript(id: id, tags: tags)
             do {
                 _ = try await bridge.executeAppleScript(tagScript)
-            } catch let error as JXAError {
-                throw ThingsError.jxaError(error)
+            } catch {
+                throw AppliedMutationError(id: id, fields: ["create"], message: error.localizedDescription)
             }
         }
 
@@ -315,6 +334,19 @@ public actor ThingsClient: ThingsClientProtocol {
         }
     }
 
+    public func moveTodo(id: String, toProjectID: String) async throws {
+        _ = try await bridge.executeAppleScript(JXAScripts.moveTodoToProjectID(id: id, projectID: toProjectID))
+    }
+
+    public func restoreTodo(_ snapshot: TodoSnapshot) async throws {
+        _ = try await bridge.executeAppleScript(JXAScripts.restoreTodoAppleScript(snapshot))
+        do {
+            _ = try await bridge.executeAppleScript(JXAScripts.setTodoTagsAppleScript(id: snapshot.id, tags: snapshot.tags))
+        } catch {
+            throw AppliedMutationError(id: snapshot.id, fields: ["title", "notes", "deadline", "status"], message: error.localizedDescription)
+        }
+    }
+
     public func updateTodo(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?) async throws {
         // Handle non-tag updates via JXA (name, notes, dueDate work fine)
         if name != nil || notes != nil || dueDate != nil {
@@ -329,8 +361,12 @@ public actor ThingsClient: ThingsClientProtocol {
             let tagScript = JXAScripts.setTodoTagsAppleScript(id: id, tags: tags)
             do {
                 _ = try await bridge.executeAppleScript(tagScript)
-            } catch let error as JXAError {
-                throw ThingsError.jxaError(error)
+            } catch {
+                let fields = [name != nil ? "title" : nil, notes != nil ? "notes" : nil, dueDate != nil ? "deadline" : nil].compactMap { $0 }
+                if !fields.isEmpty {
+                    throw AppliedMutationError(id: id, fields: fields, message: error.localizedDescription)
+                }
+                throw error
             }
         }
     }
@@ -378,11 +414,11 @@ public actor ThingsClient: ThingsClientProtocol {
 
     // MARK: - Open (disabled)
 
-    public nonisolated func openInThings(id: String) throws {
+    public nonisolated func openInThings(id _: String) throws {
         throw ThingsError.invalidState("Open command is disabled: URL schemes are not allowed.")
     }
 
-    public nonisolated func openInThings(list: ListView) throws {
+    public nonisolated func openInThings(list _: ListView) throws {
         throw ThingsError.invalidState("Open command is disabled: URL schemes are not allowed.")
     }
 

@@ -13,6 +13,7 @@ struct TaskPreview: Encodable {
     var heading: String?
     var undo: String
     var checklistItems: [String] = []
+    var unsupportedUndo: [String] = []
 
     func render(json: Bool) throws -> String {
         if json {

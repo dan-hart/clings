@@ -67,6 +67,13 @@ struct AddCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
+        if parseOnly {
+            try await perform(); return
+        }
+        try await MutationLock.withLock { try await perform() }
+    }
+
+    private func perform() async throws {
         let parser = TaskParser()
         var parsed = ParsedTask(title: "")
 
@@ -152,7 +159,8 @@ struct AddCommand: AsyncParsableCommand {
         }
 
         let client = CommandRuntime.makeClient()
-        let id = try await client.createTodo(
+        let id: String
+        do { id = try await client.createTodo(
             name: parsed.title,
             notes: parsed.notes,
             when: parsed.whenDate,
@@ -161,9 +169,9 @@ struct AddCommand: AsyncParsableCommand {
             project: parsed.project,
             area: parsed.area,
             checklistItems: parsed.checklistItems
-        )
-        try UndoStore.record(UndoEntry(operation: .create, todoID: id, snapshot: nil))
-
-        print(renderMessage("Created: \(parsed.title)", output: output))
+        ) } catch let error as AppliedMutationError {
+            try reportPartial(error, entry: UndoEntry(operation: .create, todoID: error.id, snapshot: nil))
+        }
+        try printOutcome(recordApplied(UndoEntry(operation: .create, todoID: id, snapshot: nil), message: "Created: \(parsed.title)"), output: output)
     }
 }

@@ -166,6 +166,10 @@ struct TemplateRunCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
+        try await MutationLock.withLock { try await perform() }
+    }
+
+    private func perform() async throws {
         guard let template = try TemplateStore.load(name: name) else {
             throw ValidationError("Template not found: \(name)")
         }
@@ -173,7 +177,8 @@ struct TemplateRunCommand: AsyncParsableCommand {
         let resolvedWhen = try resolveDate(template.whenExpression)
         let resolvedDeadline = try resolveDate(template.deadlineExpression)
         let client = CommandRuntime.makeClient()
-        let id = try await client.createTodo(
+        let id: String
+        do { id = try await client.createTodo(
             name: template.title,
             notes: template.notes,
             when: resolvedWhen,
@@ -182,9 +187,10 @@ struct TemplateRunCommand: AsyncParsableCommand {
             project: template.project,
             area: template.area,
             checklistItems: template.checklistItems
-        )
-        try UndoStore.record(UndoEntry(operation: .create, todoID: id, snapshot: nil))
-        print(renderMessage("Created from template: \(template.title)", output: output))
+        ) } catch let error as AppliedMutationError {
+            try reportPartial(error, entry: UndoEntry(operation: .create, todoID: error.id, snapshot: nil))
+        }
+        try printOutcome(recordApplied(UndoEntry(operation: .create, todoID: id, snapshot: nil), message: "Created from template: \(template.title)"), output: output)
     }
 }
 

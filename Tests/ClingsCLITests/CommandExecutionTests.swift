@@ -4,10 +4,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import ArgumentParser
+@testable import ClingsCLI
 import ClingsCore
 import Foundation
 import Testing
-@testable import ClingsCLI
 
 @Suite("Command Execution", .serialized)
 struct CommandExecutionTests {
@@ -76,39 +76,39 @@ struct CommandExecutionTests {
         client.searchResults = [todayTodo]
 
         let todayOutput = try await runAsync(
-            try TodayCommand.parse(["--format", "{name}"]),
+            TodayCommand.parse(["--format", "{name}"]),
             client: client
         )
         #expect(todayOutput.contains("Today work"))
 
         let projectsOutput = try await runAsync(
-            try ProjectsCommand.parse(["--json"]),
+            ProjectsCommand.parse(["--json"]),
             client: client
         )
         #expect(projectsOutput.contains("\"name\" : \"Release\""))
 
         let areasOutput = try await runAsync(
-            try AreasCommand.parse([]),
+            AreasCommand.parse([]),
             client: client
         )
         #expect(areasOutput.contains("Work"))
 
         let searchOutput = try await runAsync(
-            try SearchCommand.parse(["release"]),
+            SearchCommand.parse(["release"]),
             client: client
         )
         #expect(searchOutput.contains("Today work"))
         #expect(client.searchQueries == ["release"])
 
         let filterOutput = try await runAsync(
-            try FilterCommand.parse(["tags CONTAINS 'docs'"]),
+            FilterCommand.parse(["tags CONTAINS 'docs'"]),
             client: client
         )
         #expect(filterOutput.contains("Today work"))
         #expect(!filterOutput.contains("Inbox work"))
 
         let showOutput = try await runAsync(
-            try ShowCommand.parse([todayTodo.id, "--json"]),
+            ShowCommand.parse([todayTodo.id, "--json"]),
             client: client
         )
         #expect(showOutput.contains("\"id\" : \"today-1\""))
@@ -120,36 +120,36 @@ struct CommandExecutionTests {
             client.createTodoID = "created-from-template"
 
             let addParseOnlyOutput = try await runAsync(
-                try AddCommand.parse(["Ship docs tomorrow #docs", "--parse-only", "--json"]),
+                AddCommand.parse(["Ship docs tomorrow #docs", "--parse-only", "--json"]),
                 client: client
             )
             #expect(addParseOnlyOutput.contains("\"title\" : \"Ship docs\""))
             #expect(addParseOnlyOutput.contains("\"tags\""))
 
             let templateSaveOutput = try await runSync(
-                try TemplateSaveCommand.parse(["daily", "Daily review #review", "--checklist", "Inbox", "Calendar"])
+                TemplateSaveCommand.parse(["daily", "Daily review #review", "--checklist", "Inbox", "Calendar"])
             )
             #expect(templateSaveOutput.contains("Saved template: daily"))
 
             let templateListOutput = try await runSync(
-                try TemplateListCommand.parse([])
+                TemplateListCommand.parse([])
             )
             #expect(templateListOutput.contains("daily: Daily review"))
 
             let templateRunOutput = try await runAsync(
-                try TemplateRunCommand.parse(["daily"]),
+                TemplateRunCommand.parse(["daily"]),
                 client: client
             )
             #expect(templateRunOutput.contains("Created from template: Daily review"))
             #expect(client.createdTodos.count == 1)
 
             let templateDeleteOutput = try await runSync(
-                try TemplateDeleteCommand.parse(["daily"])
+                TemplateDeleteCommand.parse(["daily"])
             )
             #expect(templateDeleteOutput.contains("Deleted template: daily"))
 
             let viewsSaveOutput = try await runSync(
-                try ViewsSaveCommand.parse(["docs", "tags CONTAINS 'docs'", "--note", "Documentation work"])
+                ViewsSaveCommand.parse(["docs", "tags CONTAINS 'docs'", "--note", "Documentation work"])
             )
             #expect(viewsSaveOutput.contains("Saved view: docs"))
 
@@ -162,19 +162,19 @@ struct CommandExecutionTests {
             ]
 
             let viewsRunOutput = try await runAsync(
-                try ViewsRunCommand.parse(["docs"]),
+                ViewsRunCommand.parse(["docs"]),
                 client: client
             )
             #expect(viewsRunOutput.contains("Doc task"))
             #expect(!viewsRunOutput.contains("Other task"))
 
             let viewsListOutput = try await runSync(
-                try ViewsListCommand.parse([])
+                ViewsListCommand.parse([])
             )
             #expect(viewsListOutput.contains("# Documentation work"))
 
             let viewsDeleteOutput = try await runSync(
-                try ViewsDeleteCommand.parse(["docs"])
+                ViewsDeleteCommand.parse(["docs"])
             )
             #expect(viewsDeleteOutput.contains("Deleted view: docs"))
         }
@@ -182,7 +182,7 @@ struct CommandExecutionTests {
 
     @Test func completionsOutputIncludesCurrentCommandFamilies() async throws {
         let zshOutput = try await runSync(
-            try CompletionsCommand.parse(["zsh"])
+            CompletionsCommand.parse(["zsh"])
         )
         #expect(zshOutput.contains("'views:Manage saved filter views'"))
         #expect(zshOutput.contains("'template:Manage reusable task templates'"))
@@ -203,7 +203,7 @@ struct CommandExecutionTests {
             client.searchResults = [alternateTodo]
 
             let completeByTitleOutput = try await runAsync(
-                try CompleteCommand.parse(["--title", "Matching"]),
+                CompleteCommand.parse(["--title", "Matching"]),
                 client: client
             )
             #expect(completeByTitleOutput.contains("Completed: Matching title"))
@@ -214,30 +214,30 @@ struct CommandExecutionTests {
                 CommandFixtures.todo(id: "multi-2", name: "Matching beta"),
             ]
             let multipleMatchesOutput = try await runAsync(
-                try CompleteCommand.parse(["--title", "Matching"]),
+                CompleteCommand.parse(["--title", "Matching"]),
                 client: client
             )
             #expect(multipleMatchesOutput.contains("Multiple todos match"))
             #expect(multipleMatchesOutput.contains("clings complete multi-1"))
 
             let cancelOutput = try await runAsync(
-                try CancelCommand.parse([baseTodo.id]),
+                CancelCommand.parse([baseTodo.id]),
                 client: client
             )
             #expect(cancelOutput.contains("Canceled todo: todo-1"))
             #expect(client.canceledIDs == ["todo-1"])
 
             let deleteOutput = try await runAsync(
-                try DeleteCommand.parse([baseTodo.id]),
+                DeleteCommand.parse([baseTodo.id, "--force"]),
                 client: client
             )
-            #expect(deleteOutput.contains("Deleted todo: todo-1"))
+            #expect(deleteOutput.contains("Canceled todo: todo-1"))
             #expect(client.deletedIDs == ["todo-1"])
 
             try AuthTokenStore.saveToken("secret-token")
             let recorder = URLRecorder()
             let updateOutput = try await runAsync(
-                try UpdateCommand.parse([
+                UpdateCommand.parse([
                     baseTodo.id,
                     "--name", "Updated title",
                     "--notes", "Updated notes",
@@ -257,20 +257,20 @@ struct CommandExecutionTests {
             #expect(recorder.urls[0].contains("heading=Waiting"))
 
             let undoShowOutput = try await runAsync(
-                try UndoCommand.parse(["--show"]),
+                UndoCommand.parse(["--show"]),
                 client: client
             )
             #expect(undoShowOutput.contains("Latest undo: update todo-1"))
 
             let undoUpdateOutput = try await runAsync(
-                try UndoCommand.parse([]),
+                UndoCommand.parse([]),
                 client: client
             )
             #expect(undoUpdateOutput.contains("Undid update for todo-1"))
 
             try UndoStore.record(UndoEntry(operation: .create, todoID: "created-id", snapshot: nil))
             let undoCreateOutput = try await runAsync(
-                try UndoCommand.parse([]),
+                UndoCommand.parse([]),
                 client: client
             )
             #expect(undoCreateOutput.contains("Undid create for created-id"))
@@ -278,7 +278,7 @@ struct CommandExecutionTests {
 
             try UndoStore.record(UndoEntry(operation: .complete, todoID: "todo-2", snapshot: TodoSnapshot(todo: alternateTodo)))
             let undoCompleteOutput = try await runAsync(
-                try UndoCommand.parse([]),
+                UndoCommand.parse([]),
                 client: client
             )
             #expect(undoCompleteOutput.contains("Undid complete for todo-2"))
@@ -309,27 +309,27 @@ struct CommandExecutionTests {
             client.todosByID[overdue.id] = overdue
 
             let focusOutput = try await runAsync(
-                try FocusCommand.parse([]),
+                FocusCommand.parse([]),
                 client: client
             )
             #expect(focusOutput.contains("Overdue task"))
             #expect(focusOutput.contains("Overdue"))
 
             let focusFormatOutput = try await runAsync(
-                try FocusCommand.parse(["--format", "{name}"]),
+                FocusCommand.parse(["--format", "{name}"]),
                 client: client
             )
             #expect(focusFormatOutput.contains("Overdue task"))
 
             let pickShowOutput = try await runAsync(
-                try PickShowCommand.parse(["Overdue"]),
+                PickShowCommand.parse(["Overdue"]),
                 client: client,
                 inputs: ["1"]
             )
             #expect(pickShowOutput.contains("Overdue task"))
 
             let pickCompleteOutput = try await runAsync(
-                try PickCompleteCommand.parse([]),
+                PickCompleteCommand.parse([]),
                 client: client,
                 inputs: ["1"]
             )
@@ -337,28 +337,29 @@ struct CommandExecutionTests {
             #expect(!client.completedIDs.isEmpty)
 
             let pickCancelOutput = try await runAsync(
-                try PickCancelCommand.parse([]),
+                PickCancelCommand.parse([]),
                 client: client,
                 inputs: ["1"]
             )
             #expect(pickCancelOutput.contains("Canceled:"))
 
+            client.todosByID[today.id] = today
             let pickDeleteOutput = try await runAsync(
-                try PickDeleteCommand.parse([]),
+                PickDeleteCommand.parse([]),
                 client: client,
-                inputs: ["1"]
+                inputs: ["1", "yes"]
             )
-            #expect(pickDeleteOutput.contains("Deleted:"))
+            #expect(pickDeleteOutput.contains("Canceled:"))
 
             client.projects = [CommandFixtures.releaseProject]
             let projectListOutput = try await runAsync(
-                try ProjectListCommand.parse(["--json"]),
+                ProjectListCommand.parse(["--json"]),
                 client: client
             )
             #expect(projectListOutput.contains("\"name\" : \"Release\""))
 
             let projectAddOutput = try await runAsync(
-                try ProjectAddCommand.parse([
+                ProjectAddCommand.parse([
                     "Release Readiness",
                     "--notes", "Prepare the launch",
                     "--area", "Work",
@@ -373,7 +374,7 @@ struct CommandExecutionTests {
 
             client.todosForList[.today] = [today]
             let projectAuditOutput = try await runAsync(
-                try ProjectAuditCommand.parse(["--json"]),
+                ProjectAuditCommand.parse(["--json"]),
                 client: client
             )
             #expect(projectAuditOutput.contains("\"items\""))
@@ -381,68 +382,71 @@ struct CommandExecutionTests {
     }
 
     @Test func tagsAndBulkCommandsMutateThroughRuntimeClient() async throws {
-        let first = CommandFixtures.todo(id: "bulk-1", name: "First", tags: [CommandFixtures.docsTag], project: nil)
-        let second = CommandFixtures.todo(id: "bulk-2", name: "Second", tags: [], project: nil)
-        let client = RecordingThingsClient()
-        client.tags = [CommandFixtures.docsTag, CommandFixtures.reviewTag]
-        client.todosForList = [
-            .today: [first, second],
-            .inbox: [first, second],
-        ]
+        try await CommandTestSupport.withTemporaryConfigDirectory { _ in
+            let first = CommandFixtures.todo(id: "bulk-1", name: "First", tags: [CommandFixtures.docsTag], project: nil)
+            let second = CommandFixtures.todo(id: "bulk-2", name: "Second", tags: [], project: nil)
+            let client = RecordingThingsClient()
+            client.tags = [CommandFixtures.docsTag, CommandFixtures.reviewTag]
+            client.projects = [Project(id: "archive-project", name: "Archive")]
+            client.todosForList = [
+                .today: [first, second],
+                .inbox: [first, second],
+            ]
 
-        let tagsListOutput = try await runAsync(
-            try TagsListCommand.parse([]),
-            client: client
-        )
-        #expect(tagsListOutput.contains("docs"))
+            let tagsListOutput = try await runAsync(
+                TagsListCommand.parse([]),
+                client: client
+            )
+            #expect(tagsListOutput.contains("docs"))
 
-        let tagsAddOutput = try await runAsync(
-            try TagsAddCommand.parse(["urgent"]),
-            client: client
-        )
-        #expect(tagsAddOutput.contains("Created tag: urgent"))
-        #expect(client.createdTags == ["urgent"])
+            let tagsAddOutput = try await runAsync(
+                TagsAddCommand.parse(["urgent"]),
+                client: client
+            )
+            #expect(tagsAddOutput.contains("Created tag: urgent"))
+            #expect(client.createdTags == ["urgent"])
 
-        let tagsDeleteOutput = try await runAsync(
-            try TagsDeleteCommand.parse(["review"]),
-            client: client,
-            inputs: ["yes"]
-        )
-        #expect(tagsDeleteOutput.contains("Deleted tag: review"))
-        #expect(client.deletedTags == ["review"])
+            let tagsDeleteOutput = try await runAsync(
+                TagsDeleteCommand.parse(["review"]),
+                client: client,
+                inputs: ["yes"]
+            )
+            #expect(tagsDeleteOutput.contains("Deleted tag: review"))
+            #expect(client.deletedTags == ["review"])
 
-        let tagsRenameOutput = try await runAsync(
-            try TagsRenameCommand.parse(["docs", "documentation"]),
-            client: client
-        )
-        #expect(tagsRenameOutput.contains("Renamed tag: docs -> documentation"))
-        #expect(client.renamedTags.count == 1)
+            let tagsRenameOutput = try await runAsync(
+                TagsRenameCommand.parse(["docs", "documentation"]),
+                client: client
+            )
+            #expect(tagsRenameOutput.contains("Renamed tag: docs -> documentation"))
+            #expect(client.renamedTags.count == 1)
 
-        let bulkCompleteOutput = try await runAsync(
-            try BulkCompleteCommand.parse(["--list", "today", "--yes"]),
-            client: client
-        )
-        #expect(bulkCompleteOutput.contains("Completed: 2, Failed: 0"))
+            let bulkCompleteOutput = try await runAsync(
+                BulkCompleteCommand.parse(["--list", "today", "--yes"]),
+                client: client
+            )
+            #expect(bulkCompleteOutput.contains("Applied complete: 2 items"))
 
-        let bulkCancelOutput = try await runAsync(
-            try BulkCancelCommand.parse(["--list", "today", "--dry-run"]),
-            client: client
-        )
-        #expect(bulkCancelOutput.contains("[DRY RUN]"))
+            let bulkCancelOutput = try await runAsync(
+                BulkCancelCommand.parse(["--list", "today", "--dry-run"]),
+                client: client
+            )
+            #expect(bulkCancelOutput.contains("[DRY RUN]"))
 
-        let bulkTagOutput = try await runAsync(
-            try BulkTagCommand.parse(["review", "--list", "today", "--yes"]),
-            client: client
-        )
-        #expect(bulkTagOutput.contains("Updated 2 todo(s)"))
-        #expect(client.updatedTodos.count >= 2)
+            let bulkTagOutput = try await runAsync(
+                BulkTagCommand.parse(["review", "--list", "today", "--yes"]),
+                client: client
+            )
+            #expect(bulkTagOutput.contains("Applied tag: 2 items"))
+            #expect(client.updatedTodos.count >= 2)
 
-        let bulkMoveOutput = try await runAsync(
-            try BulkMoveCommand.parse(["--to", "Archive", "--list", "today", "--yes"]),
-            client: client
-        )
-        #expect(bulkMoveOutput.contains("Moved: 2, Failed: 0"))
-        #expect(client.movedTodos.count == 2)
+            let bulkMoveOutput = try await runAsync(
+                BulkMoveCommand.parse(["--to", "Archive", "--list", "today", "--yes"]),
+                client: client
+            )
+            #expect(bulkMoveOutput.contains("Applied move: 2 items"))
+            #expect(client.movedTodos.count == 2)
+        }
     }
 
     @Test func doctorReviewStatsAndCompletionsCommandsReportExpectedOutput() async throws {
@@ -485,60 +489,60 @@ struct CommandExecutionTests {
                 searchResults: []
             )
 
-            let doctorOutput = try await runSync(
-                try DoctorCommand.parse(["--json"]),
+            let doctorOutput = try await runAsync(
+                DoctorCommand.parse(["--json"]),
                 database: database
             )
             #expect(doctorOutput.contains("\"overallStatus\""))
             #expect(doctorOutput.contains("Auth token"))
 
             let reviewStartOutput = try await runAsync(
-                try ReviewStartCommand.parse([]),
+                ReviewStartCommand.parse([]),
                 database: database
             )
             #expect(reviewStartOutput.contains("Weekly Review"))
             #expect(ReviewSession.load() != nil)
 
             let reviewStatusOutput = try await runAsync(
-                try ReviewStatusCommand.parse([]),
+                ReviewStatusCommand.parse([]),
                 database: database
             )
             #expect(reviewStatusOutput.contains("Review Session Status"))
 
             let reviewClearOutput = try await runAsync(
-                try ReviewClearCommand.parse([]),
+                ReviewClearCommand.parse([]),
                 database: database
             )
             #expect(reviewClearOutput.contains("Review session cleared."))
             #expect(ReviewSession.load() == nil)
 
             let statsOutput = try await runAsync(
-                try StatsCommand.parse([]),
+                StatsCommand.parse([]),
                 database: database
             )
             #expect(statsOutput.contains("Things 3 Statistics"))
             #expect(statsOutput.contains("Overdue"))
 
             let trendsOutput = try await runAsync(
-                try StatsTrendsCommand.parse(["--json"]),
+                StatsTrendsCommand.parse(["--json"]),
                 database: database
             )
             #expect(trendsOutput.contains("\"completed\""))
 
             let heatmapOutput = try await runAsync(
-                try StatsHeatmapCommand.parse(["--no-color"]),
+                StatsHeatmapCommand.parse(["--no-color"]),
                 database: database
             )
             #expect(heatmapOutput.contains("Completion Heatmap"))
 
-            let bashCompletions = try await runSync(try CompletionsCommand.parse(["bash"]))
+            let bashCompletions = try await runSync(CompletionsCommand.parse(["bash"]))
             #expect(bashCompletions.contains("_clings()"))
 
-            let zshCompletions = try await runSync(try CompletionsCommand.parse(["zsh"]))
+            let zshCompletions = try await runSync(CompletionsCommand.parse(["zsh"]))
             #expect(zshCompletions.contains("#compdef clings"))
 
-            let fishCompletions = try await runSync(try CompletionsCommand.parse(["fish"]))
-            #expect(fishCompletions.contains("complete -c clings"))
+            let fishCompletions = try await runSync(CompletionsCommand.parse(["fish"]))
+            #expect(fishCompletions.contains("complete -c 'clings'"))
         }
     }
 

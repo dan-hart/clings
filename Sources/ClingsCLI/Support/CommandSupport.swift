@@ -93,16 +93,16 @@ func promptForTodoSelection(
         return nil
     }
 
-    print(prompt)
+    writeStderr(prompt + "\n")
     for (index, todo) in todos.enumerated() {
         let due = todo.dueDate.map {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
             return formatter.string(from: $0)
         } ?? "no due date"
-        print("  \(index + 1). \(todo.name) [\(todo.id)] (\(due))")
+        writeStderr("  \(index + 1). \(todo.name) [\(todo.id)] (\(due))\n")
     }
-    print("Enter a number or todo ID:", terminator: " ")
+    writeStderr("Enter a number or todo ID: ")
 
     guard let rawSelection = inputReader()?.trimmingCharacters(in: .whitespacesAndNewlines),
           !rawSelection.isEmpty
