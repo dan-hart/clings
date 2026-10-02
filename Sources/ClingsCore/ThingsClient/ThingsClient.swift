@@ -5,6 +5,15 @@
 
 import Foundation
 
+public struct AppliedMutationError: LocalizedError, Sendable {
+    public let id: String
+    public let fields: [String]
+    public let message: String
+    public var errorDescription: String? {
+        "Change applied to \(id) (\(fields.joined(separator: ", "))), but a later step failed: \(message)"
+    }
+}
+
 /// Errors that can occur when interacting with Things 3.
 public enum ThingsError: Error, LocalizedError {
     case notFound(String)
@@ -14,13 +23,13 @@ public enum ThingsError: Error, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .notFound(let id):
+        case let .notFound(id):
             return "Item not found: \(id)"
-        case .operationFailed(let msg):
+        case let .operationFailed(msg):
             return "Operation failed: \(msg)"
-        case .invalidState(let msg):
+        case let .invalidState(msg):
             return "Invalid state: \(msg)"
-        case .jxaError(let error):
+        case let .jxaError(error):
             return error.localizedDescription
         }
     }
@@ -30,16 +39,18 @@ public enum ThingsError: Error, LocalizedError {
 ///
 /// This protocol allows for mocking in tests.
 public protocol ThingsClientProtocol: Sendable {
-    // Lists
+    /// Lists
     func fetchList(_ list: ListView) async throws -> [Todo]
+    /// Complete candidates for scope/filter/sort/limit processing, without display caps.
+    func fetchQueryList(_ list: ListView) async throws -> [Todo]
     func fetchProjects() async throws -> [Project]
     func fetchAreas() async throws -> [Area]
     func fetchTags() async throws -> [Tag]
 
-    // Single item
+    /// Single item
     func fetchTodo(id: String) async throws -> Todo
 
-    // Mutations
+    /// Mutations
     func createTodo(
         name: String,
         notes: String?,
@@ -64,8 +75,10 @@ public protocol ThingsClientProtocol: Sendable {
     func deleteTodo(id: String) async throws
     func moveTodo(id: String, toProject: String) async throws
     func updateTodo(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?) async throws
+    func restoreTodo(_ snapshot: TodoSnapshot) async throws
+    func moveTodo(id: String, toProjectID: String) async throws
 
-    // Search
+    /// Search
     func search(query: String) async throws -> [Todo]
 
     // Tag management
@@ -80,6 +93,7 @@ public protocol ThingsClientProtocol: Sendable {
 
 public protocol ThingsDatabaseReadable: Sendable {
     func fetchList(_ list: ListView) throws -> [Todo]
+    func fetchQueryList(_ list: ListView) throws -> [Todo]
     func fetchProjects() throws -> [Project]
     func fetchAreas() throws -> [Area]
     func fetchTags() throws -> [Tag]
@@ -87,11 +101,46 @@ public protocol ThingsDatabaseReadable: Sendable {
     func search(query: String) throws -> [Todo]
 }
 
+public extension ThingsClientProtocol {
+    func restoreTodo(_: TodoSnapshot) async throws {
+        throw ThingsError.invalidState("This client cannot restore nullable todo fields")
+    }
+
+    func moveTodo(id _: String, toProjectID _: String) async throws {
+        throw ThingsError.invalidState("This client cannot move to an exact project ID")
+    }
+
+    func fetchQueryList(_ list: ListView) async throws -> [Todo] {
+        try await fetchList(list)
+    }
+}
+
+public extension ThingsDatabaseReadable {
+    func fetchQueryList(_ list: ListView) throws -> [Todo] {
+        try fetchList(list)
+    }
+}
+
 /// Result from a mutation operation.
 struct MutationResult: Decodable, Sendable {
     let success: Bool
     let error: String?
     let id: String?
+    let appliedFields: [String]?
+
+    static func appleScript(_ output: String) throws -> MutationResult {
+        let result = try JSONDecoder().decode(MutationResult.self, from: Data(output.utf8))
+        guard result.appliedFields != nil else { throw ThingsError.operationFailed("Malformed tracked automation response: missing applied fields") }
+        return result
+    }
+
+    func check(fallbackID: String? = nil) throws {
+        guard !success else { return }
+        if let id = id ?? fallbackID, let fields = appliedFields, !fields.isEmpty {
+            throw AppliedMutationError(id: id, fields: fields, message: error ?? "Automation failed after a partial write")
+        }
+        throw ThingsError.operationFailed(error ?? "Unknown automation error")
+    }
 }
 
 /// Result from a creation operation.
@@ -207,8 +256,9 @@ public actor ThingsClient: ThingsClientProtocol {
             checklistItems: checklistItems
         )
 
-        let id = try await bridge.executeAppleScript(script)
-        guard !id.isEmpty else {
+        let creation = try MutationResult.appleScript(await bridge.executeAppleScript(script))
+        try creation.check()
+        guard let id = creation.id, !id.isEmpty else {
             throw ThingsError.operationFailed("Missing created todo ID")
         }
 
@@ -216,8 +266,8 @@ public actor ThingsClient: ThingsClientProtocol {
             let tagScript = JXAScripts.setTodoTagsAppleScript(id: id, tags: tags)
             do {
                 _ = try await bridge.executeAppleScript(tagScript)
-            } catch let error as JXAError {
-                throw ThingsError.jxaError(error)
+            } catch {
+                throw AppliedMutationError(id: id, fields: creation.appliedFields ?? ["create"], message: error.localizedDescription)
             }
         }
 
@@ -240,11 +290,9 @@ public actor ThingsClient: ThingsClientProtocol {
             area: area
         )
 
-        let result = try await bridge.executeJSON(script, as: CreationResult.self)
-        if !result.success {
-            throw ThingsError.operationFailed(result.error ?? "Unknown error")
-        }
-        guard let id = result.id else {
+        let result = try await bridge.executeJSON(script, as: MutationResult.self)
+        try result.check()
+        guard let id = result.id, !id.isEmpty else {
             throw ThingsError.operationFailed("Missing created project ID")
         }
 
@@ -252,8 +300,8 @@ public actor ThingsClient: ThingsClientProtocol {
             let tagScript = JXAScripts.setProjectTagsAppleScript(id: id, tags: tags)
             do {
                 _ = try await bridge.executeAppleScript(tagScript)
-            } catch let error as JXAError {
-                throw ThingsError.jxaError(error)
+            } catch {
+                throw AppliedMutationError(id: id, fields: result.appliedFields ?? ["create"], message: error.localizedDescription)
             }
         }
 
@@ -300,22 +348,39 @@ public actor ThingsClient: ThingsClientProtocol {
         }
     }
 
+    public func moveTodo(id: String, toProjectID: String) async throws {
+        _ = try await bridge.executeAppleScript(JXAScripts.moveTodoToProjectID(id: id, projectID: toProjectID))
+    }
+
+    public func restoreTodo(_ snapshot: TodoSnapshot) async throws {
+        let restoration = try MutationResult.appleScript(await bridge.executeAppleScript(JXAScripts.restoreTodoAppleScript(snapshot)))
+        try restoration.check(fallbackID: snapshot.id)
+        guard restoration.id == snapshot.id else { throw ThingsError.operationFailed("Malformed restore response: mismatched todo ID") }
+        do {
+            _ = try await bridge.executeAppleScript(JXAScripts.setTodoTagsAppleScript(id: snapshot.id, tags: snapshot.tags))
+        } catch {
+            throw AppliedMutationError(id: snapshot.id, fields: ["title", "notes", "deadline", "status"], message: error.localizedDescription)
+        }
+    }
+
     public func updateTodo(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?) async throws {
         // Handle non-tag updates via JXA (name, notes, dueDate work fine)
         if name != nil || notes != nil || dueDate != nil {
             let script = JXAScripts.updateTodo(id: id, name: name, notes: notes, dueDate: dueDate, tags: nil)
             let result = try await bridge.executeJSON(script, as: MutationResult.self)
-            if !result.success {
-                throw ThingsError.operationFailed(result.error ?? "Unknown error")
-            }
+            try result.check(fallbackID: id)
         }
 
         if let tags = tags {
             let tagScript = JXAScripts.setTodoTagsAppleScript(id: id, tags: tags)
             do {
                 _ = try await bridge.executeAppleScript(tagScript)
-            } catch let error as JXAError {
-                throw ThingsError.jxaError(error)
+            } catch {
+                let fields = [name != nil ? "title" : nil, notes != nil ? "notes" : nil, dueDate != nil ? "deadline" : nil].compactMap { $0 }
+                if !fields.isEmpty {
+                    throw AppliedMutationError(id: id, fields: fields, message: error.localizedDescription)
+                }
+                throw error
             }
         }
     }
@@ -363,11 +428,11 @@ public actor ThingsClient: ThingsClientProtocol {
 
     // MARK: - Open (disabled)
 
-    public nonisolated func openInThings(id: String) throws {
+    public nonisolated func openInThings(id _: String) throws {
         throw ThingsError.invalidState("Open command is disabled: URL schemes are not allowed.")
     }
 
-    public nonisolated func openInThings(list: ListView) throws {
+    public nonisolated func openInThings(list _: ListView) throws {
         throw ThingsError.invalidState("Open command is disabled: URL schemes are not allowed.")
     }
 

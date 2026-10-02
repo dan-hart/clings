@@ -19,6 +19,10 @@ struct ReviewCommand: AsyncParsableCommand {
         4. Review deadlines
         5. Generate summary
 
+        With no subcommand, starts/resumes the report and saves local review
+        progress. It does not automatically process or change Things todos.
+        --json returns a structured report, session status, or clear result.
+
         EXAMPLES:
           clings review
           clings review status
@@ -43,6 +47,10 @@ struct ReviewStartCommand: AsyncParsableCommand {
         Walk through inbox, someday, projects, deadlines, and a short weekly
         summary, then persist the review session locally.
 
+        Follow the suggested commands to act on findings. The review itself
+        changes only local session state, not Things data. --no-color is useful
+        for a plain-text report; --json returns findings and saved session state.
+
         EXAMPLES:
           clings review
           clings review start
@@ -52,7 +60,7 @@ struct ReviewStartCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let session = ReviewSession.load() ?? ReviewSession()
+        let session = try ReviewSession.load() ?? ReviewSession()
 
         let useColors = !output.noColor
         let bold = useColors ? "\u{001B}[1m" : ""
@@ -61,9 +69,6 @@ struct ReviewStartCommand: AsyncParsableCommand {
         let cyan = useColors ? "\u{001B}[36m" : ""
         let dim = useColors ? "\u{001B}[2m" : ""
         let reset = useColors ? "\u{001B}[0m" : ""
-
-        print("\(bold)📋 Weekly Review\(reset)")
-        print("\(dim)─────────────────────────────────────\(reset)")
 
         let db = try CommandRuntime.makeDatabase()
         let inbox = try db.fetchList(.inbox)
@@ -78,6 +83,24 @@ struct ReviewStartCommand: AsyncParsableCommand {
             upcoming: upcoming,
             projects: projects
         )
+
+        let stats = try StatsCollector().collect(days: 7)
+        var updatedSession = session
+        updatedSession.lastReviewDate = Date()
+        updatedSession.inboxProcessed = inbox.isEmpty
+        updatedSession.deadlinesReviewed = true
+        let report = ReviewReport(session: updatedSession, summary: summary, stats: stats)
+        do { try updatedSession.save() }
+        catch {
+            throw try CommandFailure(exitStatus: 2, code: "review_storage_failed", message: "Review report generated, but the session could not be saved. Check the config directory permissions.", dataJSON: report.json(sessionSaved: false))
+        }
+        if output.json {
+            try print(CLIResponse.success(report.json(sessionSaved: true)))
+            return
+        }
+
+        print("\(bold)📋 Weekly Review\(reset)")
+        print("\(dim)─────────────────────────────────────\(reset)")
 
         // Step 1: Inbox
         print("\n\(bold)Step 1: Process Inbox\(reset)")
@@ -121,7 +144,6 @@ struct ReviewStartCommand: AsyncParsableCommand {
         // Step 5: Summary
         print("\n\(bold)Step 5: Summary\(reset)")
         let todayCount = today.count
-        let stats = try StatsCollector().collect(days: 7)
 
         print("  Today's todos:        \(todayCount)")
         print("  Completed this week:  \(green)\(stats.completedInPeriod)\(reset)")
@@ -133,13 +155,6 @@ struct ReviewStartCommand: AsyncParsableCommand {
                 print("  • \(action)")
             }
         }
-
-        // Save session
-        var updatedSession = session
-        updatedSession.lastReviewDate = Date()
-        updatedSession.inboxProcessed = inbox.isEmpty
-        updatedSession.deadlinesReviewed = true
-        updatedSession.save()
 
         print("\n\(dim)Review session saved.\(reset)")
     }
@@ -161,6 +176,9 @@ struct ReviewStatusCommand: AsyncParsableCommand {
         Show the last saved review timestamp and whether the core review steps
         have been marked complete.
 
+        This reads local session state. --json returns the session under data,
+        or data: null when no session exists.
+
         EXAMPLES:
           clings review status
         """
@@ -169,8 +187,15 @@ struct ReviewStatusCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        guard let session = ReviewSession.load() else {
-            print("No active review session. Run: clings review start")
+        guard let session = try ReviewSession.load() else {
+            print(output.json ? CLIResponse.success("null") : "No active review session. Run: clings review start")
+            return
+        }
+
+        if output.json {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            try print(CLIResponse.success(String(decoding: encoder.encode(session), as: UTF8.self)))
             return
         }
 
@@ -202,14 +227,18 @@ struct ReviewClearCommand: AsyncParsableCommand {
         discussion: """
         Delete the saved weekly review session so the next run starts fresh.
 
+        Does not delete or reset any Things todos, projects, views, or templates.
+
         EXAMPLES:
           clings review clear
         """
     )
 
+    @OptionGroup var output: OutputOptions
+
     func run() async throws {
-        ReviewSession.clear()
-        print("Review session cleared.")
+        try ReviewSession.clear()
+        print(renderMessage("Review session cleared.", output: output))
     }
 }
 
@@ -221,28 +250,63 @@ struct ReviewSession: Codable {
     var deadlinesReviewed: Bool
 
     init() {
-        self.lastReviewDate = Date()
-        self.inboxProcessed = false
-        self.deadlinesReviewed = false
+        lastReviewDate = Date()
+        inboxProcessed = false
+        deadlinesReviewed = false
     }
 
     private static var sessionPath: URL {
-        (try? ClingsConfig.fileURL(named: "review-session.json"))
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".clings/review-session.json")
+        ClingsConfig.directoryURL.appendingPathComponent("review-session.json")
     }
 
-    static func load() -> ReviewSession? {
+    static func load() throws -> ReviewSession? {
         if !FileManager.default.fileExists(atPath: sessionPath.path) {
             return nil
         }
-        return try? JSONFileStore.load(ReviewSession.self, from: "review-session.json", default: ReviewSession())
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(ReviewSession.self, from: Data(contentsOf: sessionPath))
     }
 
-    func save() {
-        try? JSONFileStore.save(self, to: "review-session.json")
+    func save() throws {
+        try JSONFileStore.save(self, to: "review-session.json")
     }
 
-    static func clear() {
-        try? JSONFileStore.delete(fileName: "review-session.json")
+    static func clear() throws {
+        guard FileManager.default.fileExists(atPath: sessionPath.path) else { return }
+        try FileManager.default.removeItem(at: sessionPath)
+    }
+}
+
+private struct ReviewReport: Encodable {
+    let session: ReviewSession
+    let inboxCount: Int
+    let somedayCount: Int
+    let activeProjectCount: Int
+    let stalledProjects: [Project]
+    let upcomingDeadlines: [Todo]
+    let overdueTodos: [Todo]
+    let suggestedActions: [String]
+    let stats: Stats
+    var sessionSaved = false
+
+    init(session: ReviewSession, summary: ReviewSummary, stats: Stats) {
+        self.session = session
+        inboxCount = summary.inboxCount
+        somedayCount = summary.somedayCount
+        activeProjectCount = summary.activeProjectCount
+        stalledProjects = summary.stalledProjects
+        upcomingDeadlines = summary.upcomingDeadlines
+        overdueTodos = summary.overdueTodos
+        suggestedActions = summary.suggestedActions
+        self.stats = stats
+    }
+
+    func json(sessionSaved: Bool) throws -> String {
+        var report = self
+        report.sessionSaved = sessionSaved
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return try String(decoding: encoder.encode(report), as: UTF8.self)
     }
 }

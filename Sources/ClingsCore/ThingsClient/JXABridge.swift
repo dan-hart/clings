@@ -60,55 +60,7 @@ public actor JXABridge {
     /// - Returns: The script's stdout output as a string.
     /// - Throws: `JXAError` if execution fails.
     public func execute(_ script: String) async throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-l", "JavaScript", "-e", script]
-
-        let stdout = Pipe()
-        let stderr = Pipe()
-        process.standardOutput = stdout
-        process.standardError = stderr
-
-        return try await withThrowingTaskGroup(of: String.self) { group in
-            // Task to run the process
-            group.addTask {
-                do {
-                    try process.run()
-                } catch {
-                    throw JXAError.executionFailed(error.localizedDescription)
-                }
-
-                process.waitUntilExit()
-
-                let outputData = stdout.fileHandleForReading.readDataToEndOfFile()
-                let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
-
-                let outputString = String(data: outputData, encoding: .utf8) ?? ""
-                let errorString = String(data: errorData, encoding: .utf8) ?? ""
-
-                if process.terminationStatus != 0 {
-                    // Check for common errors
-                    if errorString.contains("not running") || errorString.contains("Connection is invalid") {
-                        throw JXAError.thingsNotRunning
-                    }
-                    throw JXAError.processError(process.terminationStatus, errorString)
-                }
-
-                return outputString.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-
-            // Task for timeout
-            group.addTask {
-                try await Task.sleep(for: .seconds(self.timeout))
-                process.terminate()
-                throw JXAError.timeout
-            }
-
-            // Return first completed result (either success or timeout)
-            let result = try await group.next()!
-            group.cancelAll()
-            return result
-        }
+        try await AutomationProcess(arguments: ["-l", "JavaScript", "-e", script], timeout: timeout).run()
     }
 
     /// Execute a JXA script and decode the JSON output to a specific type.
@@ -176,55 +128,7 @@ public actor JXABridge {
     /// - Returns: The script's stdout output as a string.
     /// - Throws: `JXAError` if execution fails.
     public func executeAppleScript(_ script: String) async throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-e", script]  // No -l JavaScript flag
-
-        let stdout = Pipe()
-        let stderr = Pipe()
-        process.standardOutput = stdout
-        process.standardError = stderr
-
-        return try await withThrowingTaskGroup(of: String.self) { group in
-            // Task to run the process
-            group.addTask {
-                do {
-                    try process.run()
-                } catch {
-                    throw JXAError.executionFailed(error.localizedDescription)
-                }
-
-                process.waitUntilExit()
-
-                let outputData = stdout.fileHandleForReading.readDataToEndOfFile()
-                let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
-
-                let outputString = String(data: outputData, encoding: .utf8) ?? ""
-                let errorString = String(data: errorData, encoding: .utf8) ?? ""
-
-                if process.terminationStatus != 0 {
-                    // Check for common errors
-                    if errorString.contains("not running") || errorString.contains("Connection is invalid") {
-                        throw JXAError.thingsNotRunning
-                    }
-                    throw JXAError.processError(process.terminationStatus, errorString)
-                }
-
-                return outputString.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-
-            // Task for timeout
-            group.addTask {
-                try await Task.sleep(for: .seconds(self.timeout))
-                process.terminate()
-                throw JXAError.timeout
-            }
-
-            // Return first completed result (either success or timeout)
-            let result = try await group.next()!
-            group.cancelAll()
-            return result
-        }
+        try await AutomationProcess(arguments: ["-e", script], timeout: timeout).run()
     }
 
     /// Check if Things 3 is running.

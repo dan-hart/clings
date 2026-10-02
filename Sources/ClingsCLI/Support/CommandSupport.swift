@@ -15,7 +15,7 @@ func makeFormatter(output: OutputOptions) -> OutputFormatter {
 func renderTodos(_ todos: [Todo], list: String? = nil, output: OutputOptions) -> String {
     if output.json {
         let formatter = JSONOutputFormatter()
-        return list.map { formatter.format(todos: todos, list: $0) } ?? formatter.format(todos: todos)
+        return CLIResponse.success(list.map { formatter.format(todos: todos, list: $0) } ?? formatter.format(todos: todos))
     }
 
     if let template = output.format {
@@ -32,7 +32,7 @@ func renderTodos(_ todos: [Todo], list: String? = nil, output: OutputOptions) ->
 
 func renderTodo(_ todo: Todo, output: OutputOptions) -> String {
     if output.json {
-        return JSONOutputFormatter().format(todo: todo)
+        return CLIResponse.success(JSONOutputFormatter().format(todo: todo))
     }
     if let template = output.format {
         return TodoLineFormatter(template: template).format(todo: todo)
@@ -41,14 +41,14 @@ func renderTodo(_ todo: Todo, output: OutputOptions) -> String {
 }
 
 func renderMessage(_ message: String, output: OutputOptions) -> String {
-    makeFormatter(output: output).format(message: message)
+    CLIResponse.render(makeFormatter(output: output).format(message: message), output: output)
 }
 
 func fetchOpenTodos(client: any ThingsClientProtocol) async throws -> [Todo] {
     let lists: [ListView] = [.today, .inbox, .upcoming, .anytime, .someday]
     var todos: [Todo] = []
     for list in lists {
-        todos.append(contentsOf: try await client.fetchList(list))
+        try await todos.append(contentsOf: client.fetchList(list))
     }
     return uniqueTodos(todos)
 }
@@ -56,7 +56,7 @@ func fetchOpenTodos(client: any ThingsClientProtocol) async throws -> [Todo] {
 func fetchVisibleTodos(client: any ThingsClientProtocol, includeLogbook: Bool = false) async throws -> [Todo] {
     var todos = try await fetchOpenTodos(client: client)
     if includeLogbook {
-        todos.append(contentsOf: try await client.fetchList(.logbook))
+        try await todos.append(contentsOf: client.fetchList(.logbook))
     }
     return uniqueTodos(todos)
 }
@@ -76,6 +76,14 @@ func parseFlexibleDate(_ expression: String?) -> Date? {
     return NaturalLanguageDateParser().parse(expression)
 }
 
+func resolveDate(_ expression: String?) throws -> Date? {
+    guard let expression else { return nil }
+    guard let date = NaturalLanguageDateParser().parse(expression) else {
+        throw ThingsError.invalidState("Invalid date: '\(expression)'. Use a valid YYYY-MM-DD date or a supported expression such as tomorrow or next friday.")
+    }
+    return date
+}
+
 func promptForTodoSelection(
     todos: [Todo],
     prompt: String,
@@ -85,19 +93,20 @@ func promptForTodoSelection(
         return nil
     }
 
-    print(prompt)
+    writeStderr(prompt + "\n")
     for (index, todo) in todos.enumerated() {
         let due = todo.dueDate.map {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
             return formatter.string(from: $0)
         } ?? "no due date"
-        print("  \(index + 1). \(todo.name) [\(todo.id)] (\(due))")
+        writeStderr("  \(index + 1). \(todo.name) [\(todo.id)] (\(due))\n")
     }
-    print("Enter a number or todo ID:", terminator: " ")
+    writeStderr("Enter a number or todo ID: ")
 
     guard let rawSelection = inputReader()?.trimmingCharacters(in: .whitespacesAndNewlines),
-          !rawSelection.isEmpty else {
+          !rawSelection.isEmpty
+    else {
         return nil
     }
 

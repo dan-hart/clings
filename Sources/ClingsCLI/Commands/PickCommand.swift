@@ -14,6 +14,11 @@ struct PickCommand: AsyncParsableCommand {
         Search visible todos, choose one interactively, and then run a follow-up
         action without manually copying IDs.
 
+        Enter a displayed number or exact todo ID. An empty/invalid selection
+        stops the command. Write actions select open todos; show also includes
+        Logbook. --json is rejected before selection; use direct commands with
+        exact IDs in noninteractive scripts.
+
         EXAMPLES:
           clings pick show release
           clings pick complete docs
@@ -36,10 +41,13 @@ struct PickShowCommand: AsyncParsableCommand {
         discussion: """
         Present matching todos, let you choose one, and render the selected todo.
 
+        Without a query, considers visible open lists and Logbook. --json is
+        unsupported for interactive selection.
+
         EXAMPLES:
           clings pick show
           clings pick show release
-          clings pick show docs --json
+          clings show EXACT_ID --json
         """
     )
 
@@ -49,6 +57,13 @@ struct PickShowCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
+        guard !output.json else { throw CommandFailure(exitStatus: 1, code: "interactive_json", message: "pick --json is unsupported; use direct commands with exact IDs.") }
+        guard CommandRuntime.isTerminal() else { throw CommandFailure(exitStatus: 1, code: "interactive_required", message: "pick requires an interactive terminal") }
+        try await perform()
+    }
+
+    private func perform() async throws {
+        guard !output.json else { throw CommandFailure(exitStatus: 1, code: "interactive_json", message: "pick --json is unsupported; use exact IDs with direct commands.") }
         let client = CommandRuntime.makeClient()
         let candidates = try await pickCandidates(client: client, query: query, includeLogbook: true, onlyOpen: false)
         guard let todo = promptForTodoSelection(todos: candidates, prompt: "Show which todo?") else {
@@ -65,6 +80,8 @@ struct PickCompleteCommand: AsyncParsableCommand {
         discussion: """
         Choose an open todo interactively, then mark it complete.
 
+        Enter a number or exact ID at the prompt. The change is recorded for undo.
+
         EXAMPLES:
           clings pick complete
           clings pick complete release
@@ -77,14 +94,21 @@ struct PickCompleteCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
+        guard !output.json else { throw CommandFailure(exitStatus: 1, code: "interactive_json", message: "pick --json is unsupported; use direct commands with exact IDs.") }
+        guard CommandRuntime.isTerminal() else { throw CommandFailure(exitStatus: 1, code: "interactive_required", message: "pick requires an interactive terminal") }
+        try await MutationLock.withLock { try await perform() }
+    }
+
+    private func perform() async throws {
+        guard !output.json else { throw CommandFailure(exitStatus: 1, code: "interactive_json", message: "pick --json is unsupported; use exact IDs with direct commands.") }
         let client = CommandRuntime.makeClient()
         let candidates = try await pickCandidates(client: client, query: query, includeLogbook: false, onlyOpen: true)
         guard let todo = promptForTodoSelection(todos: candidates, prompt: "Complete which todo?") else {
             throw ValidationError("No todo selected")
         }
+        let snapshot = try await client.fetchTodo(id: todo.id)
         try await client.completeTodo(id: todo.id)
-        try UndoStore.record(UndoEntry(operation: .complete, todoID: todo.id, snapshot: TodoSnapshot(todo: todo)))
-        print(renderMessage("Completed: \(todo.name)", output: output))
+        try printOutcome(recordApplied(UndoEntry(operation: .complete, todoID: todo.id, snapshot: TodoSnapshot(todo: snapshot)), message: "Completed: \(todo.name)"), output: output)
     }
 }
 
@@ -94,6 +118,8 @@ struct PickCancelCommand: AsyncParsableCommand {
         abstract: "Pick a todo and cancel it",
         discussion: """
         Choose an open todo interactively, then cancel it.
+
+        Cancellation keeps the todo as canceled; undo can reopen it.
 
         EXAMPLES:
           clings pick cancel
@@ -107,14 +133,21 @@ struct PickCancelCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
+        guard !output.json else { throw CommandFailure(exitStatus: 1, code: "interactive_json", message: "pick --json is unsupported; use direct commands with exact IDs.") }
+        guard CommandRuntime.isTerminal() else { throw CommandFailure(exitStatus: 1, code: "interactive_required", message: "pick requires an interactive terminal") }
+        try await MutationLock.withLock { try await perform() }
+    }
+
+    private func perform() async throws {
+        guard !output.json else { throw CommandFailure(exitStatus: 1, code: "interactive_json", message: "pick --json is unsupported; use exact IDs with direct commands.") }
         let client = CommandRuntime.makeClient()
         let candidates = try await pickCandidates(client: client, query: query, includeLogbook: false, onlyOpen: true)
         guard let todo = promptForTodoSelection(todos: candidates, prompt: "Cancel which todo?") else {
             throw ValidationError("No todo selected")
         }
+        let snapshot = try await client.fetchTodo(id: todo.id)
         try await client.cancelTodo(id: todo.id)
-        try UndoStore.record(UndoEntry(operation: .cancel, todoID: todo.id, snapshot: TodoSnapshot(todo: todo)))
-        print(renderMessage("Canceled: \(todo.name)", output: output))
+        try printOutcome(recordApplied(UndoEntry(operation: .cancel, todoID: todo.id, snapshot: TodoSnapshot(todo: snapshot)), message: "Canceled: \(todo.name)"), output: output)
     }
 }
 
@@ -123,7 +156,8 @@ struct PickDeleteCommand: AsyncParsableCommand {
         commandName: "delete",
         abstract: "Pick a todo and delete it",
         discussion: """
-        Choose an open todo interactively, then move it to the trash.
+        Choose an open todo interactively, then cancel it through the automation
+        API. This does not move it to Trash. Undo can reopen the selected todo.
 
         EXAMPLES:
           clings pick delete
@@ -137,14 +171,22 @@ struct PickDeleteCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
+        guard !output.json else { throw CommandFailure(exitStatus: 1, code: "interactive_json", message: "pick --json is unsupported; use direct commands with exact IDs.") }
+        guard CommandRuntime.isTerminal() else { throw CommandFailure(exitStatus: 1, code: "interactive_required", message: "pick requires an interactive terminal") }
+        try await MutationLock.withLock { try await perform() }
+    }
+
+    private func perform() async throws {
+        guard !output.json else { throw CommandFailure(exitStatus: 1, code: "interactive_json", message: "pick --json is unsupported; use exact IDs with direct commands.") }
         let client = CommandRuntime.makeClient()
         let candidates = try await pickCandidates(client: client, query: query, includeLogbook: false, onlyOpen: true)
         guard let todo = promptForTodoSelection(todos: candidates, prompt: "Delete which todo?") else {
             throw ValidationError("No todo selected")
         }
+        let snapshot = try await client.fetchTodo(id: todo.id)
+        guard try confirmMutation("Cancel the selected todo? This does not move it to Trash.", authorized: false) else { try printOutcome(MutationOutcome(applied: false, undoRecorded: false, message: "Aborted"), output: output); return }
         try await client.deleteTodo(id: todo.id)
-        try UndoStore.record(UndoEntry(operation: .delete, todoID: todo.id, snapshot: TodoSnapshot(todo: todo)))
-        print(renderMessage("Deleted: \(todo.name)", output: output))
+        try printOutcome(recordApplied(UndoEntry(operation: .delete, todoID: todo.id, snapshot: TodoSnapshot(todo: snapshot)), message: "Canceled: \(todo.name)"), output: output)
     }
 }
 
@@ -154,11 +196,10 @@ private func pickCandidates(
     includeLogbook: Bool,
     onlyOpen: Bool
 ) async throws -> [Todo] {
-    let todos: [Todo]
-    if let query, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-        todos = try await client.search(query: query)
+    let todos: [Todo] = if let query, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        try await client.search(query: query)
     } else {
-        todos = try await fetchVisibleTodos(client: client, includeLogbook: includeLogbook)
+        try await fetchVisibleTodos(client: client, includeLogbook: includeLogbook)
     }
 
     let filtered = onlyOpen ? todos.filter(\.isOpen) : todos

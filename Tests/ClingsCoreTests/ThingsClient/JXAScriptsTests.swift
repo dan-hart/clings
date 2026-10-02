@@ -3,8 +3,8 @@
 // Copyright (C) 2024 Dan Hart
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import Testing
 @testable import ClingsCore
+import Testing
 
 @Suite("JXAScripts")
 struct JXAScriptsTests {
@@ -288,7 +288,8 @@ struct JXAScriptsTests {
 
         @Test func returnsIdAndName() {
             let script = JXAScripts.createTodo(name: "Task")
-            #expect(script.contains("return id of newTodo"))
+            #expect(script.contains("set mutationID to id of newTodo"))
+            #expect(script.contains("mutationJSON(true, mutationID, appliedFields"))
         }
     }
 

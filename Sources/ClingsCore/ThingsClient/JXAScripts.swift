@@ -7,7 +7,74 @@ import Foundation
 
 /// JavaScript for Automation (JXA) script templates for Things 3.
 public enum JXAScripts {
+    /// Reports each completed assignment even when a later Apple event fails.
+    /// Foundation performs JSON escaping for arbitrary IDs/error strings.
+    static func trackedAppleScript(id: String?, body: String) -> String {
+        """
+        use framework "Foundation"
+        use scripting additions
+        set mutationID to \(id.map { "\"\($0.appleScriptEscaped)\"" } ?? "missing value")
+        set appliedFields to {}
+        try
+            \(body)
+            return my mutationJSON(true, mutationID, appliedFields, missing value)
+        on error errorMessage number errorNumber
+            return my mutationJSON(false, mutationID, appliedFields, errorMessage & " (" & errorNumber & ")")
+        end try
 
+        on mutationJSON(successFlag, mutationID, appliedFields, errorMessage)
+            set payload to current application's NSMutableDictionary's dictionary()
+            payload's setObject:(current application's NSNumber's numberWithBool:successFlag) forKey:"success"
+            if mutationID is missing value then
+                payload's setObject:(current application's NSNull's null()) forKey:"id"
+            else
+                payload's setObject:(mutationID as text) forKey:"id"
+            end if
+            payload's setObject:(current application's NSArray's arrayWithArray:appliedFields) forKey:"appliedFields"
+            if errorMessage is missing value then
+                payload's setObject:(current application's NSNull's null()) forKey:"error"
+            else
+                payload's setObject:(errorMessage as text) forKey:"error"
+            end if
+            set encodedData to current application's NSJSONSerialization's dataWithJSONObject:payload options:0 |error|:(missing value)
+            set resultText to current application's NSString's alloc()'s initWithData:encodedData encoding:(current application's NSUTF8StringEncoding)
+            return resultText as text
+        end mutationJSON
+        """
+    }
+
+    public static func moveTodoToProjectID(id: String, projectID: String) -> String {
+        """
+        tell application "Things3"
+            set targetTodo to to do id "\(id.appleScriptEscaped)"
+            set project of targetTodo to project id "\(projectID.appleScriptEscaped)"
+        end tell
+        """
+    }
+
+    public static func restoreTodoAppleScript(_ snapshot: TodoSnapshot) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = .current
+        formatter.dateFormat = "MMMM d, yyyy HH:mm:ss"
+        let setup = appleScriptDateSetup(variableName: "restoredDeadline", dateString: snapshot.dueDate.map { formatter.string(from: $0) })
+        let status = snapshot.status == .open ? "open" : snapshot.status == .completed ? "completed" : "canceled"
+        return trackedAppleScript(id: snapshot.id, body: """
+        tell application "Things3"
+            set targetTodo to to do id "\(snapshot.id.appleScriptEscaped)"
+            set name of targetTodo to "\(snapshot.name.appleScriptEscaped)"
+            set end of appliedFields to "title"
+            set notes of targetTodo to "\((snapshot.notes ?? "").appleScriptEscaped)"
+            set end of appliedFields to "notes"
+            \(setup)
+            set due date of targetTodo to \(snapshot.dueDate == nil ? "missing value" : "restoredDeadline")
+            set end of appliedFields to "deadline"
+            set status of targetTodo to \(status)
+            set end of appliedFields to "status"
+        end tell
+        """)
+    }
     // MARK: - List Queries
 
     /// Fetch all todos from a specific list view.
@@ -57,6 +124,7 @@ public enum JXAScripts {
                     notes: todo.notes() || null,
                     status: todo.status(),
                     dueDate: todo.dueDate() ? todo.dueDate().toISOString() : null,
+                    scheduledDate: (() => { try { const date = todo.activationDate(); return date ? date.toISOString() : null; } catch (e) { return null; } })(),
                     tags: todo.tags().map(t => ({ id: t.id(), name: t.name() })),
                     project: proj,
                     area: ar,
@@ -118,6 +186,7 @@ public enum JXAScripts {
                 notes: todo.notes() || null,
                 status: todo.status(),
                 dueDate: todo.dueDate() ? todo.dueDate().toISOString() : null,
+                scheduledDate: (() => { try { const date = todo.activationDate(); return date ? date.toISOString() : null; } catch (e) { return null; } })(),
                 tags: todo.tags().map(t => ({ id: t.id(), name: t.name() })),
                 project: proj,
                 area: ar,
@@ -244,7 +313,7 @@ public enum JXAScripts {
         """
     }
 
-    /// Delete a todo by ID (moves to Trash).
+    /// Cancel a todo by ID through the supported API; this never moves it to Trash.
     public static func deleteTodo(id: String) -> String {
         """
         (() => {
@@ -295,22 +364,26 @@ public enum JXAScripts {
         let dueDateISO = dueDate.map { ISO8601DateFormatter().string(from: $0) }
 
         // Tags are handled via AppleScript for reliability.
-        _ = tags  // Tags are applied separately.
+        _ = tags // Tags are applied separately.
+        var assignments: [String] = []
+        if let name { assignments.append("todo.name = '\(name.jxaEscaped)'; appliedFields.push('title');") }
+        if let notes { assignments.append("todo.notes = '\(notes.jxaEscaped)'; appliedFields.push('notes');") }
+        if let dueDateISO { assignments.append("todo.dueDate = new Date('\(dueDateISO)'); appliedFields.push('deadline');") }
 
         return """
         (() => {
-            const app = Application('Things3');
-            const todo = app.toDos.byId('\(id.jxaEscaped)');
-
-            if (!todo.exists()) {
-                return JSON.stringify({ success: false, error: 'Todo not found' });
+            const appliedFields = [];
+            try {
+                const app = Application('Things3');
+                const todo = app.toDos.byId('\(id.jxaEscaped)');
+                if (!todo.exists()) {
+                    return JSON.stringify({ success: false, id: '\(id.jxaEscaped)', appliedFields, error: 'Todo not found' });
+                }
+                \(assignments.joined(separator: "\n"))
+                return JSON.stringify({ success: true, id: '\(id.jxaEscaped)', appliedFields });
+            } catch (error) {
+                return JSON.stringify({ success: false, id: '\(id.jxaEscaped)', appliedFields, error: String(error) });
             }
-
-            \(name != nil ? "todo.name = '\(name!.jxaEscaped)';" : "")
-            \(notes != nil ? "todo.notes = '\(notes!.jxaEscaped)';" : "")
-            \(dueDateISO != nil ? "todo.dueDate = new Date('\(dueDateISO!)');" : "")
-
-            return JSON.stringify({ success: true, id: '\(id.jxaEscaped)' });
         })()
         """
     }
@@ -342,14 +415,14 @@ public enum JXAScripts {
             let hour = components.hour,
             let minute = components.minute,
             let second = components.second,
-            (1...12).contains(month)
+            (1 ... 12).contains(month)
         else {
             return "error \"Invalid date components\""
         }
 
         let monthNames = [
             "January", "February", "March", "April", "May", "June",
-            "July", "August", "September", "October", "November", "December"
+            "July", "August", "September", "October", "November", "December",
         ]
         // Work at noon while changing calendar fields, then assign wall-clock
         // components. AppleScript's `set time` can cross back into the previous
@@ -379,7 +452,7 @@ public enum JXAScripts {
         area: String? = nil,
         checklistItems: [String] = []
     ) -> String {
-        _ = tags  // Tags are applied separately via AppleScript.
+        _ = tags // Tags are applied separately via AppleScript.
         let checklistArray = checklistItems.map { "\"\($0.appleScriptEscaped)\"" }.joined(separator: ", ")
         let whenDateSetup = appleScriptDateSetup(variableName: "scheduledDate", dateString: when)
         let deadlineDateSetup = appleScriptDateSetup(variableName: "deadlineDate", dateString: deadline)
@@ -388,37 +461,48 @@ public enum JXAScripts {
         if let notes = notes, !notes.isEmpty {
             propsCode += ", notes: \"\(notes.appleScriptEscaped)\""
         }
+        let projectCode = project.map { projectName in
+            """
+            if exists project "\(projectName.appleScriptEscaped)" then
+                set project of newTodo to project "\(projectName.appleScriptEscaped)"
+                set end of appliedFields to "project"
+            end if
+            """
+        } ?? ""
+        let areaCode = area.map { areaName in
+            """
+            if exists area "\(areaName.appleScriptEscaped)" then
+                set area of newTodo to area "\(areaName.appleScriptEscaped)"
+                set end of appliedFields to "area"
+            end if
+            """
+        } ?? ""
 
-        return """
+        return trackedAppleScript(id: nil, body: """
         tell application "Things3"
             set newTodo to make new to do with properties {\(propsCode)}
+            set mutationID to id of newTodo
+            set end of appliedFields to "create"
 
-            \(project != nil ? """
-            if exists project "\(project!.appleScriptEscaped)" then
-                set project of newTodo to project "\(project!.appleScriptEscaped)"
-            end if
-            """ : "")
-
-            \(area != nil ? """
-            if exists area "\(area!.appleScriptEscaped)" then
-                set area of newTodo to area "\(area!.appleScriptEscaped)"
-            end if
-            """ : "")
+            \(projectCode)
+            \(areaCode)
 
             \(whenDateSetup)
             \(when != nil ? "schedule newTodo for scheduledDate" : "")
+            \(when != nil ? "set end of appliedFields to \"schedule\"" : "")
 
             \(deadlineDateSetup)
             \(deadline != nil ? "set due date of newTodo to deadlineDate" : "")
+            \(deadline != nil ? "set end of appliedFields to \"deadline\"" : "")
 
             set checklistItems to {\(checklistArray)}
             repeat with itemName in checklistItems
                 make new to do with properties {name:itemName} at newTodo
+                if appliedFields does not contain "checklist" then set end of appliedFields to "checklist"
             end repeat
 
-            return id of newTodo
         end tell
-        """
+        """)
     }
 
     /// Create a new project with the given properties.
@@ -431,6 +515,17 @@ public enum JXAScripts {
     ) -> String {
         let whenISO = when.map { ISO8601DateFormatter().string(from: $0) }
         let deadlineISO = deadline.map { ISO8601DateFormatter().string(from: $0) }
+        let scheduleCode = whenISO.map { "project.activationDate = new Date('\($0)'); appliedFields.push('schedule');" } ?? ""
+        let deadlineCode = deadlineISO.map { "project.dueDate = new Date('\($0)'); appliedFields.push('deadline');" } ?? ""
+        let areaCode = area.map { name in
+            """
+            const area = app.areas.byName('\(name.jxaEscaped)');
+            if (area.exists()) {
+                project.area = area;
+                appliedFields.push('area');
+            }
+            """
+        } ?? ""
 
         var propsCode = "name: '\(name.jxaEscaped)'"
         if let notes = notes, !notes.isEmpty {
@@ -439,30 +534,21 @@ public enum JXAScripts {
 
         return """
         (() => {
-            const app = Application('Things3');
-
-            const props = { \(propsCode) };
-            const project = app.make({ new: 'project', withProperties: props });
-
-            // Set when date
-            \(whenISO != nil ? "project.activationDate = new Date('\(whenISO!)');" : "")
-
-            // Set deadline
-            \(deadlineISO != nil ? "project.dueDate = new Date('\(deadlineISO!)');" : "")
-
-            // Add to area
-            \(area != nil ? """
-            const area = app.areas.byName('\(area!.jxaEscaped)');
-            if (area.exists()) {
-                project.area = area;
+            let projectID = null;
+            const appliedFields = [];
+            try {
+                const app = Application('Things3');
+                const props = { \(propsCode) };
+                const project = app.make({ new: 'project', withProperties: props });
+                projectID = project.id();
+                appliedFields.push('create');
+                \(scheduleCode)
+                \(deadlineCode)
+                \(areaCode)
+                return JSON.stringify({success: true, id: projectID, name: project.name(), appliedFields});
+            } catch (error) {
+                return JSON.stringify({success: false, id: projectID, appliedFields, error: String(error)});
             }
-            """ : "")
-
-            return JSON.stringify({
-                success: true,
-                id: project.id(),
-                name: project.name()
-            });
         })()
         """
     }
@@ -501,6 +587,7 @@ public enum JXAScripts {
                     notes: todo.notes() || null,
                     status: todo.status(),
                     dueDate: todo.dueDate() ? todo.dueDate().toISOString() : null,
+                    scheduledDate: (() => { try { const date = todo.activationDate(); return date ? date.toISOString() : null; } catch (e) { return null; } })(),
                     tags: todo.tags().map(t => ({ id: t.id(), name: t.name() })),
                     project: proj,
                     creationDate: creationDate.toISOString(),
@@ -613,7 +700,7 @@ public enum JXAScripts {
 extension String {
     /// Escape a string for safe use in JXA single-quoted strings.
     var jxaEscaped: String {
-        self.replacingOccurrences(of: "\\", with: "\\\\")
+        replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "'", with: "\\'")
             .replacingOccurrences(of: "\n", with: "\\n")
             .replacingOccurrences(of: "\r", with: "\\r")
@@ -622,7 +709,7 @@ extension String {
 
     /// Escape a string for safe use in AppleScript double-quoted strings.
     var appleScriptEscaped: String {
-        self.replacingOccurrences(of: "\\", with: "\\\\")
+        replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
     }
 }

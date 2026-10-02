@@ -3,8 +3,8 @@
 // Copyright (C) 2024 Dan Hart
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import Foundation
 @testable import ClingsCore
+import Foundation
 
 final class MockJXAExecutor: JXAExecuting, @unchecked Sendable {
     enum StubError: Error {
@@ -30,7 +30,7 @@ final class MockJXAExecutor: JXAExecuting, @unchecked Sendable {
         return try popNext(from: &executeResponses, label: "execute")
     }
 
-    func executeJSON<T: Decodable & Sendable>(_ script: String, as type: T.Type) async throws -> T {
+    func executeJSON<T: Decodable & Sendable>(_ script: String, as _: T.Type) async throws -> T {
         executeJSONScripts.append(script)
         let raw = try popNext(from: &jsonResponses, label: "executeJSON")
         let decoder = JSONDecoder()
@@ -54,9 +54,9 @@ final class MockJXAExecutor: JXAExecuting, @unchecked Sendable {
 
         let response = responses.removeFirst()
         switch response {
-        case .success(let value):
+        case let .success(value):
             return value
-        case .failure(let error):
+        case let .failure(error):
             throw error
         }
     }
@@ -145,11 +145,12 @@ func jsonObjectString(_ object: [String: Any?]) throws -> String {
     return string
 }
 
-func mutationResultJSON(success: Bool, error: String? = nil, id: String? = nil) throws -> String {
+func mutationResultJSON(success: Bool, error: String? = nil, id: String? = nil, appliedFields: [String]? = nil) throws -> String {
     try jsonObjectString([
         "success": success,
         "error": error,
         "id": id,
+        "appliedFields": appliedFields,
     ])
 }
 

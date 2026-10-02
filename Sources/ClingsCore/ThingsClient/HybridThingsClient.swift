@@ -11,13 +11,13 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
     private let jxaBridge: any JXAExecuting
 
     public init() throws {
-        self.database = try ThingsDatabase()
-        self.jxaBridge = JXABridge()
+        database = try ThingsDatabase()
+        jxaBridge = JXABridge()
     }
 
     public init(databasePath: String, bridge: any JXAExecuting = JXABridge()) {
-        self.database = ThingsDatabase(dbPath: databasePath)
-        self.jxaBridge = bridge
+        database = ThingsDatabase(dbPath: databasePath)
+        jxaBridge = bridge
     }
 
     init(database: any ThingsDatabaseReadable, jxaBridge: any JXAExecuting) {
@@ -29,6 +29,10 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
 
     public func fetchList(_ list: ListView) async throws -> [Todo] {
         try database.fetchList(list)
+    }
+
+    public func fetchQueryList(_ list: ListView) async throws -> [Todo] {
+        try database.fetchQueryList(list)
     }
 
     public func fetchProjects() async throws -> [Project] {
@@ -77,8 +81,9 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
             checklistItems: checklistItems
         )
 
-        let id = try await jxaBridge.executeAppleScript(script)
-        guard !id.isEmpty else {
+        let creation = try MutationResult.appleScript(await jxaBridge.executeAppleScript(script))
+        try creation.check()
+        guard let id = creation.id, !id.isEmpty else {
             throw ThingsError.operationFailed("Missing created todo ID")
         }
 
@@ -86,8 +91,8 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
             let tagScript = JXAScripts.setTodoTagsAppleScript(id: id, tags: tags)
             do {
                 _ = try await jxaBridge.executeAppleScript(tagScript)
-            } catch let error as JXAError {
-                throw ThingsError.jxaError(error)
+            } catch {
+                throw AppliedMutationError(id: id, fields: creation.appliedFields ?? ["create"], message: error.localizedDescription)
             }
         }
 
@@ -110,11 +115,9 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
             area: area
         )
 
-        let result = try await jxaBridge.executeJSON(script, as: CreationResult.self)
-        if !result.success {
-            throw ThingsError.operationFailed(result.error ?? "Unknown error")
-        }
-        guard let id = result.id else {
+        let result = try await jxaBridge.executeJSON(script, as: MutationResult.self)
+        try result.check()
+        guard let id = result.id, !id.isEmpty else {
             throw ThingsError.operationFailed("Missing created project ID")
         }
 
@@ -122,8 +125,8 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
             let tagScript = JXAScripts.setProjectTagsAppleScript(id: id, tags: tags)
             do {
                 _ = try await jxaBridge.executeAppleScript(tagScript)
-            } catch let error as JXAError {
-                throw ThingsError.jxaError(error)
+            } catch {
+                throw AppliedMutationError(id: id, fields: result.appliedFields ?? ["create"], message: error.localizedDescription)
             }
         }
 
@@ -170,22 +173,39 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         }
     }
 
+    public func moveTodo(id: String, toProjectID: String) async throws {
+        _ = try await jxaBridge.executeAppleScript(JXAScripts.moveTodoToProjectID(id: id, projectID: toProjectID))
+    }
+
+    public func restoreTodo(_ snapshot: TodoSnapshot) async throws {
+        let restoration = try MutationResult.appleScript(await jxaBridge.executeAppleScript(JXAScripts.restoreTodoAppleScript(snapshot)))
+        try restoration.check(fallbackID: snapshot.id)
+        guard restoration.id == snapshot.id else { throw ThingsError.operationFailed("Malformed restore response: mismatched todo ID") }
+        do {
+            _ = try await jxaBridge.executeAppleScript(JXAScripts.setTodoTagsAppleScript(id: snapshot.id, tags: snapshot.tags))
+        } catch {
+            throw AppliedMutationError(id: snapshot.id, fields: ["title", "notes", "deadline", "status"], message: error.localizedDescription)
+        }
+    }
+
     public func updateTodo(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?) async throws {
         // Handle non-tag updates via JXA (name, notes, dueDate work fine)
         if name != nil || notes != nil || dueDate != nil {
             let script = JXAScripts.updateTodo(id: id, name: name, notes: notes, dueDate: dueDate, tags: nil)
             let result = try await jxaBridge.executeJSON(script, as: MutationResult.self)
-            if !result.success {
-                throw ThingsError.operationFailed(result.error ?? "Unknown error")
-            }
+            try result.check(fallbackID: id)
         }
 
         if let tags = tags {
             let tagScript = JXAScripts.setTodoTagsAppleScript(id: id, tags: tags)
             do {
                 _ = try await jxaBridge.executeAppleScript(tagScript)
-            } catch let error as JXAError {
-                throw ThingsError.jxaError(error)
+            } catch {
+                let fields = [name != nil ? "title" : nil, notes != nil ? "notes" : nil, dueDate != nil ? "deadline" : nil].compactMap { $0 }
+                if !fields.isEmpty {
+                    throw AppliedMutationError(id: id, fields: fields, message: error.localizedDescription)
+                }
+                throw error
             }
         }
     }
@@ -222,11 +242,11 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
 
     // MARK: - Open (disabled)
 
-    public nonisolated func openInThings(id: String) throws {
+    public nonisolated func openInThings(id _: String) throws {
         throw ThingsError.invalidState("Open command is disabled: URL schemes are not allowed.")
     }
 
-    public nonisolated func openInThings(list: ListView) throws {
+    public nonisolated func openInThings(list _: ListView) throws {
         throw ThingsError.invalidState("Open command is disabled: URL schemes are not allowed.")
     }
 

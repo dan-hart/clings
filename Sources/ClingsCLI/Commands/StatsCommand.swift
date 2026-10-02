@@ -18,6 +18,10 @@ struct StatsCommand: AsyncParsableCommand {
         - Overdue items
         - Tag distribution
 
+        This is a read-only report from the local database. --days controls the
+        dashboard period; trends/heatmap use their own --weeks option. --json
+        puts a report object under data rather than the todo-list count/items payload.
+
         EXAMPLES:
           clings stats
           clings stats --days 7
@@ -34,10 +38,14 @@ struct StatsCommand: AsyncParsableCommand {
         ]
     )
 
-    @Option(name: .long, help: "Number of days to analyze (default: 30)")
+    @Option(name: .long, help: "Number of days to analyze (1...36600; default: 30)")
     var days: Int = 30
 
     @OptionGroup var output: OutputOptions
+
+    func validate() throws {
+        try StatsCollector.validateDays(days)
+    }
 
     func run() async throws {
         let stats = try StatsCollector().collect(days: days)
@@ -46,7 +54,7 @@ struct StatsCommand: AsyncParsableCommand {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(stats)
-            print(String(data: data, encoding: .utf8) ?? "{}")
+            print(CLIResponse.success(String(decoding: data, as: UTF8.self)))
         } else {
             printPrettyStats(stats, useColors: !output.noColor)
         }
@@ -188,7 +196,8 @@ struct Stats: Codable {
     init(days: Int, totalOpen: Int, completedInPeriod: Int, canceledInPeriod: Int,
          overdue: Int, completionRate: Double, inbox: Int, today: Int, upcoming: Int,
          anytime: Int, someday: Int, topProjects: [(String, Int)], topTags: [(String, Int)],
-         byArea: [String: Int]) {
+         byArea: [String: Int])
+    {
         self.days = days
         self.totalOpen = totalOpen
         self.completedInPeriod = completedInPeriod
@@ -209,7 +218,17 @@ struct Stats: Codable {
 // MARK: - Stats Collector
 
 struct StatsCollector {
+    static func validateDays(_ days: Int) throws {
+        guard (1 ... 36600).contains(days) else { throw ValidationError("--days must be between 1 and 36600") }
+    }
+
+    static func days(forWeeks weeks: Int) throws -> Int {
+        guard (1 ... 5200).contains(weeks) else { throw ValidationError("--weeks must be between 1 and 5200") }
+        return weeks * 7
+    }
+
     func collect(days: Int) throws -> Stats {
+        try Self.validateDays(days)
         let db = try CommandRuntime.makeDatabase()
 
         // Fetch all lists
@@ -225,7 +244,9 @@ struct StatsCollector {
         let totalOpen = allOpen.count
 
         // Completed/canceled in period
-        let periodStart = Calendar.current.date(byAdding: .day, value: -days, to: Date())!
+        guard let periodStart = Calendar.current.date(byAdding: .day, value: -days, to: Date()) else {
+            throw ValidationError("Unable to calculate the requested statistics period")
+        }
         let completedInPeriod = logbook.filter { todo in
             todo.status == .completed && todo.modificationDate >= periodStart
         }.count
@@ -292,16 +313,19 @@ struct StatsCollector {
 
     /// Collect daily completion counts for trends/heatmap.
     func collectDailyCompletions(days: Int) throws -> [Date: Int] {
+        try Self.validateDays(days)
         let db = try CommandRuntime.makeDatabase()
         let logbook = try db.fetchList(.logbook)
 
         let calendar = Calendar.current
-        let periodStart = calendar.date(byAdding: .day, value: -days, to: Date())!
+        guard let periodStart = calendar.date(byAdding: .day, value: -days, to: Date()) else {
+            throw ValidationError("Unable to calculate the requested statistics period")
+        }
 
         var dailyCounts: [Date: Int] = [:]
 
         // Initialize all days to 0
-        for i in 0..<days {
+        for i in 0 ..< days {
             if let date = calendar.date(byAdding: .day, value: -i, to: Date()) {
                 let dayStart = calendar.startOfDay(for: date)
                 dailyCounts[dayStart] = 0
@@ -331,6 +355,9 @@ struct StatsTrendsCommand: AsyncParsableCommand {
         Shows a weekly breakdown of completed todos as a bar chart.
         Useful for tracking productivity patterns over time.
 
+        --weeks controls this report (default: 4); dashboard --days does not.
+        --json returns daily completion entries under data. This does not modify Things data.
+
         EXAMPLES:
           clings stats trends           Show 4-week trend
           clings stats trends --weeks 8 Show 8-week trend
@@ -341,13 +368,13 @@ struct StatsTrendsCommand: AsyncParsableCommand {
         """
     )
 
-    @Option(name: .long, help: "Number of weeks to show (default: 4)")
+    @Option(name: .long, help: "Number of weeks to show (1...5200; default: 4)")
     var weeks: Int = 4
 
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let days = weeks * 7
+        let days = try StatsCollector.days(forWeeks: weeks)
         let dailyCounts = try StatsCollector().collectDailyCompletions(days: days)
 
         if output.json {
@@ -361,7 +388,7 @@ struct StatsTrendsCommand: AsyncParsableCommand {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try JSONSerialization.data(withJSONObject: jsonData, options: [.prettyPrinted, .sortedKeys])
-            print(String(data: data, encoding: .utf8) ?? "[]")
+            print(CLIResponse.success(String(decoding: data, as: UTF8.self)))
         } else {
             printTrends(dailyCounts, weeks: weeks, useColors: !output.noColor)
         }
@@ -381,12 +408,13 @@ struct StatsTrendsCommand: AsyncParsableCommand {
         print("\(dim)─────────────────────────────────────\(reset)")
 
         // Group by week
-        for weekIndex in (0..<weeks).reversed() {
-            let weekStart = calendar.date(byAdding: .weekOfYear, value: -weekIndex, to: Date())!
-            let weekStartDay = calendar.startOfDay(for: calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: weekStart))!)
+        for weekIndex in (0 ..< weeks).reversed() {
+            guard let weekStart = calendar.date(byAdding: .weekOfYear, value: -weekIndex, to: Date()),
+                  let start = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: weekStart)) else { continue }
+            let weekStartDay = calendar.startOfDay(for: start)
 
             var weekTotal = 0
-            for dayOffset in 0..<7 {
+            for dayOffset in 0 ..< 7 {
                 if let day = calendar.date(byAdding: .day, value: dayOffset, to: weekStartDay) {
                     let dayStart = calendar.startOfDay(for: day)
                     weekTotal += dailyCounts[dayStart] ?? 0
@@ -419,6 +447,9 @@ struct StatsHeatmapCommand: AsyncParsableCommand {
         completion intensity. Days with more completions are shown
         in darker green.
 
+        --weeks defaults to 12. --json returns the underlying report rather
+        than ANSI chart output. This reads completion history without writes.
+
         EXAMPLES:
           clings stats heatmap            Show 12-week calendar
           clings stats heatmap --weeks 52 Show full year
@@ -429,13 +460,13 @@ struct StatsHeatmapCommand: AsyncParsableCommand {
         """
     )
 
-    @Option(name: .long, help: "Number of weeks to show (default: 12)")
+    @Option(name: .long, help: "Number of weeks to show (1...5200; default: 12)")
     var weeks: Int = 12
 
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let days = weeks * 7
+        let days = try StatsCollector.days(forWeeks: weeks)
         let dailyCounts = try StatsCollector().collectDailyCompletions(days: days)
 
         if output.json {
@@ -447,7 +478,7 @@ struct StatsHeatmapCommand: AsyncParsableCommand {
                 jsonData.append(["date": formatter.string(from: date), "completed": count])
             }
             let data = try JSONSerialization.data(withJSONObject: jsonData, options: [.prettyPrinted, .sortedKeys])
-            print(String(data: data, encoding: .utf8) ?? "[]")
+            print(CLIResponse.success(String(decoding: data, as: UTF8.self)))
         } else {
             printHeatmap(dailyCounts, weeks: weeks, useColors: !output.noColor)
         }
@@ -470,12 +501,13 @@ struct StatsHeatmapCommand: AsyncParsableCommand {
         let maxCount = dailyCounts.values.max() ?? 1
 
         // Print each day of week as a row
-        for dayIndex in 0..<7 {
+        for dayIndex in 0 ..< 7 {
             var row = "  \(dayLabels[dayIndex]) "
 
-            for weekOffset in (0..<weeks).reversed() {
-                let weekStart = calendar.date(byAdding: .weekOfYear, value: -weekOffset, to: Date())!
-                let weekStartDay = calendar.startOfDay(for: calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: weekStart))!)
+            for weekOffset in (0 ..< weeks).reversed() {
+                guard let weekStart = calendar.date(byAdding: .weekOfYear, value: -weekOffset, to: Date()),
+                      let start = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: weekStart)) else { continue }
+                let weekStartDay = calendar.startOfDay(for: start)
 
                 if let day = calendar.date(byAdding: .day, value: dayIndex, to: weekStartDay) {
                     let dayStart = calendar.startOfDay(for: day)
@@ -503,27 +535,35 @@ struct StatsHeatmapCommand: AsyncParsableCommand {
 
     private func heatmapBlock(count: Int, max: Int, useColors: Bool) -> String {
         if !useColors {
-            if count == 0 { return "·" }
-            if count <= max / 4 { return "░" }
-            if count <= max / 2 { return "▒" }
-            if count <= 3 * max / 4 { return "▓" }
+            if count == 0 {
+                return "·"
+            }
+            if count <= max / 4 {
+                return "░"
+            }
+            if count <= max / 2 {
+                return "▒"
+            }
+            if count <= 3 * max / 4 {
+                return "▓"
+            }
             return "█"
         }
 
         // Use green color scale
         let reset = "\u{001B}[0m"
         if count == 0 {
-            return "\u{001B}[90m·\(reset)"  // Gray
+            return "\u{001B}[90m·\(reset)" // Gray
         }
         if count <= max / 4 {
-            return "\u{001B}[38;5;22m█\(reset)"  // Dark green
+            return "\u{001B}[38;5;22m█\(reset)" // Dark green
         }
         if count <= max / 2 {
-            return "\u{001B}[38;5;28m█\(reset)"  // Medium green
+            return "\u{001B}[38;5;28m█\(reset)" // Medium green
         }
         if count <= 3 * max / 4 {
-            return "\u{001B}[38;5;34m█\(reset)"  // Light green
+            return "\u{001B}[38;5;34m█\(reset)" // Light green
         }
-        return "\u{001B}[38;5;46m█\(reset)"  // Bright green
+        return "\u{001B}[38;5;46m█\(reset)" // Bright green
     }
 }

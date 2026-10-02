@@ -15,6 +15,9 @@ struct TemplateCommand: AsyncParsableCommand {
         Save reusable task blueprints with notes, tags, checklist items, and relative
         schedule expressions.
 
+        With no subcommand, lists templates. Saving and deleting definitions
+        changes local clings state; run creates a real Things todo.
+
         EXAMPLES:
           clings template save weekly-review "Weekly review" --when "tomorrow morning"
           clings template list
@@ -38,6 +41,8 @@ struct TemplateListCommand: ParsableCommand {
         discussion: """
         Show all saved templates and the task title each template creates.
 
+        --json returns an array under data including stored defaults and date expressions.
+
         EXAMPLES:
           clings template list
           clings template ls --json
@@ -54,7 +59,7 @@ struct TemplateListCommand: ParsableCommand {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             encoder.dateEncodingStrategy = .iso8601
             let data = try encoder.encode(templates)
-            print(String(data: data, encoding: .utf8) ?? "[]")
+            print(CLIResponse.success(String(decoding: data, as: UTF8.self)))
             return
         }
 
@@ -76,13 +81,19 @@ struct TemplateSaveCommand: ParsableCommand {
         discussion: """
         Capture a reusable task skeleton for repeatable work.
 
+        Saving an existing name replaces it. Use --when and --deadline to store
+        date expressions; dates embedded in the title are retained when explicit
+        options are absent. Relative expressions are resolved when the task is made.
+        --tags and --checklist accept space-separated values; quote each multiword
+        checklist item. Saving does not create a Things todo.
+
         EXAMPLES:
           clings template save weekly-review "Weekly review" --when "tomorrow morning"
           clings template save release-checklist "Prepare release notes #docs" --checklist "Draft" "Review"
         """
     )
 
-    @Argument(help: "Template name")
+    @Argument(help: "Template name", completion: SavedNameCompletion.templateKind)
     var name: String
 
     @Argument(help: "Template title or natural-language task")
@@ -109,21 +120,28 @@ struct TemplateSaveCommand: ParsableCommand {
     @Option(name: .long, parsing: .upToNextOption, help: "Checklist items")
     var checklist: [String] = []
 
+    @OptionGroup var output: OutputOptions
+
     func run() throws {
         let parsed = TaskParser().parse(title)
+        for expression in parsed.invalidDateExpressions {
+            _ = try resolveDate(expression)
+        }
+        _ = try resolveDate(when)
+        _ = try resolveDate(deadline)
         let template = TaskTemplate(
             name: name,
             title: parsed.title,
             notes: notes ?? parsed.notes,
-            tags: tags.isEmpty ? parsed.tags : tags,
+            tags: Array(NSOrderedSet(array: parsed.tags + tags)) as? [String] ?? parsed.tags + tags,
             project: project ?? parsed.project,
             area: area ?? parsed.area,
-            whenExpression: when,
-            deadlineExpression: deadline,
+            whenExpression: when ?? parsed.whenExpression,
+            deadlineExpression: deadline ?? parsed.deadlineExpression,
             checklistItems: checklist.isEmpty ? parsed.checklistItems : checklist
         )
         try TemplateStore.save(template)
-        print("Saved template: \(name)")
+        print(renderMessage("Saved template: \(name)", output: output))
     }
 }
 
@@ -134,35 +152,47 @@ struct TemplateRunCommand: AsyncParsableCommand {
         discussion: """
         Instantiate a saved template as a new todo in Things.
 
+        Relative dates are resolved now. To preview or override defaults, use
+        clings add "Task title" --template NAME --parse-only before creating.
+        Creation is recorded for undo; undo cancels the new todo via automation.
+
         EXAMPLES:
           clings template run weekly-review
           clings template run release-checklist --json
         """
     )
 
-    @Argument(help: "Template name")
+    @Argument(help: "Template name", completion: SavedNameCompletion.templateKind)
     var name: String
 
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
+        try await MutationLock.withLock { try await perform() }
+    }
+
+    private func perform() async throws {
         guard let template = try TemplateStore.load(name: name) else {
             throw ValidationError("Template not found: \(name)")
         }
 
+        let resolvedWhen = try resolveDate(template.whenExpression)
+        let resolvedDeadline = try resolveDate(template.deadlineExpression)
         let client = CommandRuntime.makeClient()
-        let id = try await client.createTodo(
+        let id: String
+        do { id = try await client.createTodo(
             name: template.title,
             notes: template.notes,
-            when: parseFlexibleDate(template.whenExpression),
-            deadline: parseFlexibleDate(template.deadlineExpression),
+            when: resolvedWhen,
+            deadline: resolvedDeadline,
             tags: template.tags,
             project: template.project,
             area: template.area,
             checklistItems: template.checklistItems
-        )
-        try UndoStore.record(UndoEntry(operation: .create, todoID: id, snapshot: nil))
-        print(renderMessage("Created from template: \(template.title)", output: output))
+        ) } catch let error as AppliedMutationError {
+            try reportPartial(error, entry: UndoEntry(operation: .create, todoID: error.id, snapshot: nil))
+        }
+        try printOutcome(recordApplied(UndoEntry(operation: .create, todoID: id, snapshot: nil), message: "Created from template: \(template.title)"), output: output)
     }
 }
 
@@ -173,6 +203,8 @@ struct TemplateDeleteCommand: ParsableCommand {
         discussion: """
         Remove a saved template from local clings state.
 
+        Existing Things todos created from the template are unaffected.
+
         EXAMPLES:
           clings template delete weekly-review
           clings template rm release-checklist
@@ -180,13 +212,15 @@ struct TemplateDeleteCommand: ParsableCommand {
         aliases: ["rm"]
     )
 
-    @Argument(help: "Template name")
+    @Argument(help: "Template name", completion: SavedNameCompletion.templateKind)
     var name: String
+
+    @OptionGroup var output: OutputOptions
 
     func run() throws {
         guard try TemplateStore.delete(name: name) else {
             throw ValidationError("Template not found: \(name)")
         }
-        print("Deleted template: \(name)")
+        print(renderMessage("Deleted template: \(name)", output: output))
     }
 }

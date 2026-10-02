@@ -15,6 +15,19 @@ struct AddCommand: AsyncParsableCommand {
         Supports natural language patterns for capture, scheduling, tags, notes,
         and checklist items.
 
+        Quote the full task so your shell preserves #tags and spaces. --when
+        sets the planned start; --deadline sets the due date. Explicit options
+        override parsed values, while tags are combined and deduplicated.
+        Template defaults are applied before parsing the title and options.
+
+        PREVIEW FIRST:
+          clings add "Draft release notes tomorrow #docs" --parse-only --json
+          clings add "Draft release notes" --when tomorrow --deadline friday
+
+        --parse-only never creates a todo. Invalid date options are rejected
+        before any write, including impossible dates and invalid times.
+        Priority markers are parsed but are not applied as a Things priority.
+
         EXAMPLES:
           clings add "Draft changelog entry tomorrow #docs"
           clings add "Replace air filter by friday !!"
@@ -27,19 +40,19 @@ struct AddCommand: AsyncParsableCommand {
     @Argument(help: "The todo title (supports natural language)")
     var title: String
 
-    @Option(name: .long, help: "Start from a saved task template")
+    @Option(name: .long, help: "Start from a saved task template", completion: SavedNameCompletion.templateKind)
     var template: String?
 
     @Option(name: .long, help: "Add notes to the todo")
     var notes: String?
 
-    @Option(name: .long, help: "Set the when date (today, tomorrow, etc.)")
+    @Option(name: .long, help: "Planned start date, e.g. 'tomorrow' or '2027-01-15'; preview with --parse-only")
     var when: String?
 
-    @Option(name: .long, help: "Set the deadline")
+    @Option(name: .long, help: "Due date, distinct from the planned start; e.g. 'friday' or '2027-01-15'")
     var deadline: String?
 
-    @Option(name: .long, parsing: .upToNextOption, help: "Add tags")
+    @Option(name: .long, parsing: .upToNextOption, help: "Space-separated tag names, combined with parsed/template tags")
     var tags: [String] = []
 
     @Option(name: .long, help: "Add to a project")
@@ -54,6 +67,13 @@ struct AddCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
+        if parseOnly {
+            try await perform(); return
+        }
+        try await MutationLock.withLock { try await perform() }
+    }
+
+    private func perform() async throws {
         let parser = TaskParser()
         var parsed = ParsedTask(title: "")
 
@@ -62,19 +82,22 @@ struct AddCommand: AsyncParsableCommand {
                 throw ValidationError("Template not found: \(template)")
             }
 
-            parsed = ParsedTask(
+            parsed = try ParsedTask(
                 title: savedTemplate.title,
                 notes: savedTemplate.notes,
                 tags: savedTemplate.tags,
                 project: savedTemplate.project,
                 area: savedTemplate.area,
-                dueDate: parseFlexibleDate(savedTemplate.deadlineExpression),
-                whenDate: parseFlexibleDate(savedTemplate.whenExpression),
+                dueDate: resolveDate(savedTemplate.deadlineExpression),
+                whenDate: resolveDate(savedTemplate.whenExpression),
                 checklistItems: savedTemplate.checklistItems
             )
         }
 
         let titleParsed = parser.parse(title)
+        for expression in titleParsed.invalidDateExpressions {
+            _ = try resolveDate(expression)
+        }
         if !titleParsed.title.isEmpty {
             parsed.title = titleParsed.title
         }
@@ -101,35 +124,43 @@ struct AddCommand: AsyncParsableCommand {
         }
 
         // Command line options override parsed values
-        if let notes = notes {
+        if let notes {
             parsed.notes = notes
         }
         if !tags.isEmpty {
             parsed.tags.append(contentsOf: tags)
         }
-        if let project = project {
+        if let project {
             parsed.project = project
         }
-        if let area = area {
+        if let area {
             parsed.area = area
         }
-        if let when = when {
-            parsed.whenDate = parseFlexibleDate(when)
+        if let when {
+            parsed.whenDate = try resolveDate(when)
         }
-        if let deadline = deadline {
-            parsed.dueDate = parseFlexibleDate(deadline)
+        if let deadline {
+            parsed.dueDate = try resolveDate(deadline)
         }
 
         parsed.tags = Array(NSOrderedSet(array: parsed.tags)) as? [String] ?? parsed.tags
 
         // Handle parse-only mode
         if parseOnly {
-            printParsedResult(parsed)
+            let preview = TaskPreview(
+                title: parsed.title, notes: parsed.notes, tags: parsed.tags,
+                project: parsed.project, area: parsed.area, when: parsed.whenDate,
+                deadline: parsed.dueDate,
+                undo: "Cancels the newly created todo; does not permanently delete it.",
+                checklistItems: parsed.checklistItems
+            )
+            try print(preview.render(json: output.json))
             return
         }
 
         let client = CommandRuntime.makeClient()
-        let id = try await client.createTodo(
+        let id: String
+        do { id = try await client.createTodo(
             name: parsed.title,
             notes: parsed.notes,
             when: parsed.whenDate,
@@ -138,85 +169,9 @@ struct AddCommand: AsyncParsableCommand {
             project: parsed.project,
             area: parsed.area,
             checklistItems: parsed.checklistItems
-        )
-        try UndoStore.record(UndoEntry(operation: .create, todoID: id, snapshot: nil))
-
-        print(renderMessage("Created: \(parsed.title)", output: output))
-    }
-
-    private func printParsedResult(_ parsed: ParsedTask) {
-        let dateFormatter = ISO8601DateFormatter()
-
-        if output.json {
-            var jsonDict: [String: Any] = [
-                "title": parsed.title,
-            ]
-            if let notes = parsed.notes {
-                jsonDict["notes"] = notes
-            }
-            if !parsed.tags.isEmpty {
-                jsonDict["tags"] = parsed.tags
-            }
-            if let project = parsed.project {
-                jsonDict["project"] = project
-            }
-            if let area = parsed.area {
-                jsonDict["area"] = area
-            }
-            if let whenDate = parsed.whenDate {
-                jsonDict["when"] = dateFormatter.string(from: whenDate)
-            }
-            if let dueDate = parsed.dueDate {
-                jsonDict["deadline"] = dateFormatter.string(from: dueDate)
-            }
-            if !parsed.checklistItems.isEmpty {
-                jsonDict["checklistItems"] = parsed.checklistItems
-            }
-
-            if let data = try? JSONSerialization.data(withJSONObject: jsonDict, options: [.prettyPrinted, .sortedKeys]),
-               let str = String(data: data, encoding: .utf8) {
-                print(str)
-            }
-        } else {
-            let useColors = !output.noColor
-            let bold = useColors ? "\u{001B}[1m" : ""
-            let cyan = useColors ? "\u{001B}[36m" : ""
-            let dim = useColors ? "\u{001B}[2m" : ""
-            let reset = useColors ? "\u{001B}[0m" : ""
-
-            print("\(bold)Parsed Task\(reset)")
-            print("\(dim)─────────────────────────────────────\(reset)")
-            print("  Title:    \(parsed.title)")
-
-            if let notes = parsed.notes {
-                print("  Notes:    \(notes)")
-            }
-            if !parsed.tags.isEmpty {
-                print("  Tags:     \(cyan)\(parsed.tags.map { "#\($0)" }.joined(separator: " "))\(reset)")
-            }
-            if let project = parsed.project {
-                print("  Project:  \(project)")
-            }
-            if let area = parsed.area {
-                print("  Area:     \(area)")
-            }
-            if let whenDate = parsed.whenDate {
-                let formatter = DateFormatter()
-                formatter.dateStyle = .medium
-                print("  When:     \(formatter.string(from: whenDate))")
-            }
-            if let dueDate = parsed.dueDate {
-                let formatter = DateFormatter()
-                formatter.dateStyle = .medium
-                print("  Deadline: \(formatter.string(from: dueDate))")
-            }
-            if !parsed.checklistItems.isEmpty {
-                print("  Checklist:")
-                for item in parsed.checklistItems {
-                    print("    - \(item)")
-                }
-            }
-            print("")
+        ) } catch let error as AppliedMutationError {
+            try reportPartial(error, entry: UndoEntry(operation: .create, todoID: error.id, snapshot: nil))
         }
+        try printOutcome(recordApplied(UndoEntry(operation: .create, todoID: id, snapshot: nil), message: "Created: \(parsed.title)"), output: output)
     }
 }

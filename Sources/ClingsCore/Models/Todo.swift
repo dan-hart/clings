@@ -15,6 +15,7 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
     public var notes: String?
     public var status: Status
     public var dueDate: Date?
+    public var scheduledDate: Date?
     public var tags: [Tag]
     public var project: Project?
     public var area: Area?
@@ -28,6 +29,7 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
         notes: String? = nil,
         status: Status = .open,
         dueDate: Date? = nil,
+        scheduledDate: Date? = nil,
         tags: [Tag] = [],
         project: Project? = nil,
         area: Area? = nil,
@@ -40,6 +42,7 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
         self.notes = notes
         self.status = status
         self.dueDate = dueDate
+        self.scheduledDate = scheduledDate
         self.tags = tags
         self.project = project
         self.area = area
@@ -54,6 +57,7 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
         case notes
         case status
         case dueDate
+        case scheduledDate
         case tags
         case project
         case area
@@ -76,6 +80,7 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
         }
 
         dueDate = try container.decodeIfPresent(Date.self, forKey: .dueDate)
+        scheduledDate = try container.decodeIfPresent(Date.self, forKey: .scheduledDate)
         tags = try container.decodeIfPresent([Tag].self, forKey: .tags) ?? []
         project = try container.decodeIfPresent(Project.self, forKey: .project)
         area = try container.decodeIfPresent(Area.self, forKey: .area)
@@ -86,9 +91,17 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
 
     // MARK: - Computed Properties
 
-    public var isCompleted: Bool { status == .completed }
-    public var isCanceled: Bool { status == .canceled }
-    public var isOpen: Bool { status == .open }
+    public var isCompleted: Bool {
+        status == .completed
+    }
+
+    public var isCanceled: Bool {
+        status == .canceled
+    }
+
+    public var isOpen: Bool {
+        status == .open
+    }
 
     /// Whether the task is overdue (has a due date in the past and is still open).
     /// Compared at calendar-day granularity, since due dates are date-only:
@@ -136,6 +149,8 @@ extension Todo: Filterable {
             return .string(status.rawValue)
         case "due", "duedate":
             return .optionalDate(dueDate)
+        case "when", "start", "scheduleddate":
+            return .optionalDate(scheduledDate)
         case "tags":
             return .stringList(tags.map { $0.name })
         case "project":

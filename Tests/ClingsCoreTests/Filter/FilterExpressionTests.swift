@@ -3,8 +3,8 @@
 // Copyright (C) 2024 Dan Hart
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import Testing
 @testable import ClingsCore
+import Testing
 
 @Suite("FilterExpression")
 struct FilterExpressionTests {
@@ -12,7 +12,7 @@ struct FilterExpressionTests {
     struct FilterValueParse {
         @Test func parseQuotedString() {
             let value = FilterValue.parse("'hello world'")
-            if case .string(let s) = value {
+            if case let .string(s) = value {
                 #expect(s == "hello world")
             } else {
                 Issue.record("Expected string")
@@ -21,7 +21,7 @@ struct FilterExpressionTests {
 
         @Test func parseDoubleQuotedString() {
             let value = FilterValue.parse("\"hello world\"")
-            if case .string(let s) = value {
+            if case let .string(s) = value {
                 #expect(s == "hello world")
             } else {
                 Issue.record("Expected string")
@@ -37,7 +37,7 @@ struct FilterExpressionTests {
 
         @Test func parseInteger() {
             let value = FilterValue.parse("42")
-            if case .integer(let n) = value {
+            if case let .integer(n) = value {
                 #expect(n == 42)
             } else {
                 Issue.record("Expected integer")
@@ -46,7 +46,7 @@ struct FilterExpressionTests {
 
         @Test func parseNegativeInteger() {
             let value = FilterValue.parse("-10")
-            if case .integer(let n) = value {
+            if case let .integer(n) = value {
                 #expect(n == -10)
             } else {
                 Issue.record("Expected integer")
@@ -55,7 +55,7 @@ struct FilterExpressionTests {
 
         @Test func parseList() {
             let value = FilterValue.parse("('a', 'b', 'c')")
-            if case .stringList(let list) = value {
+            if case let .stringList(list) = value {
                 #expect(list == ["a", "b", "c"])
             } else {
                 Issue.record("Expected string list")
@@ -64,7 +64,7 @@ struct FilterExpressionTests {
 
         @Test func parseDateToday() {
             let value = FilterValue.parse("today")
-            if case .date(let d) = value {
+            if case let .date(d) = value {
                 #expect(Calendar.current.isDateInToday(d))
             } else {
                 Issue.record("Expected date")
@@ -73,7 +73,7 @@ struct FilterExpressionTests {
 
         @Test func parseDateTomorrow() {
             let value = FilterValue.parse("tomorrow")
-            if case .date(let d) = value {
+            if case let .date(d) = value {
                 #expect(Calendar.current.isDateInTomorrow(d))
             } else {
                 Issue.record("Expected date")
@@ -82,7 +82,7 @@ struct FilterExpressionTests {
 
         @Test func parseDateYesterday() {
             let value = FilterValue.parse("yesterday")
-            if case .date(let d) = value {
+            if case let .date(d) = value {
                 #expect(Calendar.current.isDateInYesterday(d))
             } else {
                 Issue.record("Expected date")
@@ -91,7 +91,7 @@ struct FilterExpressionTests {
 
         @Test func parseDateISO() {
             let value = FilterValue.parse("2024-12-25")
-            if case .date(let d) = value {
+            if case let .date(d) = value {
                 let components = Calendar.current.dateComponents([.year, .month, .day], from: d)
                 #expect(components.year == 2024)
                 #expect(components.month == 12)
@@ -105,7 +105,7 @@ struct FilterExpressionTests {
             let weekdays = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
             for (index, day) in weekdays.enumerated() {
                 let value = FilterValue.parse(day)
-                if case .date(let d) = value {
+                if case let .date(d) = value {
                     let weekday = Calendar.current.component(.weekday, from: d)
                     #expect(weekday == index + 1, "Failed for \(day)")
                 } else {
@@ -116,7 +116,7 @@ struct FilterExpressionTests {
 
         @Test func parseUnquotedString() {
             let value = FilterValue.parse("open")
-            if case .string(let s) = value {
+            if case let .string(s) = value {
                 #expect(s == "open")
             } else {
                 Issue.record("Expected string")
@@ -284,11 +284,7 @@ struct FilterExpressionTests {
         }
 
         @Test func matchesUnknownField() throws {
-            let expr = try FilterParser.parse("unknown_field IS NULL")
-            let todo = TestData.todoOpen
-
-            // Unknown field returns true for IS NULL
-            #expect(expr.matches(todo))
+            #expect(throws: (any Error).self) { try FilterParser.parse("unknown_field IS NULL") }
         }
     }
 
@@ -328,7 +324,7 @@ struct FilterExpressionTests {
 
             #expect(condition.field == "status")
             #expect(condition.operator == .equal)
-            if case .string(let v) = condition.value {
+            if case let .string(v) = condition.value {
                 #expect(v == "open")
             } else {
                 Issue.record("Expected string value")

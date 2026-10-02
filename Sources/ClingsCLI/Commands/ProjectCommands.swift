@@ -14,7 +14,8 @@ struct ProjectCommand: AsyncParsableCommand {
         commandName: "project",
         abstract: "Manage projects",
         discussion: """
-        List and create projects in Things 3.
+        List, create, and audit projects in Things 3. With no subcommand, lists
+        projects. Auditing is read-only; add creates a real project.
 
         Projects are containers for related todos working toward a specific goal.
 
@@ -22,7 +23,7 @@ struct ProjectCommand: AsyncParsableCommand {
           clings project                    List all projects (same as 'clings projects')
           clings project list               Same as above
           clings project add "Documentation Refresh"  Create a new project
-          clings project add "Writing Refresh" --area "Writing" --deadline 2025-01-31
+          clings project add "Writing Refresh" --area "Writing" --deadline 2027-01-31
 
         SEE ALSO:
           projects, add --project, areas
@@ -43,7 +44,8 @@ struct ProjectListCommand: AsyncParsableCommand {
         commandName: "list",
         abstract: "List all projects",
         discussion: """
-        Show every project currently available in Things.
+        Show visible projects, excluding trashed projects and repeating project
+        templates in SQLite reads. --json puts count/items under data.
 
         EXAMPLES:
           clings project list
@@ -62,7 +64,7 @@ struct ProjectListCommand: AsyncParsableCommand {
             ? JSONOutputFormatter()
             : TextOutputFormatter(useColors: !output.noColor)
 
-        print(formatter.format(projects: projects))
+        print(CLIResponse.render(formatter.format(projects: projects), output: output))
     }
 }
 
@@ -75,11 +77,15 @@ struct ProjectAddCommand: AsyncParsableCommand {
         discussion: """
         Creates a new project in Things 3.
 
+        --when and --deadline accept today, tomorrow, or YYYY-MM-DD. --tags takes
+        one comma-separated string (unlike add --tags). Project creation is not
+        recorded by clings undo.
+
         EXAMPLES:
           clings project add "Documentation Refresh"
           clings project add "Reading List" --notes "Collect and organize reference material"
           clings project add "Writing Sprint" --area "Writing" --when today
-          clings project add "Reference Review" --deadline 2025-06-01 --tags "planning,research"
+          clings project add "Reference Review" --deadline 2027-06-01 --tags "planning,research"
         """
     )
 
@@ -116,7 +122,7 @@ struct ProjectAddCommand: AsyncParsableCommand {
             .split(separator: ",")
             .map { String($0).trimmingCharacters(in: .whitespaces) } ?? []
 
-        _ = try await client.createProject(
+        let id = try await client.createProject(
             name: trimmedTitle,
             notes: notes,
             when: parsedWhen,
@@ -125,30 +131,16 @@ struct ProjectAddCommand: AsyncParsableCommand {
             area: area
         )
 
-        let formatter: OutputFormatter = output.json
-            ? JSONOutputFormatter()
-            : TextOutputFormatter(useColors: !output.noColor)
-
-        print(formatter.format(message: "Created project: \(trimmedTitle)"))
+        try printOutcome(MutationOutcome(id: id, applied: true, undoRecorded: false, unsupportedUndo: ["project creation"], appliedFields: ["create"], message: "Created project: \(trimmedTitle)"), output: output)
     }
 
     private func parseWhenDate(_ str: String) throws -> Date {
         let lower = str.lowercased()
-        let calendar = Calendar.current
-        let now = Date()
-
-        if lower == "today" {
-            return calendar.startOfDay(for: now)
-        }
-        if lower == "tomorrow" {
-            if let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) {
-                return tomorrow
+        let isAbsolute = str.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil
+        if lower == "today" || lower == "tomorrow" || isAbsolute {
+            if let date = try resolveDate(str) {
+                return date
             }
-        }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withFullDate]
-        if let date = formatter.date(from: str) {
-            return date
         }
         throw ThingsError.invalidState("Invalid date format: \(str). Use YYYY-MM-DD, 'today', or 'tomorrow'.")
     }
@@ -162,6 +154,9 @@ struct ProjectAuditCommand: AsyncParsableCommand {
         Inspect open projects and flag missing next actions, overdue work, and
         other stalled-project signals.
 
+        Generates a report without changing projects or todos. Use --json for
+        structured findings; project names and todo IDs can guide follow-up work.
+
         EXAMPLES:
           clings project audit
           clings project audit --json
@@ -172,9 +167,9 @@ struct ProjectAuditCommand: AsyncParsableCommand {
 
     func run() async throws {
         let client = CommandRuntime.makeClient()
-        let report = ProjectAudit().audit(
-            projects: try await client.fetchProjects(),
-            todos: try await fetchOpenTodos(client: client)
+        let report = try await ProjectAudit().audit(
+            projects: client.fetchProjects(),
+            todos: fetchOpenTodos(client: client)
         )
 
         if output.json {
@@ -182,7 +177,7 @@ struct ProjectAuditCommand: AsyncParsableCommand {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             encoder.dateEncodingStrategy = .iso8601
             let data = try encoder.encode(report)
-            print(String(data: data, encoding: .utf8) ?? "{}")
+            print(CLIResponse.success(String(decoding: data, as: UTF8.self)))
             return
         }
 

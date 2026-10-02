@@ -3,9 +3,9 @@
 // Copyright (C) 2024 Dan Hart
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+@testable import ClingsCore
 import Foundation
 import Testing
-@testable import ClingsCore
 
 @Suite("HybridThingsClient")
 struct HybridThingsClientTests {
@@ -40,8 +40,8 @@ struct HybridThingsClientTests {
 
     @Test func writeMethodsUseBridgeAndApplyTagScripts() async throws {
         let bridge = MockJXAExecutor()
-        bridge.appleScriptResponses = [
-            .success("todo-id"),
+        bridge.appleScriptResponses = try [
+            .success(mutationResultJSON(success: true, id: "todo-id", appliedFields: ["create"])),
             .success("ok"),
             .success("ok"),
             .success("ok"),
@@ -49,14 +49,14 @@ struct HybridThingsClientTests {
             .success(""),
             .success(""),
         ]
-        bridge.jsonResponses = [
-            .success(try creationResultJSON(success: true, id: "project-id", name: "Ops")),
-            .success(try mutationResultJSON(success: true)),
-            .success(try mutationResultJSON(success: true)),
-            .success(try mutationResultJSON(success: true)),
-            .success(try mutationResultJSON(success: true)),
-            .success(try mutationResultJSON(success: true)),
-            .success(try mutationResultJSON(success: true)),
+        bridge.jsonResponses = try [
+            .success(creationResultJSON(success: true, id: "project-id", name: "Ops")),
+            .success(mutationResultJSON(success: true)),
+            .success(mutationResultJSON(success: true)),
+            .success(mutationResultJSON(success: true)),
+            .success(mutationResultJSON(success: true)),
+            .success(mutationResultJSON(success: true)),
+            .success(mutationResultJSON(success: true)),
         ]
 
         let client = HybridThingsClient(database: MockThingsDatabaseReader(), jxaBridge: bridge)
@@ -106,7 +106,7 @@ struct HybridThingsClientTests {
 
     @Test func writeMethodsPropagateFailures() async throws {
         let missingIDBridge = MockJXAExecutor()
-        missingIDBridge.appleScriptResponses = [.success("")]
+        missingIDBridge.appleScriptResponses = try [.success(mutationResultJSON(success: true, appliedFields: ["create"]))]
 
         let missingIDClient = HybridThingsClient(database: MockThingsDatabaseReader(), jxaBridge: missingIDBridge)
         do {
@@ -123,7 +123,7 @@ struct HybridThingsClientTests {
             Issue.record("Expected missing todo ID error")
         } catch let error as ThingsError {
             switch error {
-            case .operationFailed(let message):
+            case let .operationFailed(message):
                 #expect(message.contains("Missing created todo ID"))
             default:
                 Issue.record("Unexpected error: \(error)")
@@ -133,14 +133,14 @@ struct HybridThingsClientTests {
         }
 
         let failedMutationBridge = MockJXAExecutor()
-        failedMutationBridge.jsonResponses = [.success(try mutationResultJSON(success: false, error: "nope"))]
+        failedMutationBridge.jsonResponses = try [.success(mutationResultJSON(success: false, error: "nope"))]
         let failedMutationClient = HybridThingsClient(database: MockThingsDatabaseReader(), jxaBridge: failedMutationBridge)
         do {
             try await failedMutationClient.completeTodo(id: "todo-id")
             Issue.record("Expected mutation failure")
         } catch let error as ThingsError {
             switch error {
-            case .operationFailed(let message):
+            case let .operationFailed(message):
                 #expect(message == "nope")
             default:
                 Issue.record("Unexpected error: \(error)")
@@ -157,7 +157,7 @@ struct HybridThingsClientTests {
             Issue.record("Expected deleteTag failure")
         } catch let error as ThingsError {
             switch error {
-            case .jxaError(let jxaError):
+            case let .jxaError(jxaError):
                 #expect(jxaError.localizedDescription.contains("tag failure"))
             default:
                 Issue.record("Unexpected error: \(error)")
@@ -175,7 +175,7 @@ struct HybridThingsClientTests {
             Issue.record("Expected openInThings(id:) to throw")
         } catch let error as ThingsError {
             switch error {
-            case .invalidState(let message):
+            case let .invalidState(message):
                 #expect(message.contains("Open command is disabled"))
             default:
                 Issue.record("Unexpected error: \(error)")
@@ -189,7 +189,7 @@ struct HybridThingsClientTests {
             Issue.record("Expected openInThings(list:) to throw")
         } catch let error as ThingsError {
             switch error {
-            case .invalidState(let message):
+            case let .invalidState(message):
                 #expect(message.contains("Open command is disabled"))
             default:
                 Issue.record("Unexpected error: \(error)")

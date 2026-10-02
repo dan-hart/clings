@@ -7,8 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-01
+
+### Added
+
+- **Versioned scripting interface**: CLI JSON responses use schema version 1 with `success`, command-specific `data`, and structured errors that retain partial results.
+- **Shared query controls**: Search, filter, and saved views support explicit list scope, historical tasks, stable sorting, and positive result limits. Scheduled starts are available separately from deadlines.
+- **Complete mutation previews**: Add and update previews expose final fields and undo capabilities without writes. Invalid dates and impossible times are rejected; templates retain relative expressions until execution.
+- **Saved batch plans**: Dry-run JSON freezes exact IDs, snapshots, and proposed changes. Confirmed execution persists per-item results, detects stale tasks, and reconciles interrupted writes before retrying.
+- **Retryable undo**: Supported status/tag batches have grouped undo. Failed reversals retain unreversed entries; snapshots restore the original status and clear previously absent notes/deadlines.
+- **Capability diagnostics**: Read-only diagnostics distinguish database, configuration, runtime, optional token, and automation access, with opt-in probing and redacted support output.
+- **Generated discovery**: Bash, zsh, and fish completions come from ArgumentParser metadata, with local saved-definition completion. A generated command reference and safe example checks prevent documentation drift.
+- **Verified releases**: Exact-main/CI gates, pinned dependencies, dual-architecture archives, build provenance, checksum verification, Homebrew completion installation, and installed-CLI smoke checks.
+- **Documentation**: Expanded help throughout the command tree, a refreshed README with badges and practical workflows, plus setup, query, scripting, troubleshooting, and release guides.
+
+### Changed
+
+- **JSON migration**: Existing command payloads now live inside `.data`; scripts using `.items` must use `.data.items`. Help, version output, and completion scripts remain native text.
+- **Script-visible failures**: Validation, ambiguity, and missing noninteractive confirmation return status 1; runtime, partial-operation, and required diagnostic failures return status 2.
+- **Deletion safety**: `delete` explicitly cancels through the supported Things API, rather than promising Trash. It requires confirmation unless `--force` is supplied.
+- **Mutation reliability**: Partial writes and journal failures are reported explicitly. Unsupported schedule, heading, and project-move reversals are exposed before writes; undo is not a backup.
+- **Defensive numeric input**: Focus and statistics reject zero, negative, or oversized time windows before arithmetic or calendar calculations.
+
 ### Fixed
 
+- **Automation deadlines and output**: Run subprocess waits off Swift's cooperative workers, drain stdout/stderr concurrently, and cancel expired operations without late launches. Large responses no longer fill an unread pipe while the CLI waits for exit.
+- **Partial project creation**: Preserve the created project ID and completed assignments when a later property or tagging step fails, so retries do not blindly duplicate an applied write.
+- **Gregorian automation dates**: Includes the reviewed locale/calendar-safe creation fix and DST runtime regressions from PR #13.
 - **`someday`/`anytime`/etc. list drift from Things**: `ThingsDatabase` list queries (`fetchList`, `search`) no longer include Things' internal repeating-task templates, which are hidden generator rows (identified by a non-null `rt1_recurrenceRule`) rather than real todos.
 - **Deadline decoding**: `deadline` values are now decoded using Things' packed date format (`(year << 16) | (month << 12) | (day << 7)`) instead of being misread as raw seconds since the Cocoa reference date. The previous decoding produced a nonsensical shared date (e.g. April 23, 2009) for every todo carrying Things' year-4001 "no real deadline" sentinel; that sentinel now correctly decodes to `nil`.
 - **Trashed project descendants**: Todos filed (directly, or via a heading) under a trashed project are now excluded from every list except Trash, matching Things' own behavior. Previously only a todo's own `trashed` flag was checked, so items under a trashed project kept appearing everywhere.

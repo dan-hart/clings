@@ -21,12 +21,15 @@ public struct FilterParser {
     /// Parse a filter expression string.
     public static func parse(_ input: String) throws -> FilterExpression {
         var parser = FilterParser(input: input)
-        return try parser.parseExpression()
+        let result = try parser.parseExpression()
+        parser.skipWhitespace()
+        guard parser.position == input.endIndex else { throw FilterParseError.trailingInput }
+        return result
     }
 
     private init(input: String) {
         self.input = input
-        self.position = input.startIndex
+        position = input.startIndex
     }
 
     // MARK: - Parsing
@@ -76,6 +79,8 @@ public struct FilterParser {
 
         // Parse field name
         let field = try parseIdentifier()
+        let fields: Set = ["id", "name", "title", "notes", "status", "due", "duedate", "when", "start", "scheduleddate", "tags", "project", "area", "created", "creationdate", "modified", "modificationdate"]
+        guard fields.contains(field.lowercased()) else { throw FilterParseError.unknownField(field) }
         skipWhitespace()
 
         // Parse operator
@@ -235,7 +240,7 @@ public struct FilterParser {
 
             // Parse item
             let value = try parseValue()
-            if case .string(let s) = value {
+            if case let .string(s) = value {
                 items.append(s)
             } else {
                 throw FilterParseError.listItemMustBeString
@@ -248,7 +253,7 @@ public struct FilterParser {
     // MARK: - Helpers
 
     private mutating func skipWhitespace() {
-        while position < input.endIndex && input[position].isWhitespace {
+        while position < input.endIndex, input[position].isWhitespace {
             position = input.index(after: position)
         }
     }
@@ -298,6 +303,8 @@ public struct FilterParser {
 
 /// Errors that can occur during filter parsing.
 public enum FilterParseError: Error, LocalizedError {
+    case unknownField(String)
+    case trailingInput
     case expectedIdentifier
     case unknownOperator
     case expectedValue
@@ -309,6 +316,8 @@ public enum FilterParseError: Error, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
+        case let .unknownField(field): return "Unknown filter field: \(field). Use name, status, due, when, tags, project, area, created, modified, or id."
+        case .trailingInput: return "Unexpected trailing input. Join conditions with AND or OR."
         case .expectedIdentifier:
             return "Expected field name"
         case .unknownOperator:

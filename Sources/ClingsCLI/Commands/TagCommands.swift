@@ -15,6 +15,9 @@ struct TagsCommand: AsyncParsableCommand {
         discussion: """
         List, create, rename, and delete tags in Things 3.
 
+        With no subcommand, lists tags. Tag management is not recorded by undo.
+        Quote names containing spaces or shell characters such as @.
+
         Tags allow cross-cutting organization across projects and areas.
         Common uses include:
         - Context (e.g., @phone, @computer, @errands)
@@ -50,6 +53,9 @@ struct TagsListCommand: AsyncParsableCommand {
         discussion: """
         Show every tag currently available in Things.
 
+        --json puts count/items under data. Use the displayed tag names with
+        add --tags, update --tags, or filter "tags CONTAINS 'docs'".
+
         EXAMPLES:
           clings tags list
           clings tags ls --json
@@ -67,7 +73,7 @@ struct TagsListCommand: AsyncParsableCommand {
             ? JSONOutputFormatter()
             : TextOutputFormatter(useColors: !output.noColor)
 
-        print(formatter.format(tags: tags))
+        print(CLIResponse.render(formatter.format(tags: tags), output: output))
     }
 }
 
@@ -79,6 +85,9 @@ struct TagsAddCommand: AsyncParsableCommand {
         abstract: "Create a new tag",
         discussion: """
         Creates a new tag in Things 3.
+
+        Creates the tag definition only; use add/update/bulk tag to apply it to
+        todos. This operation is not recorded by undo.
 
         EXAMPLES:
           clings tags add "urgent"
@@ -107,7 +116,7 @@ struct TagsAddCommand: AsyncParsableCommand {
             : TextOutputFormatter(useColors: !output.noColor)
 
         if output.json {
-            print(formatter.format(tags: [tag]))
+            print(CLIResponse.success(formatter.format(tags: [tag])))
         } else {
             print(formatter.format(message: "Created tag: \(tag.name)"))
         }
@@ -125,6 +134,9 @@ struct TagsDeleteCommand: AsyncParsableCommand {
 
         WARNING: This will remove the tag from all todos that have it.
         Use --force to skip the confirmation prompt.
+
+        This removes a tag definition, not the tagged todos. Undo cannot restore
+        this operation; review the exact name before confirming.
 
         EXAMPLES:
           clings tags delete "old-tag"
@@ -147,14 +159,9 @@ struct TagsDeleteCommand: AsyncParsableCommand {
             throw ThingsError.invalidState("Tag name cannot be empty")
         }
 
-        // Confirmation unless --force
-        if !force {
-            print("Delete tag '\(trimmedName)'? This will remove it from all todos. [y/N] ", terminator: "")
-            guard let response = CommandRuntime.inputReader()?.lowercased(),
-                  response == "y" || response == "yes" else {
-                print("Cancelled")
-                return
-            }
+        guard try confirmMutation("Delete tag '\(trimmedName)'? This removes it from all todos and cannot be undone.", authorized: force) else {
+            try printOutcome(MutationOutcome(applied: false, undoRecorded: false, message: "Canceled request; no change applied"), output: output)
+            return
         }
 
         let client = CommandRuntime.makeClient()
@@ -164,7 +171,7 @@ struct TagsDeleteCommand: AsyncParsableCommand {
             ? JSONOutputFormatter()
             : TextOutputFormatter(useColors: !output.noColor)
 
-        print(formatter.format(message: "Deleted tag: \(trimmedName)"))
+        print(CLIResponse.render(formatter.format(message: "Deleted tag: \(trimmedName)"), output: output))
     }
 }
 
@@ -178,6 +185,9 @@ struct TagsRenameCommand: AsyncParsableCommand {
         Renames an existing tag in Things 3.
 
         All todos with the old tag name will automatically have the new name.
+
+        Quote names containing spaces. The alias is tags mv. This changes the
+        shared tag definition and is not recorded by clings undo.
 
         EXAMPLES:
           clings tags rename "old-name" "new-name"
@@ -215,6 +225,6 @@ struct TagsRenameCommand: AsyncParsableCommand {
             ? JSONOutputFormatter()
             : TextOutputFormatter(useColors: !output.noColor)
 
-        print(formatter.format(message: "Renamed tag: \(trimmedOld) -> \(trimmedNew)"))
+        print(CLIResponse.render(formatter.format(message: "Renamed tag: \(trimmedOld) -> \(trimmedNew)"), output: output))
     }
 }

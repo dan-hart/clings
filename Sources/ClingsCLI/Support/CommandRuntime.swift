@@ -4,9 +4,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import ClingsCore
+import Darwin
 import Foundation
 
 enum CommandRuntime {
+    @TaskLocal static var persistPlan: @Sendable (BatchPlan, String) throws -> Void = { plan, path in try plan.save(path: path) }
+    @TaskLocal static var isTerminal: @Sendable () -> Bool = { isatty(STDIN_FILENO) == 1 }
     @TaskLocal static var makeClient: @Sendable () -> any ThingsClientProtocol = {
         ThingsClientFactory.create()
     }

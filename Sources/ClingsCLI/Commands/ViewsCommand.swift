@@ -14,6 +14,9 @@ struct ViewsCommand: AsyncParsableCommand {
         discussion: """
         Save named filter expressions so you can reuse them without retyping DSL.
 
+        With no subcommand, lists views. Definitions are local to clings, not
+        saved inside Things. Relative dates such as today are evaluated on run.
+
         EXAMPLES:
           clings views save docs "tags CONTAINS 'docs'" --note "Documentation queue"
           clings views list
@@ -38,6 +41,8 @@ struct ViewsListCommand: ParsableCommand {
         Show every saved view name, the filter expression it runs, and any note you
         stored alongside it.
 
+        --json returns a schema 1 envelope with an array of definitions under data.
+
         EXAMPLES:
           clings views list
           clings views ls --json
@@ -54,7 +59,7 @@ struct ViewsListCommand: ParsableCommand {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             encoder.dateEncodingStrategy = .iso8601
             let data = try encoder.encode(views)
-            print(String(data: data, encoding: .utf8) ?? "[]")
+            print(CLIResponse.success(String(decoding: data, as: UTF8.self)))
             return
         }
 
@@ -80,13 +85,16 @@ struct ViewsSaveCommand: ParsableCommand {
         discussion: """
         Store a reusable filter expression under a short name.
 
+        Saving an existing name replaces its definition. Quote the expression
+        as one shell argument. No Things todos are changed by saving a view.
+
         EXAMPLES:
           clings views save docs-today "tags CONTAINS 'docs' AND due <= today"
           clings views save docs "tags CONTAINS 'docs'" --note "Documentation queue"
         """
     )
 
-    @Argument(help: "View name")
+    @Argument(help: "View name", completion: SavedNameCompletion.viewKind)
     var name: String
 
     @Argument(help: "Filter expression")
@@ -95,9 +103,11 @@ struct ViewsSaveCommand: ParsableCommand {
     @Option(name: .long, help: "Optional description for this view")
     var note: String?
 
+    @OptionGroup var output: OutputOptions
+
     func run() throws {
         try SavedViewStore.save(SavedView(name: name, expression: expression, note: note))
-        print("Saved view: \(name)")
+        print(renderMessage("Saved view: \(name)", output: output))
     }
 }
 
@@ -109,6 +119,9 @@ struct ViewsRunCommand: AsyncParsableCommand {
         Load a saved view by name, evaluate its filter expression, and render the
         matching open todos.
 
+        Uses the same open-list scope as filter; Logbook is excluded. --json
+        returns {count, items, list} under data. --format customizes todo lines only.
+
         EXAMPLES:
           clings views run docs-today
           clings views run docs --json
@@ -116,10 +129,11 @@ struct ViewsRunCommand: AsyncParsableCommand {
         """
     )
 
-    @Argument(help: "View name")
+    @Argument(help: "View name", completion: SavedNameCompletion.viewKind)
     var name: String
 
     @OptionGroup var output: OutputOptions
+    @OptionGroup var queryOptions: QueryOptions
 
     func run() async throws {
         guard let view = try SavedViewStore.load(name: name) else {
@@ -128,7 +142,7 @@ struct ViewsRunCommand: AsyncParsableCommand {
 
         let filter = try FilterParser.parse(view.expression)
         let client = CommandRuntime.makeClient()
-        let todos = try await fetchOpenTodos(client: client).filter { filter.matches($0) }
+        let todos = try await queryOptions.apply(queryOptions.fetch(client: client).filter { filter.matches($0) })
         print(renderTodos(todos, list: view.name, output: output))
     }
 }
@@ -140,6 +154,8 @@ struct ViewsDeleteCommand: ParsableCommand {
         discussion: """
         Remove a saved view you no longer need.
 
+        Deletes only the local definition, never matching Things todos.
+
         EXAMPLES:
           clings views delete docs-today
           clings views rm docs
@@ -147,13 +163,15 @@ struct ViewsDeleteCommand: ParsableCommand {
         aliases: ["rm"]
     )
 
-    @Argument(help: "View name")
+    @Argument(help: "View name", completion: SavedNameCompletion.viewKind)
     var name: String
+
+    @OptionGroup var output: OutputOptions
 
     func run() throws {
         guard try SavedViewStore.delete(name: name) else {
             throw ValidationError("Saved view not found: \(name)")
         }
-        print("Deleted view: \(name)")
+        print(renderMessage("Deleted view: \(name)", output: output))
     }
 }
