@@ -51,7 +51,9 @@ struct DoctorCommand: AsyncParsableCommand {
                 let platform: String
                 let report: DoctorReport
             }
-            let bundle = Bundle(version: Clings.configuration.version, platform: ProcessInfo.processInfo.operatingSystemVersionString, report: report)
+            var bundledReport = report
+            bundledReport.supportBundleCreated = true
+            let bundle = Bundle(version: Clings.configuration.version, platform: ProcessInfo.processInfo.operatingSystemVersionString, report: bundledReport)
             let data = try encoder.encode(bundle)
             let path = URL(fileURLWithPath: supportBundle).path
             let descriptor = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, S_IRUSR | S_IWUSR)

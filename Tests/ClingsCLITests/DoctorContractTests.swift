@@ -129,6 +129,8 @@ struct DoctorContractTests {
                 _ = try await CommandTestSupport.captureStandardOutput { try await command.run() }
                 let original = try Data(contentsOf: bundle)
                 let object = try JSONSerialization.jsonObject(with: original)
+                let bundleReport = (object as? [String: Any])?["report"] as? [String: Any]
+                #expect(bundleReport?["supportBundleCreated"] as? Bool == true)
                 #expect(!strings(in: object).contains { $0.contains("private-doctor-token") || $0.contains(directory.path) })
                 let permissions = try FileManager.default.attributesOfItem(atPath: bundle.path)[.posixPermissions] as? NSNumber
                 #expect(permissions?.intValue == 0o600)
