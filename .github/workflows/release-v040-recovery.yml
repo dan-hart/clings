@@ -1,0 +1,88 @@
+name: Recover v0.4.0 release
+
+on:
+  push:
+    branches:
+      - task/release-v040-recovery
+
+permissions:
+  contents: read
+  checks: read
+
+concurrency:
+  group: release-v0.4.0
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Release ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    env:
+      RELEASE_TAG: v0.4.0
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v0.4.0
+          fetch-depth: 0
+      - name: Verify main and exact-commit CI
+        run: |
+          # Restore the annotation if checkout materializes the tag as a commit ref.
+          # This updates the runner's local ref only; the published tag never moves.
+          git fetch --force origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          git fetch origin main
+          bash scripts/release-preflight.sh "$RELEASE_TAG" --tag-checkout
+          bash scripts/release-ci-check.sh "$(git rev-parse HEAD)"
+      - name: Build and test
+        run: |
+          swift build --force-resolved-versions
+          swift test --force-resolved-versions
+          swift build -c release --force-resolved-versions
+      - name: Package binary and completions
+        run: bash scripts/package-release.sh "${RELEASE_TAG#v}" '${{ matrix.arch }}' "$RUNNER_TEMP/release-assets"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clings-${{ matrix.arch }}
+          path: ${{ runner.temp }}/release-assets/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    name: Publish verified release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: v0.4.0
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v0.4.0
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: clings-*
+          path: release-assets
+          merge-multiple: true
+      - name: Checksums and notes
+        run: |
+          test -s "release-assets/clings-$RELEASE_TAG-macos-arm64.tar.gz"
+          test -s "release-assets/clings-$RELEASE_TAG-macos-x86_64.tar.gz"
+          (cd release-assets && sha256sum *.tar.gz > SHA256SUMS)
+          bash scripts/verify-release-assets.sh release-assets "$RELEASE_TAG" "$(git rev-parse HEAD)"
+          bash scripts/release-notes.sh "$RELEASE_TAG" > "$RUNNER_TEMP/release-notes.md"
+      - name: Publish
+        run: |
+          gh release create "$RELEASE_TAG" --verify-tag --title "$RELEASE_TAG" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" release-assets/*.tar.gz release-assets/SHA256SUMS
