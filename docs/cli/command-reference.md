@@ -178,14 +178,16 @@ terminal or navigate Things manually.
 
 | Option | Behavior |
 | --- | --- |
-| `--json` | JSON where implemented; takes precedence over `--format` |
+| `--json` | Schema 1 JSON envelope; takes precedence over `--format` |
 | `--no-color` | Suppress ANSI colors in output paths that use them |
 | `--format TEMPLATE` | Custom todo line: `{id}`, `{name}`, `{status}`, `{due}`, `{project}`, `{area}`, `{tags}` |
 
 Put options after the command, such as `clings inbox --json`. Although many
 commands accept the shared option group, not all renderers honor every option.
-Review remains text; pick and bulk can mix prompts/previews with JSON. There
-are no root-level global output options shared across all commands.
+JSON payloads live under `.data`; errors include `.error` and nonzero exits.
+Review and bulk support structured reports; `pick --json` is rejected before
+reads/writes. Help/version/completions remain text. There are no root-level
+global output options shared across all commands.
 
 ### add TITLE
 
@@ -225,11 +227,11 @@ requiring a URL token or performing writes.
 
 - `complete` (alias `done`) accepts `--title`/`-t` instead of an ID. It searches
   text and completes only when one open todo matches. Multiple matches print
-  candidates without a write; `--title` takes precedence over a supplied ID.
+  candidates without a write and exit 1; `--title` takes precedence over a supplied ID.
 - `cancel` marks the todo canceled immediately, without confirmation.
 - `delete` (alias `rm`) also cancels through the current automation API. It
-  does not move to Trash. `--force`/`-f` is accepted but no confirmation prompt
-  is implemented; the write happens immediately.
+  does not move to Trash. Confirmation is required unless `--force`/`-f` is
+  supplied. Noninteractive invocation without authorization fails.
 
 All three record supported undo entries. Use exact IDs from a list or `show`,
 not an assumed unique title. These commands accept shared output options, but
@@ -254,7 +256,7 @@ Supported fields/operators and date boundaries are documented in
 
 | Subcommand | Arguments/options | Effect |
 | --- | --- | --- |
-| `list` (`ls`, default) | Shared output options | List definitions; JSON is a bare array |
+| `list` (`ls`, default) | Shared output options | List definitions; JSON payload `.data` is an array |
 | `save` | `NAME EXPRESSION [--note TEXT]` | Save/replace local definition; does not validate the full DSL until run |
 | `run` | `NAME` plus output options | Query open tasks; relative dates resolve now |
 | `delete` (`rm`) | `NAME` | Delete only the local definition |
@@ -266,30 +268,32 @@ They do not create smart lists inside Things.
 
 | Subcommand | Arguments/options | Effect |
 | --- | --- | --- |
-| `list` (`ls`, default) | Shared output options | List definitions; JSON is a bare array |
+| `list` (`ls`, default) | Shared output options | List definitions; JSON payload `.data` is an array |
 | `save` | `NAME TITLE` plus defaults below | Save/replace a local task blueprint |
 | `run` | `NAME` plus output options | Create a Things todo and record creation undo |
 | `delete` (`rm`) | `NAME` | Remove definition; existing todos remain |
 
 Save defaults: `--notes`, `--when`, `--deadline`, `--project`, `--area`,
 `--tags TAG...`, `--checklist ITEM...`. Quote each multiword checklist item.
-Relative dates embedded in TITLE are retained as schedule defaults; explicit
-date options. Their relative expressions resolve when run. With template save,
+Relative dates embedded in TITLE are retained as defaults; explicit date options
+override them. Their relative expressions resolve when run. With template save,
 explicit tags replace parsed tags; with add --template, tags combine.
 
 ### bulk
 
 Actions: `complete`, `cancel`, `tag TAGS`, and `move --to PROJECT`.
 Shared options: `--list LIST` (default `today`), `--where EXPRESSION`,
-`--dry-run`, `--yes`/`-y`, and output options. List values are `today`, `inbox`,
+`--dry-run`, `--execute-plan PATH`, `--yes`/`-y`, and output options. List values are `today`, `inbox`,
 `upcoming`, `anytime`, `someday`, and `logbook` (not their CLI aliases).
 
 `--where` narrows the selected list; omitting it selects the whole list. Every
 nonempty write prompts unless `--yes` is supplied. `--dry-run` previews and exits
 before the prompt or writes. `tag` takes one comma-separated argument and merges
-existing tags. Complete/cancel/move report successful and failed writes; tagging
-can stop on a failure. There is no atomic rollback or bulk undo history. Even
-`--json` can include text previews. Inspect reported counts, not just exit status.
+existing tags. A JSON dry-run produces a reusable exact-ID plan. Execution checks
+snapshots and persists per-item results; retries skip successes and reconcile
+interrupted writes. There is no atomic rollback. Status/tag batches support
+grouped undo; project moves do not. Partial failures return exit 2. Keep plan
+files private, and never redirect stdout onto an executing plan file.
 
 ### project, projects, areas, tags
 
@@ -312,13 +316,14 @@ does not delete todos. Project/tag management is not covered by undo.
 - `pick show|complete|cancel|delete [QUERY]` prompts for a displayed number or
   exact ID. Show includes historical work; writes restrict candidates to open
   tasks. An empty or invalid choice stops the command. `pick delete` cancels,
-  matching direct delete. Prompts remain text with `--json`.
+  matching direct delete and requiring confirmation. `--json` is rejected before
+  selection or writes; use exact-ID commands for scripting.
 - `undo --show` inspects the latest entry; `undo` attempts its reversal. History
   holds up to 20 entries. Supported operations: creation, update, completion,
-  cancellation, deletion. Creation undo cancels; status undo reopens; update
+  cancellation, deletion, and grouped status/tag changes. Creation undo cancels; status undo restores the original status; update
   undo restores name/notes/deadline/tags. It does not restore schedule/headings,
-  nor cover bulk writes or project/tag management. Entries are popped before
-  reversal, so failures consume them.
+  or project moves, nor cover project/tag management. Entries remain until
+  reversal succeeds; partially reversed groups retain unfinished members.
 
 ### stats and review
 
@@ -328,18 +333,22 @@ JSON report output. `--days` belongs to the dashboard, not its subcommands.
 
 `review start` (default) generates a weekly report and saves local session
 progress; it does not mutate Things todos. `review status` reads progress and
-`review clear` clears that session only. Review reports/status stay text despite
-accepting `--json`. Progress is stored as `review-session.json` in the config
+`review clear` clears that session only. Review reports/status support `--json`.
+Progress is stored as `review-session.json` in the config
 directory, with a legacy fallback path under `~/.clings`.
 
 ### doctor, config, completions, open
 
-`doctor [--verbose] [--json]` checks config storage, database opening,
-`osascript` availability, and auth-token presence. It does not test automation
-permission; warnings appear in the report without a failing process status.
+`doctor [--verbose] [--json]` checks config readiness without creating it, actual
+database readability, `osascript`, optional token presence, and capabilities.
+Required failures return exit 2; optional token warnings do not. Opt into a
+read-only Things version query with `--probe-automation`. JSON is redacted even
+with `--verbose`; `--support-bundle NEW_FILE` creates a private redacted report
+without overwriting existing files.
 
 `config set-auth-token TOKEN` stores the secret with mode 0600 for update
 scheduling/headings. See [Getting started](getting-started.md) for token handling
-and `CLINGS_CONFIG_DIR`. `completions bash|zsh|fish` prints a completion script;
+and `CLINGS_CONFIG_DIR`. `completions bash|zsh|fish` prints a parser-generated script
+with local saved view/template name completion;
 installation and shell initialization are separate steps. `open TARGET` is
 currently disabled and always raises an error.

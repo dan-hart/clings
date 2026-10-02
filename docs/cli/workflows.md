@@ -63,12 +63,12 @@ clings add "Prepare next release" --template release-prep --parse-only --json
 clings template run release-prep
 ```
 
-The template retains date expressions, not a fixed creation-time date. Explicit template options store scheduling; a date found only in the title is not retained as a template scheduling default. `add --template` lets you override the title and other defaults. Tags combine; supplied checklist items replace the template checklist.
+The template retains date expressions, not a fixed creation-time date, including supported dates embedded in the title. `add --template` lets you override the title and other defaults. Explicit scalar options win. Tags combine; supplied checklist items replace the template checklist.
 
 ## 6. Triage an inbox in batches
 
 ```bash
-clings inbox --json | jq -r '.items[] | [.id, .name] | @tsv'
+clings inbox --json | jq -r '.data.items[] | [.id, .name] | @tsv'
 clings bulk move --list inbox --where "tags CONTAINS 'docs'" \
   --to "Documentation" --dry-run
 ```
@@ -79,7 +79,7 @@ After inspecting the preview:
 clings bulk move --list inbox --where "tags CONTAINS 'docs'" --to "Documentation"
 ```
 
-The command prompts before writing. It cannot roll back a partial batch and does not record bulk undo history. Use a small selection first. The filter never expands selection beyond the chosen list.
+The command previews exact IDs and changes before confirmation. Writes remain sequential and cannot roll back a partial batch. Status/tag batches record grouped undo; project moves are not reversible. The filter never expands selection beyond the chosen list. For a reusable selection, save `--dry-run --json` to a private plan file and execute it with `--execute-plan PATH --yes`. Execution persists results in that file; never redirect stdout onto it. Retry the same plan to skip completed writes and process unfinished items.
 
 ## 7. Find the right task without copying an ID
 
@@ -88,7 +88,7 @@ clings pick show release
 clings pick complete release
 ```
 
-Enter a displayed number or exact ID. The completion action only offers open tasks. `pick show` can include historical work. These are interactive workflows; do not expect `--json` to remove the prompt.
+Enter a displayed number or exact ID. The completion action only offers open tasks. `pick show` can include historical work. These are interactive workflows: `--json` is rejected before selection or writes.
 
 For scripts, use a known exact ID:
 
@@ -108,14 +108,14 @@ clings someday --format "{name} [{project}] {due}"
 clings stats --days 7
 ```
 
-Review generates guidance and stores local session progress; it does not process your inbox or update tasks automatically. Audit highlights open-project issues. `review status` reads saved progress; `review clear` resets only the review session. Review output is text, even when `--json` is passed.
+Review generates guidance and stores local session progress; it does not process your inbox or update tasks automatically. Audit highlights open-project issues. `review status` reads saved progress; `review clear` resets only the review session. Use `--json` for structured review reports.
 
 ## 9. Export completed work
 
 ```bash
 clings logbook --json | jq -r '
   ["Task", "Project", "Status"],
-  (.items[] | select(.status == "completed") |
+  (.data.items[] | select(.status == "completed") |
     [.name, (.project // ""), .status]) | @csv'
 ```
 
@@ -128,4 +128,4 @@ clings undo --show
 clings undo
 ```
 
-Undo supports recorded single-todo creation, update, completion, cancellation, and deletion. Undoing creation cancels the todo; undoing completion/cancellation/deletion reopens it. Update undo restores the recorded name, notes, deadline, and tags, not the schedule or heading. It does not cover bulk actions, project/tag management, or changes made directly in Things. A failed reversal consumes the entry, so inspect errors and the Things task itself.
+Undo supports recorded creation, update, status changes, and grouped status/tag batches. Undoing creation cancels the todo; status undo restores the original status. Update undo restores recorded name, notes, deadline, and tags, including absent values, not schedule or heading. Project moves, project/tag management, and changes made directly in Things are outside this guarantee. Failed reversals and unreversed group members remain in history for retry. Inspect both errors and the current task before retrying.

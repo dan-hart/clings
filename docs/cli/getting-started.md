@@ -52,7 +52,7 @@ clings add "Draft outline tomorrow #writing" --parse-only --json
 
 `--parse-only` previews parsing without creating a todo or requiring a Things write. Inspect the extracted title and dates, then remove the flag to create it.
 
-Use `clings doctor --verbose` when setup is unclear. It checks config storage, database access, presence of `osascript`, and token configuration. It does not test automation authorization, and warnings do not currently change its exit status.
+Use `clings doctor --verbose` when setup is unclear. It checks config readiness, actual database readability, `osascript`, and token configuration without creating config. Missing tokens are optional warnings; required failures return exit 2. Opt into a read-only automation query with `--probe-automation`; it may launch Things or show a permission prompt. JSON and support bundles redact private paths and secrets.
 
 ## Automation permission
 
@@ -99,6 +99,11 @@ This separates clings configuration, not Things accounts or databases. Templates
 ## Shell completions
 
 The `completions` command prints a script; it does not install it. Create the destination directory first.
+
+Scripts are generated from the command tree and complete local saved view/template
+names without querying Things or creating missing config. Suggestions allow letters,
+numbers, spaces, hyphens, underscores, and periods. Names containing other shell
+metacharacters are omitted for safety; type those names explicitly.
 
 ### zsh
 

@@ -29,7 +29,7 @@ clings focus --limit 5
 
 # Find open work with a deadline
 clings filter "tags CONTAINS 'docs' AND due IS NOT NULL" --json \
-  | jq -r '.items[] | [.name, (.dueDate // "—")] | @tsv'
+  | jq -r '.data.items[] | [.name, (.dueDate // "—")] | @tsv'
 
 # Preview a batch before changing anything
 clings bulk move --list inbox --where "tags CONTAINS 'docs'" \
@@ -45,8 +45,8 @@ clings bulk move --list inbox --where "tags CONTAINS 'docs'" \
 | 🧩 Reusable workflows | Save named filter views and task templates with relative date defaults |
 | ⚙️ Shell composition | Use JSON and custom todo-line templates with `jq`, scripts, and reports |
 | 🎯 Focus and review | Rank open work, audit projects, and generate weekly review reports |
-| 📦 Bulk actions | Preview and confirm completion, cancellation, tagging, and project moves |
-| ↩️ Limited undo | Reverse supported recent single-todo operations; inspect the history first |
+| 📦 Resumable batches | Save exact-ID plans, confirm once, and retry unfinished items without repeating successes |
+| ↩️ Retryable undo | Reverse supported single-todo and grouped status/tag changes; retain failed reversals |
 
 ## Get started
 
@@ -133,28 +133,28 @@ Templates retain relative dates from both embedded phrases and `--when`/`--deadl
 # TSV for a spreadsheet or terminal report (requires jq)
 clings today --json | jq -r '
   ["ID", "Task", "Project", "Deadline"],
-  (.items[] | [.id, .name, (.project // ""), (.dueDate // "")]) | @tsv'
+  (.data.items[] | [.id, .name, (.project // ""), (.dueDate // "")]) | @tsv'
 
 # Completed work only, excluding canceled Logbook entries
 clings logbook --json \
-  | jq -r '.items[] | select(.status == "completed") | .name'
+  | jq -r '.data.items[] | select(.status == "completed") | .name'
 
 # A compact text queue
 clings focus --limit 5 --format "{name} [{project}] {tags}"
 ```
 
-### Triage an inbox with a preview
+### Save and execute an exact-ID batch
 
 ```bash
-clings bulk move --list inbox --where "tags CONTAINS 'docs'" \
-  --to "Documentation" --dry-run
+umask 077
+clings bulk complete --list inbox --where "tags CONTAINS 'done'" \
+  --dry-run --json > completion-plan.json
 
-# After reviewing the selection, repeat without --dry-run
-clings bulk move --list inbox --where "tags CONTAINS 'docs'" \
-  --to "Documentation"
+# Review the plan before explicitly authorizing its exact IDs
+clings bulk complete --execute-plan completion-plan.json --yes --json
 ```
 
-Bulk filters apply **only to the selected list** (default: Today). Without a filter, the entire list is selected. Every nonempty write prompts unless `--yes` is supplied. Bulk writes are sequential, may partially succeed, and are not covered by undo.
+Bulk filters apply **only to the selected list** (default: Today). Without a filter, the entire list is selected. Every nonempty write prompts unless `--yes` is supplied. Plans reject stale snapshots and retain per-item results; retrying skips successes. Execution updates the plan file in place: never redirect stdout onto that same file. Status/tag batches support grouped undo; project moves do not.
 
 ## Find the right command
 
@@ -165,7 +165,7 @@ Bulk filters apply **only to the selected list** (default: Today). Without a fil
 | `upcoming` | Future scheduled work; alias `u` |
 | `anytime` | Available unscheduled work |
 | `someday` | Someday/maybe tasks; alias `s` |
-| `logbook` | Completed/canceled history; alias `l` |
+| `logbook` | Completed history; alias `l`; query history scopes also include canceled tasks |
 | `search` | Title/notes search; aliases `find`, `f` |
 | `filter` | Structured queries over open lists |
 | `show` | Inspect one exact todo ID |
@@ -183,8 +183,8 @@ Bulk filters apply **only to the selected list** (default: Today). Without a fil
 | `bulk` | Preview/execute `complete`, `cancel`, `tag`, `move` |
 | `focus` | Ranked working queue |
 | `pick` | Interactive `show`, `complete`, `cancel`, `delete` |
-| `undo` | Inspect/reverse supported recent single-todo mutations |
-| `doctor` | Local setup diagnostics |
+| `undo` | Inspect/reverse supported recent mutations and groups |
+| `doctor` | Read-only capability checks and redacted support bundles |
 | `stats` | Dashboard, `trends`, `heatmap` |
 | `review` | Weekly report: `start`, `status`, `clear` |
 | `config` | `set-auth-token` for schedule/heading updates |
@@ -204,9 +204,9 @@ Most output commands accept `--json` and `--no-color`. Todo renderers also accep
 
 - **Reads:** SQLite access is read-only. clings does not write directly to the Things database.
 - **Writes:** Things’ AppleScript/JXA automation APIs perform writes. `update --when` and `update --heading` additionally use Things URLs and need an auth token; `add --when` does not.
-- **Delete:** The automation implementation cancels a todo; it does not move it to Trash. It currently runs without confirmation even when `--force` is omitted. Use Things itself for permanent deletion.
-- **Undo:** Covers supported single-todo changes, not bulk writes or project/tag management. Schedule and heading changes cannot be restored. Inspect `clings undo --show` first.
-- **JSON:** Lists, search, filter, and saved-view results are suitable for pipelines. Interactive picking, bulk previews, and review reports may still emit text despite `--json`.
+- **Delete:** Cancels a todo; it does not move it to Trash. Confirmation is required unless `--force` is supplied. Noninteractive deletion without explicit authorization fails. Use Things itself for permanent deletion.
+- **Undo:** Covers creation, status, name, notes, deadline, tags, and supported grouped status/tag changes. Failed reversals remain retryable. Schedule, heading, project moves, and project/tag management are not fully reversible; inspect `clings undo --show` first.
+- **JSON:** Schema 1 responses wrap payloads in `.data`, including previews and review reports. Failures include `.error` and preserve partial results. Exit 1 means invalid/refused input; exit 2 means runtime or partial failure. `pick --json` is rejected without writes. Help, version, and completion scripts remain text.
 - **Priority:** Natural-language priority markers are parsed, but are not applied as a native Things priority. Use tags such as `urgent` with `focus`.
 
 Keep independent backups; synchronization is not a substitute for recoverable backups. Details are in the [command reference](docs/cli/command-reference.md) and [troubleshooting guide](docs/cli/troubleshooting.md).
@@ -218,7 +218,9 @@ Keep independent backups; synchronization is not a substitute for recoverable ba
 - [Workflow cookbook](docs/cli/workflows.md): capture, planning, templates, bulk triage, and reporting
 - [Filtering and scripting](docs/cli/filtering-and-scripting.md): query syntax, JSON shapes, `jq`, and shell patterns
 - [Troubleshooting](docs/cli/troubleshooting.md): diagnosis, dates, permissions, and unexpected results
-- [Ten proposed improvements](docs/cli/improvement-roadmap.md): source-based ideas for the next iterations
+- [Machine interface and migration](docs/cli/machine-interface.md): JSON schema, exits, plans, and mutation guarantees
+- [Generated reference](docs/cli/generated-reference.md): options generated from the actual parser
+- [Ten improvements delivered](docs/cli/improvement-roadmap.md): v0.4.0 changes and remaining boundaries
 
 ## Development and contributions
 

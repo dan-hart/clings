@@ -12,7 +12,7 @@ clings COMMAND --help
 
 Replace `COMMAND` with the failing command. Record the version, exact command, error message, macOS version, and whether it fails on a read or write. Redact auth tokens, task notes, and personal paths before sharing diagnostics.
 
-`doctor` checks local config/database/runtime availability. It does not prove automation permission or successful communication with Things. It may create the config directory. Missing auth tokens produce warnings even if you only use commands that do not need them.
+`doctor` checks actual database readability, config readiness, runtime presence, and supported capabilities without creating config. Missing auth tokens are optional warnings, not read-only health failures. Required failures return exit 2. Use `--probe-automation` to opt into a read-only Things version query; it may launch Things or display a permission prompt. JSON stays redacted even with `--verbose`. `--support-bundle NEW_FILE` creates a private redacted file without overwriting one.
 
 ## Reads work, writes fail
 
@@ -52,29 +52,29 @@ Today includes relevant previously activated open work and due/overdue deadlines
 
 ## Filters return no completed work
 
-`filter` and saved views read open lists only. `status = completed` cannot expand their scope. Use:
+`filter` and saved views default to open lists. `status = completed` cannot expand their scope. Use `--include-logbook`, `--list logbook`, or:
 
 ```bash
-clings logbook --json | jq '.items[] | select(.status == "completed")'
+clings filter "status = completed" --include-logbook --json | jq '.data.items[]'
 ```
 
 Check field spelling, expression quotes, date boundaries, and the distinction between a project name and an ID. Bulk `--where` only filters its selected `--list`.
 
 ## jq reports invalid JSON
 
-First inspect the command output directly. `pick` menus, bulk previews/prompts, review reports, and ambiguous `complete --title` output may contain plain text despite `--json`. Use list/search/filter JSON for pipelines. List results use `.items[]`; `show` is a single object; views/template definitions use bare arrays.
+Confirm the installed version: v0.4.0 uses schema 1 envelopes, with command payloads under `.data`. List results use `.data.items[]`; show uses `.data.id`; saved definitions use `.data[]`. Failures are JSON too, with `.error` and a nonzero exit. `pick --json` is deliberately rejected before reads or writes. Help, version, and completion scripts remain text. Use `set -o pipefail` so a successful `jq` does not hide a CLI failure.
 
 ## Delete did not put a task in Trash
 
-The current automation implementation sets status to canceled. Both `delete` and `pick delete` use that behavior. Single-task delete has no implemented confirmation prompt; `--force` is a compatibility flag. Use Things itself for trash/permanent deletion. `undo` can reopen a recorded cancellation, but does not recover arbitrary deleted data.
+The automation implementation sets status to canceled. Both `delete` and `pick delete` use that behavior and require confirmation unless explicitly authorized with `--force`. Noninteractive deletion without authorization fails. Use Things itself for Trash/permanent deletion. Undo restores a recorded original status, but does not recover arbitrary deleted data.
 
 ## A bulk command only partly worked
 
-Bulk writes are sequential and do not roll back earlier successes. Complete/cancel/move report success/failure counts; tagging can stop at the first failure. Inspect the actual remaining tasks before retrying so you do not repeat unintended actions. A successful process exit alone is not proof that every item succeeded. Bulk operations are not recorded in undo history.
+Bulk writes are sequential and do not roll back earlier successes. Partial failure returns exit 2 and retains per-item results. Saved plans persist progress; retry the same `--execute-plan` file to skip successful writes and reconcile interrupted ones. Conflicting snapshots require inspection rather than blind retry. Status/tag batches support grouped undo; project moves do not. Never redirect stdout onto the executing plan file.
 
 ## Undo did not restore everything
 
-`undo --show` displays the latest supported entry. Bulk writes, project/tag management, and changes outside clings are not recorded. Update snapshots do not restore scheduling or headings. Entries are removed before reversal, so failures consume them. Use your Things backups for recovery beyond these limits.
+`undo --show` displays the latest supported entry. Project/tag management and changes outside clings are not recorded. Update snapshots do not restore scheduling, headings, or project moves. Entries remain until reversal succeeds; partially reversed groups retain unfinished members. A journal storage failure after a write reports `applied: true` and `undoRecorded: false`, not a rollback. Inspect the real task and use Things backups for recovery beyond these limits.
 
 ## open returns an error
 

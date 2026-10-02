@@ -23,20 +23,19 @@ Generate coverage artifacts:
 
 ```bash
 swift test --enable-code-coverage
+bash scripts/coverage-check.sh
 ```
 
 The project measures coverage against files in `Sources/`, not bundled dependencies. This command reports the source-only total:
 
 ```bash
-xcrun llvm-cov export -summary-only \
-  .build/arm64-apple-macosx/debug/clingsPackageTests.xctest/Contents/MacOS/clingsPackageTests \
-  -instr-profile=.build/arm64-apple-macosx/debug/codecov/default.profdata |
-  jq --arg sourcesPrefix "$(pwd)/Sources/" \
+clings_coverage_report="$(swift test --show-codecov-path)"
+jq --arg sourcesPrefix "$(pwd)/Sources/" \
      '[.data[0].files[] | select(.filename | startswith($sourcesPrefix))] |
       {files: length,
        lines_total: (map(.summary.lines.count) | add),
        lines_covered: (map(.summary.lines.covered) | add),
-       line_percent: ((map(.summary.lines.covered) | add) / (map(.summary.lines.count) | add) * 100)}'
+       line_percent: ((map(.summary.lines.covered) | add) / (map(.summary.lines.count) | add) * 100)}' "$clings_coverage_report"
 ```
 
 ## File-Level Drilldown
@@ -44,13 +43,11 @@ xcrun llvm-cov export -summary-only \
 Use this report to spot low-coverage files inside `Sources/`:
 
 ```bash
-xcrun llvm-cov export -summary-only \
-  .build/arm64-apple-macosx/debug/clingsPackageTests.xctest/Contents/MacOS/clingsPackageTests \
-  -instr-profile=.build/arm64-apple-macosx/debug/codecov/default.profdata |
-  jq -r --arg sourcesPrefix "$(pwd)/Sources/" '.data[0].files[] |
+clings_coverage_report="$(swift test --show-codecov-path)"
+jq -r --arg sourcesPrefix "$(pwd)/Sources/" '.data[0].files[] |
          select(.filename | startswith($sourcesPrefix)) |
          [.summary.lines.percent, .summary.lines.count, .summary.lines.covered, .filename] |
-         @tsv' |
+         @tsv' "$clings_coverage_report" |
   sort -n
 ```
 
@@ -61,6 +58,7 @@ Before cutting a release:
 ```bash
 swift test
 swift test --enable-code-coverage
+bash scripts/coverage-check.sh
 swift build
 swift build -c release
 bash scripts/release-docs-check.sh
@@ -70,3 +68,4 @@ bash scripts/release-docs-check.sh
 
 - Prefer source-only coverage when discussing the project target. Dependency coverage from `swift-argument-parser`, GRDB, and SwiftDate will otherwise dilute the total.
 - Keep command help and `docs/` aligned. If you add a new command family, update the command reference and rerun the docs check script.
+- `coverage-check.sh` reads SwiftPM's exported report and rejects source-only line coverage below 80%, or database/shared query-validation coverage below 95%. Run an instrumented test suite first so the report is current. Error paths also need explicit failure/partial-result tests; aggregate line coverage is not proof of safety.

@@ -23,7 +23,22 @@ jobs:
         run: swift build --force-resolved-versions
 
       - name: Test
-        run: swift test --force-resolved-versions
+        run: swift test --force-resolved-versions --enable-code-coverage
+
+      - name: Verify source coverage
+        run: bash scripts/coverage-check.sh
+
+      - name: Verify CLI reference and examples
+        run: |
+          ruby scripts/generate-reference.rb .build/debug/clings --check
+          ruby scripts/cli-contract-check.rb .build/debug/clings
+          bash scripts/release-docs-check.sh
+
+      - name: Verify release safety gates
+        run: |
+          bash scripts/tests/release-preflight-test.sh
+          bash scripts/tests/release-ci-test.sh
+          bash scripts/tests/release-assets-test.sh
 
       - name: Build Release
         run: swift build -c release --force-resolved-versions

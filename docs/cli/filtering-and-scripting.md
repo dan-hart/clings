@@ -10,7 +10,7 @@
 | `filter EXPR` | Open tasks across Today, Inbox, Upcoming, Anytime, and Someday; duplicates removed |
 | `views run NAME` | Same open-list scope as `filter` |
 | `bulk ACTION --list LIST --where EXPR` | Only the selected Things list; defaults to Today |
-| `logbook --json` | Historical list; use `jq` to select completed or canceled records |
+| `logbook --json` | Existing completed-history view; query `--list logbook`/`--include-logbook` also includes canceled records |
 
 A query such as `status = completed` needs `--include-logbook` or `--list logbook`.
 Search, filter, and view execution share `--list`, `--include-logbook`, `--sort`,
@@ -79,29 +79,35 @@ clings filter "due IS NULL AND project IS NULL"  # No deadline or project
 
 ## JSON shapes
 
-Output schemas vary by command. Do not assume every result is a bare array.
+Every JSON response uses schema 1: `{schemaVersion, success, data}`. Failures add
+`error: {code, message}` and retain useful partial results in `data`. The payload
+inside `.data` varies by command. See [the migration guide](machine-interface.md).
 
 | Command | Shape | Access pattern |
 | --- | --- | --- |
-| Lists, search, filter, views run | `{count, items, list?}` | `.items[]` |
-| Projects, areas, tags list | `{count, items}` | `.items[]` |
-| Show | One todo object | `.id`, `.name` |
-| Views list, template list | Bare arrays | `.[]` |
-| Add --parse-only | Parsed task object | `.title`, `.when`, `.deadline` |
-| Focus | `{items: [{todo, score, reasons}]}` | `.items[].todo` |
-| Doctor | `{overallStatus, checks}` | `.checks[]` |
+| Lists, search, filter, views run | `{count, items, list?}` | `.data.items[]` |
+| Projects, areas, tags list | `{count, items}` | `.data.items[]` |
+| Show | One todo object | `.data.id`, `.data.name` |
+| Views list, template list | Arrays | `.data[]` |
+| Add --parse-only | Final task preview | `.data.title`, `.data.when`, `.data.deadline` |
+| Focus | `{items: [{todo, score, reasons}]}` | `.data.items[].todo` |
+| Doctor | `{overallStatus, checks}` | `.data.checks[]` |
 | Undo --show | Latest entry object, or a message object when empty | Inspect before assuming fields |
 | Stats, trends, heatmap, project audit | Command-specific report objects | Inspect their fields first |
 
-List/show todo objects contain `id`, `name`, `notes`, `status`, `dueDate`, `tags`, `project`, `area`, `checklistItems`, `creationDate`, and `modificationDate`. `tags` is an array of names; `project`/`area` are names or `null`; `dueDate` is an ISO 8601 string or `null`. Missing notes become an empty string. Scheduled-start dates are not currently exposed in this representation. Focus embeds model objects and does not use this flattened todo representation.
+List/show todo objects contain `id`, `name`, `notes`, `status`, `dueDate`, `scheduledDate`, `tags`, `project`, `area`, `checklistItems`, `creationDate`, and `modificationDate`. `tags` is an array of names; `project`/`area` are names or `null`; dates are ISO 8601 strings or `null`. Missing notes become an empty string. Focus embeds model objects and does not use this flattened todo representation. Batch snapshots/journals preserve exact timestamp precision for safe comparisons rather than using the display date representation.
 
 Illustrative list envelope (not captured task data):
 
 ```json
 {
-  "count": 1,
-  "list": "Today",
-  "items": [{"id": "EXAMPLE_ID", "name": "Draft release notes", "tags": ["docs"], "project": "Documentation", "dueDate": null}]
+  "schemaVersion": 1,
+  "success": true,
+  "data": {
+    "count": 1,
+    "list": "Today",
+    "items": [{"id": "EXAMPLE_ID", "name": "Draft release notes", "tags": ["docs"], "project": "Documentation", "dueDate": null, "scheduledDate": null}]
+  }
 }
 ```
 
@@ -109,22 +115,22 @@ Illustrative list envelope (not captured task data):
 
 ```bash
 # IDs and names, without assuming a bare array
-clings today --json | jq -r '.items[] | [.id, .name] | @tsv'
+clings today --json | jq -r '.data.items[] | [.id, .name] | @tsv'
 
 # Exact tag membership
-clings today --json | jq '.items[] | select(.tags | index("docs"))'
+clings today --json | jq '.data.items[] | select(.tags | index("docs"))'
 
 # Completed work, omitting canceled tasks
-clings logbook --json | jq -r '.items[] | select(.status == "completed") | .name'
+clings logbook --json | jq -r '.data.items[] | select(.status == "completed") | .name'
 
-# Definitions are bare arrays
-clings views list --json | jq -r '.[] | [.name, .expression] | @tsv'
+# Definitions are arrays inside the envelope
+clings views list --json | jq -r '.data[] | [.name, .expression] | @tsv'
 
 # Ranking explanations use a different embedded todo shape
-clings focus --json | jq -r '.items[] | [.todo.name, (.score | tostring), (.reasons | join(", "))] | @tsv'
+clings focus --json | jq -r '.data.items[] | [.todo.name, (.score | tostring), (.reasons | join(", "))] | @tsv'
 
 # Check diagnostics by payload, not just exit status
-clings doctor --json | jq -e '.overallStatus == "ok"'
+clings doctor --json | jq -e '.success and .data.overallStatus == "ok"'
 ```
 
 ## Custom text output
@@ -138,6 +144,6 @@ Supported placeholders are `{id}`, `{name}`, `{status}`, `{due}`, `{project}`, `
 
 ## Script discipline
 
-For Bash pipelines, enable `set -o pipefail` so an upstream CLI error is not hidden by a successful `jq`. Check exact IDs before writing. Keep `--dry-run` previews separate from bulk writes and inspect their reported failures; bulk output can mix text and JSON, and per-item failures may not produce a nonzero exit code.
+For Bash pipelines, enable `set -o pipefail` so an upstream CLI error is not hidden by a successful `jq`. Check exact IDs before writing. Keep `--dry-run` previews separate from bulk writes and inspect per-item results. Exit 1 means invalid/ambiguous/refused input; exit 2 means runtime, partial failure, or unhealthy required capability.
 
-`pick`, `review`, and bulk commands are not clean JSON pipeline sources. `complete --title` can print ambiguity text without writing, even with `--json`. Prefer `show`, list, search, and filter for machine-readable reads, followed by direct commands with a validated ID.
+`pick --json` is rejected without writes. Review reports and bulk plans support JSON. Ambiguous `complete --title --json` returns a structured failure and exit 1 without writing. Prefer exact validated IDs rather than automatically selecting the first search result.
