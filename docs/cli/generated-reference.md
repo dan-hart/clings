@@ -835,4 +835,3 @@ Show subcommand help information.
 | --- | --- |
 | `<subcommands>...` | Optional. |
 | `--version` | Show the version. Optional. |
-

@@ -46,7 +46,7 @@ commands.each do |path, command|
     lines << ""
   end
 end
-rendered = lines.join("\n") + "\n"
+rendered = lines.join("\n").rstrip + "\n"
 target = File.expand_path("../docs/cli/generated-reference.md", __dir__)
 case mode
 when "--write" then File.write(target, rendered)
