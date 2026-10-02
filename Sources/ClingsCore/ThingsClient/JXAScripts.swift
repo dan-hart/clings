@@ -515,6 +515,17 @@ public enum JXAScripts {
     ) -> String {
         let whenISO = when.map { ISO8601DateFormatter().string(from: $0) }
         let deadlineISO = deadline.map { ISO8601DateFormatter().string(from: $0) }
+        let scheduleCode = whenISO.map { "project.activationDate = new Date('\($0)'); appliedFields.push('schedule');" } ?? ""
+        let deadlineCode = deadlineISO.map { "project.dueDate = new Date('\($0)'); appliedFields.push('deadline');" } ?? ""
+        let areaCode = area.map { name in
+            """
+            const area = app.areas.byName('\(name.jxaEscaped)');
+            if (area.exists()) {
+                project.area = area;
+                appliedFields.push('area');
+            }
+            """
+        } ?? ""
 
         var propsCode = "name: '\(name.jxaEscaped)'"
         if let notes = notes, !notes.isEmpty {
@@ -523,30 +534,21 @@ public enum JXAScripts {
 
         return """
         (() => {
-            const app = Application('Things3');
-
-            const props = { \(propsCode) };
-            const project = app.make({ new: 'project', withProperties: props });
-
-            // Set when date
-            \(whenISO != nil ? "project.activationDate = new Date('\(whenISO!)');" : "")
-
-            // Set deadline
-            \(deadlineISO != nil ? "project.dueDate = new Date('\(deadlineISO!)');" : "")
-
-            // Add to area
-            \(area != nil ? """
-            const area = app.areas.byName('\(area!.jxaEscaped)');
-            if (area.exists()) {
-                project.area = area;
+            let projectID = null;
+            const appliedFields = [];
+            try {
+                const app = Application('Things3');
+                const props = { \(propsCode) };
+                const project = app.make({ new: 'project', withProperties: props });
+                projectID = project.id();
+                appliedFields.push('create');
+                \(scheduleCode)
+                \(deadlineCode)
+                \(areaCode)
+                return JSON.stringify({success: true, id: projectID, name: project.name(), appliedFields});
+            } catch (error) {
+                return JSON.stringify({success: false, id: projectID, appliedFields, error: String(error)});
             }
-            """ : "")
-
-            return JSON.stringify({
-                success: true,
-                id: project.id(),
-                name: project.name()
-            });
         })()
         """
     }

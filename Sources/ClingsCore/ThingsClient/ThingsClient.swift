@@ -290,11 +290,9 @@ public actor ThingsClient: ThingsClientProtocol {
             area: area
         )
 
-        let result = try await bridge.executeJSON(script, as: CreationResult.self)
-        if !result.success {
-            throw ThingsError.operationFailed(result.error ?? "Unknown error")
-        }
-        guard let id = result.id else {
+        let result = try await bridge.executeJSON(script, as: MutationResult.self)
+        try result.check()
+        guard let id = result.id, !id.isEmpty else {
             throw ThingsError.operationFailed("Missing created project ID")
         }
 
@@ -302,8 +300,8 @@ public actor ThingsClient: ThingsClientProtocol {
             let tagScript = JXAScripts.setProjectTagsAppleScript(id: id, tags: tags)
             do {
                 _ = try await bridge.executeAppleScript(tagScript)
-            } catch let error as JXAError {
-                throw ThingsError.jxaError(error)
+            } catch {
+                throw AppliedMutationError(id: id, fields: result.appliedFields ?? ["create"], message: error.localizedDescription)
             }
         }
 

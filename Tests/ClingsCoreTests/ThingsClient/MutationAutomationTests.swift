@@ -3,6 +3,48 @@ import Foundation
 import Testing
 
 struct MutationAutomationTests {
+    @Test func projectScriptTracksAssignmentsThroughRealExecutor() async throws {
+        let create = JXAScripts.createProject(name: "Documentation", when: Date(), deadline: Date())
+        let script = """
+        (() => {
+            const Application = () => ({ make: () => ({
+                id: () => 'project-id',
+                name: () => 'Documentation',
+                set activationDate(value) {},
+                set dueDate(value) { throw new Error('deadline rejected'); }
+            }) });
+            return \(create);
+        })()
+        """
+        let result = try await JXABridge(timeout: 3).executeJSON(script, as: MutationResult.self)
+        #expect(result.success == false)
+        #expect(result.id == "project-id")
+        #expect(result.appliedFields == ["create", "schedule"])
+        #expect(result.error?.contains("deadline rejected") == true)
+    }
+
+    @Test func projectCreationRetainsPartialIDAndCompletedFields() async throws {
+        for hybrid in [false, true] {
+            for tagFailure in [false, true] {
+                let bridge = MockJXAExecutor()
+                bridge.jsonResponses = [.success(tagFailure
+                    ? #"{"success":true,"id":"project-id","appliedFields":["create"]}"#
+                    : #"{"success":false,"id":"project-id","appliedFields":["create","schedule"],"error":"deadline rejected"}"#)]
+                bridge.appleScriptResponses = [.failure(ThingsError.operationFailed("tags rejected"))]
+                let client: any ThingsClientProtocol = hybrid ? HybridThingsClient(database: MockThingsDatabaseReader(), jxaBridge: bridge) : ThingsClient(bridge: bridge)
+                do {
+                    _ = try await client.createProject(name: "Documentation", notes: nil, when: nil, deadline: nil, tags: tagFailure ? ["docs"] : [], area: nil)
+                    Issue.record("Expected partial project creation")
+                } catch let error as AppliedMutationError {
+                    #expect(error.id == "project-id")
+                    #expect(error.fields == (tagFailure ? ["create"] : ["create", "schedule"]))
+                } catch {
+                    Issue.record("Lost partial project outcome: \(error)")
+                }
+            }
+        }
+    }
+
     @Test func trackedClientsRejectMalformedFirstScriptOutput() async throws {
         for hybrid in [false, true] {
             let bridge = MockJXAExecutor()
