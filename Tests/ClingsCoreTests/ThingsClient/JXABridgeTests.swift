@@ -14,6 +14,76 @@ struct JXABridgeTests {
         let date: Date
     }
 
+    @Test func largeOutputIsDrainedBeforeProcessExit() async throws {
+        let bridge = JXABridge(timeout: 2)
+        let output = try await bridge.execute("'x'.repeat(512 * 1024)")
+        #expect(output.count == 512 * 1024)
+        let stderrOutput = try await bridge.execute("console.log('x'.repeat(512 * 1024)); 'done'")
+        #expect(stderrOutput == "done")
+    }
+
+    @Test func cancellationStopsExecutionPromptly() async throws {
+        let bridge = JXABridge(timeout: 10)
+        let task = Task { try await bridge.execute("delay(2); 'done'") }
+        try await Task.sleep(for: .milliseconds(100))
+        let start = ContinuousClock.now
+        task.cancel()
+        do {
+            _ = try await task.value
+            Issue.record("Expected cancellation, not script success")
+        } catch is CancellationError {
+            #expect(start.duration(to: .now) < .seconds(1))
+        }
+    }
+
+    @Test func alreadyCancelledOperationDoesNotExecute() async throws {
+        let bridge = JXABridge(timeout: 10)
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await bridge.execute("'must not execute'")
+        }
+        do {
+            _ = try await task.value
+            Issue.record("Expected cancellation before execution")
+        } catch is CancellationError {}
+    }
+
+    @Test func simultaneousDeadlinesRemainIndependent() async throws {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for _ in 0..<16 {
+                group.addTask {
+                    let bridge = JXABridge(timeout: 0.01)
+                    do {
+                        _ = try await bridge.execute("delay(0.2); 'overdue'")
+                        Issue.record("Expected each concurrent script to time out")
+                    } catch JXAError.timeout {}
+                }
+            }
+            try await group.waitForAll()
+        }
+    }
+
+    @Test func expiredDeadlineDoesNotLaunchQueuedWork() async throws {
+        // A missing executable would produce executionFailed if launch were attempted.
+        let runner = AutomationProcess(arguments: [], timeout: 0,
+            executableURL: URL(fileURLWithPath: "/private/tmp/clings-missing-\(UUID().uuidString)"))
+        do {
+            _ = try await runner.run()
+            Issue.record("Expected timeout before launch")
+        } catch JXAError.timeout {}
+    }
+
+    @Test func launchFailureKeepsActionableErrorClassification() async throws {
+        let runner = AutomationProcess(arguments: [], timeout: 1,
+            executableURL: URL(fileURLWithPath: "/private/tmp/clings-missing-\(UUID().uuidString)"))
+        do {
+            _ = try await runner.run()
+            Issue.record("Expected launch failure")
+        } catch JXAError.executionFailed(let message) {
+            #expect(!message.isEmpty)
+        }
+    }
+
     @Test func executeReturnsTrimmedOutput() async throws {
         let bridge = JXABridge(timeout: 1)
         let output = try await bridge.execute("(() => '  trimmed output  ')()")
