@@ -91,6 +91,10 @@ or use `--force` intentionally. Undo is a local mutation journal, not a backup.
 Scheduling, headings, and project moves cannot be promised full restoration;
 previews and help expose these limits.
 
+Project and tag management are not recorded for undo. A partially created
+project reports its ID and completed assignments with exit 2. Inspect that ID
+before retrying so a later property failure does not create a duplicate project.
+
 ## Freeze a batch selection
 
 Save a dry-run plan to review the exact IDs and proposed changes. Executing the

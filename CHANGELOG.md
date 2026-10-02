@@ -27,9 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Script-visible failures**: Validation, ambiguity, and missing noninteractive confirmation return status 1; runtime, partial-operation, and required diagnostic failures return status 2.
 - **Deletion safety**: `delete` explicitly cancels through the supported Things API, rather than promising Trash. It requires confirmation unless `--force` is supplied.
 - **Mutation reliability**: Partial writes and journal failures are reported explicitly. Unsupported schedule, heading, and project-move reversals are exposed before writes; undo is not a backup.
+- **Defensive numeric input**: Focus and statistics reject zero, negative, or oversized time windows before arithmetic or calendar calculations.
 
 ### Fixed
 
+- **Partial project creation**: Preserve the created project ID and completed assignments when a later property or tagging step fails, so retries do not blindly duplicate an applied write.
 - **Gregorian automation dates**: Includes the reviewed locale/calendar-safe creation fix and DST runtime regressions from PR #13.
 - **`someday`/`anytime`/etc. list drift from Things**: `ThingsDatabase` list queries (`fetchList`, `search`) no longer include Things' internal repeating-task templates, which are hidden generator rows (identified by a non-null `rt1_recurrenceRule`) rather than real todos.
 - **Deadline decoding**: `deadline` values are now decoded using Things' packed date format (`(year << 16) | (month << 12) | (day << 7)`) instead of being misread as raw seconds since the Cocoa reference date. The previous decoding produced a nonsensical shared date (e.g. April 23, 2009) for every todo carrying Things' year-4001 "no real deadline" sentinel; that sentinel now correctly decodes to `nil`.
