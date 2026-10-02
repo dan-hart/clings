@@ -43,10 +43,11 @@ struct Clings: AsyncParsableCommand {
           https://github.com/dan-hart/clings/tree/main/docs/cli
 
         Put output options after the command. --json takes precedence over
-        --format. Interactive commands and bulk previews may include text even
-        with --json; use list, search, or filter JSON for pipelines.
+        --format and emits schema 1 envelopes with payloads under data.
+        Failed commands return nonzero exits and structured JSON errors.
+        Interactive pick rejects --json; help/version/completions remain text.
         """,
-        version: "0.3.1",
+        version: "0.4.0",
         subcommands: [
             // List views
             TodayCommand.self,
