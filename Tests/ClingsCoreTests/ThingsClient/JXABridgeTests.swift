@@ -185,10 +185,12 @@ struct JXABridgeTests {
     }
 
     @Test func executeAndAppleScriptHonorTimeouts() async throws {
-        let bridge = JXABridge(timeout: 0.01)
+        // Leave room for the timeout task to be scheduled on a busy CI runner.
+        // The script must still be running when that task gets its first turn.
+        let bridge = JXABridge(timeout: 0.1)
 
         do {
-            _ = try await bridge.execute("delay(0.2); 'done'")
+            _ = try await bridge.execute("delay(5); 'done'")
             Issue.record("Expected JXA timeout")
         } catch let error as JXAError {
             switch error {
@@ -202,7 +204,7 @@ struct JXABridgeTests {
         }
 
         do {
-            _ = try await bridge.executeAppleScript("delay 0.2\nreturn \"done\"")
+            _ = try await bridge.executeAppleScript("delay 5\nreturn \"done\"")
             Issue.record("Expected AppleScript timeout")
         } catch let error as JXAError {
             switch error {
