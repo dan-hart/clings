@@ -14,7 +14,7 @@ ruby -rjson -e '
   percentage = 100.0 * covered / total
   puts format("Source line coverage: %.2f%% (%d/%d)", percentage, covered, total)
   abort "Source line coverage is below the 80% project requirement" if percentage < 80
-  %w[ClingsCore/ThingsClient/ThingsDatabase.swift ClingsCLI/Support/QueryOptions.swift].each do |path|
+  %w[ClingsCore/ThingsClient/ThingsDatabase.swift ClingsCLI/Support/QueryOptions.swift ClingsCLI/Support/CLIResponse.swift].each do |path|
     critical = source.select { |file| file.fetch("filename").end_with?("/Sources/#{path}") }
     abort "Missing critical-path coverage: #{path}" if critical.empty?
     count = critical.sum { |file| file.fetch("summary").fetch("lines").fetch("count") }

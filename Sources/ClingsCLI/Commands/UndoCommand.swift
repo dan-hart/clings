@@ -52,7 +52,7 @@ struct UndoCommand: AsyncParsableCommand {
                 print(renderMessage("No undo history available", output: output))
                 return
             }
-            print(renderUndoEntry(entry))
+            try print(renderUndoEntry(entry))
             return
         }
 
@@ -112,13 +112,9 @@ struct UndoCommand: AsyncParsableCommand {
         try printOutcome(MutationOutcome(applied: true, undoRecorded: false, message: "Undid \(entry.operation.rawValue) for \(entry.todoID)"), output: output)
     }
 
-    private func renderUndoEntry(_ entry: UndoEntry) -> String {
+    private func renderUndoEntry(_ entry: UndoEntry) throws -> String {
         if output.json {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            encoder.dateEncodingStrategy = .iso8601
-            let data = try? encoder.encode(entry)
-            return String(data: data ?? Data("{}".utf8), encoding: .utf8) ?? "{}"
+            return try CLIResponse.success(payloadJSON(entry))
         }
 
         return "Latest undo: \(entry.operation.rawValue) \(entry.todoID)"

@@ -48,8 +48,10 @@ struct SetAuthToken: ParsableCommand {
     @Argument(help: "The auth token from Things 3 (Settings > General > Enable Things URLs)")
     var token: String
 
+    @OptionGroup var output: OutputOptions
+
     func run() throws {
         try AuthTokenStore.saveToken(token)
-        print("Auth token saved to ~/.config/clings/auth-token")
+        print(renderMessage("Auth token saved securely in the config directory", output: output))
     }
 }

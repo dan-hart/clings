@@ -33,16 +33,20 @@ struct FocusCommand: AsyncParsableCommand {
 
     @OptionGroup var output: OutputOptions
 
+    func validate() throws {
+        guard limit > 0 else { throw ValidationError("--limit must be a positive number") }
+    }
+
     func run() async throws {
         let client = CommandRuntime.makeClient()
-        let plan = FocusPlanner().build(todos: try await fetchOpenTodos(client: client), limit: limit)
+        let plan = try await FocusPlanner().build(todos: fetchOpenTodos(client: client), limit: limit)
 
         if output.json {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             encoder.dateEncodingStrategy = .iso8601
             let data = try encoder.encode(plan)
-            print(String(data: data, encoding: .utf8) ?? "{}")
+            print(CLIResponse.success(String(decoding: data, as: UTF8.self)))
             return
         }
 

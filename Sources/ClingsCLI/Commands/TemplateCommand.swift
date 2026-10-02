@@ -41,7 +41,7 @@ struct TemplateListCommand: ParsableCommand {
         discussion: """
         Show all saved templates and the task title each template creates.
 
-        --json returns a bare array including stored defaults and date expressions.
+        --json returns an array under data including stored defaults and date expressions.
 
         EXAMPLES:
           clings template list
@@ -59,7 +59,7 @@ struct TemplateListCommand: ParsableCommand {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             encoder.dateEncodingStrategy = .iso8601
             let data = try encoder.encode(templates)
-            print(String(data: data, encoding: .utf8) ?? "[]")
+            print(CLIResponse.success(String(decoding: data, as: UTF8.self)))
             return
         }
 
@@ -120,6 +120,8 @@ struct TemplateSaveCommand: ParsableCommand {
     @Option(name: .long, parsing: .upToNextOption, help: "Checklist items")
     var checklist: [String] = []
 
+    @OptionGroup var output: OutputOptions
+
     func run() throws {
         let parsed = TaskParser().parse(title)
         for expression in parsed.invalidDateExpressions {
@@ -139,7 +141,7 @@ struct TemplateSaveCommand: ParsableCommand {
             checklistItems: checklist.isEmpty ? parsed.checklistItems : checklist
         )
         try TemplateStore.save(template)
-        print("Saved template: \(name)")
+        print(renderMessage("Saved template: \(name)", output: output))
     }
 }
 
@@ -213,10 +215,12 @@ struct TemplateDeleteCommand: ParsableCommand {
     @Argument(help: "Template name", completion: SavedNameCompletion.templateKind)
     var name: String
 
+    @OptionGroup var output: OutputOptions
+
     func run() throws {
         guard try TemplateStore.delete(name: name) else {
             throw ValidationError("Template not found: \(name)")
         }
-        print("Deleted template: \(name)")
+        print(renderMessage("Deleted template: \(name)", output: output))
     }
 }

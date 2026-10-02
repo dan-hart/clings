@@ -196,11 +196,10 @@ private func pickCandidates(
     includeLogbook: Bool,
     onlyOpen: Bool
 ) async throws -> [Todo] {
-    let todos: [Todo]
-    if let query, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-        todos = try await client.search(query: query)
+    let todos: [Todo] = if let query, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        try await client.search(query: query)
     } else {
-        todos = try await fetchVisibleTodos(client: client, includeLogbook: includeLogbook)
+        try await fetchVisibleTodos(client: client, includeLogbook: includeLogbook)
     }
 
     let filtered = onlyOpen ? todos.filter(\.isOpen) : todos

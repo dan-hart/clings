@@ -21,7 +21,7 @@ struct CompleteCommand: AsyncParsableCommand {
           clings complete --title "milk"   By title search
 
         To find a todo's ID, use the show command or --json output:
-          clings today --json | jq -r '.items[].id'
+          clings today --json | jq -r '.data.items[].id'
 
         --title completes only when exactly one open todo matches. Multiple
         matches are listed without completing anything; choose an exact ID or
@@ -73,15 +73,7 @@ struct CompleteCommand: AsyncParsableCommand {
                 try printOutcome(recordApplied(UndoEntry(operation: .complete, todoID: todo.id, snapshot: TodoSnapshot(todo: snapshot)), message: "Completed: \(todo.name)"), output: output)
 
             default:
-                // Multiple matches - show list with IDs
-                print("Multiple todos match '\(searchTitle)':")
-                for (index, todo) in openTodos.prefix(10).enumerated() {
-                    print("  \(index + 1). \(todo.name)")
-                }
-                print("\nUse the exact ID to complete:")
-                for todo in openTodos.prefix(5) {
-                    print("  clings complete \(todo.id)")
-                }
+                throw CommandFailure(exitStatus: 1, code: "ambiguous_title", message: "Multiple todos match '\(searchTitle)'. Use an exact ID: \(openTodos.map(\.id).joined(separator: ", ")). No changes applied.", dataJSON: JSONOutputFormatter().format(todos: openTodos))
             }
         } else if let todoId = id {
             // Original ID-based completion
@@ -254,7 +246,7 @@ struct UpdateCommand: AsyncParsableCommand {
         var resolvedWhen = when
         var scheduledDate: Date?
         // Validate --when value if provided
-        if let when = when {
+        if let when {
             let validKeywords = Set(["today", "tomorrow", "evening", "anytime", "someday"])
             let isKeyword = validKeywords.contains(when.lowercased())
             scheduledDate = isKeyword ? (try? resolveDate(when)) : try resolveDate(when)
@@ -275,12 +267,12 @@ struct UpdateCommand: AsyncParsableCommand {
 
         // Validate and trim --heading
         let resolvedHeading: String?
-        if let heading = heading {
+        if let heading {
             let trimmed = heading.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else {
                 throw ThingsError.invalidState("--heading value cannot be empty")
             }
-            guard !trimmed.contains(where: { $0.isNewline }) else {
+            guard !trimmed.contains(where: \.isNewline) else {
                 throw ThingsError.invalidState("--heading value cannot contain newlines")
             }
             resolvedHeading = trimmed
@@ -299,13 +291,13 @@ struct UpdateCommand: AsyncParsableCommand {
                 deadline: dueDate ?? previous.dueDate, scheduleExpression: resolvedWhen,
                 heading: resolvedHeading,
                 undo: "Restores title, notes, deadline and tags; scheduling and heading are not restored.",
-                unsupportedUndo: [when != nil ? "schedule" : nil, heading != nil ? "heading" : nil].compactMap { $0 }
+                unsupportedUndo: [when != nil ? "schedule" : nil, heading != nil ? "heading" : nil].compactMap(\.self)
             )
             try print(preview.render(json: output.json))
             return
         }
         // Pre-validate auth token before any mutations to avoid partial updates
-        warnUnsupported([when != nil ? "schedule" : nil, resolvedHeading != nil ? "heading" : nil].compactMap { $0 })
+        warnUnsupported([when != nil ? "schedule" : nil, resolvedHeading != nil ? "heading" : nil].compactMap(\.self))
         let needsURLScheme = when != nil || resolvedHeading != nil
         var prevalidatedToken: String? = nil
         if needsURLScheme {
@@ -348,7 +340,7 @@ struct UpdateCommand: AsyncParsableCommand {
                 if hasJXAUpdates {
                     let jxaFields = [name != nil ? "name" : nil, notes != nil ? "notes" : nil,
                                      dueDate != nil ? "due date" : nil, !tags.isEmpty ? "tags" : nil]
-                        .compactMap { $0 }.joined(separator: ", ")
+                        .compactMap(\.self).joined(separator: ", ")
                     let result = try recordApplied(UndoEntry(operation: .update, todoID: id, snapshot: TodoSnapshot(todo: previousSnapshot)), message: "Partial update: \(jxaFields) updated, but URL update failed", unsupported: ["schedule", "heading"])
                     throw try CommandFailure(exitStatus: 2, code: "mutation_partial", message: "Partial update: \(jxaFields) applied, but --when/--heading failed: \(error.localizedDescription)", dataJSON: payloadJSON(result))
                 }
@@ -358,10 +350,10 @@ struct UpdateCommand: AsyncParsableCommand {
 
         let urlSchemeNote = needsURLScheme ? " (--when/--heading sent via URL scheme; verify in Things)" : ""
         if !hasJXAUpdates {
-            try printOutcome(MutationOutcome(applied: true, undoRecorded: false, unsupportedUndo: [when != nil ? "schedule" : nil, heading != nil ? "heading" : nil].compactMap { $0 }, message: "Updated todo: \(id)\(urlSchemeNote)"), output: output)
+            try printOutcome(MutationOutcome(applied: true, undoRecorded: false, unsupportedUndo: [when != nil ? "schedule" : nil, heading != nil ? "heading" : nil].compactMap(\.self), message: "Updated todo: \(id)\(urlSchemeNote)"), output: output)
             return
         }
-        try printOutcome(recordApplied(UndoEntry(operation: .update, todoID: id, snapshot: TodoSnapshot(todo: previousSnapshot)), message: "Updated todo: \(id)\(urlSchemeNote)", unsupported: [when != nil ? "schedule" : nil, heading != nil ? "heading" : nil].compactMap { $0 }), output: output)
+        try printOutcome(recordApplied(UndoEntry(operation: .update, todoID: id, snapshot: TodoSnapshot(todo: previousSnapshot)), message: "Updated todo: \(id)\(urlSchemeNote)", unsupported: [when != nil ? "schedule" : nil, heading != nil ? "heading" : nil].compactMap(\.self)), output: output)
     }
 
     private func updateViaURLScheme(id: String, when: String?, heading: String?, token: String) throws {
@@ -369,10 +361,10 @@ struct UpdateCommand: AsyncParsableCommand {
             URLQueryItem(name: "auth-token", value: token),
             URLQueryItem(name: "id", value: id),
         ]
-        if let when = when {
+        if let when {
             queryItems.append(URLQueryItem(name: "when", value: when.lowercased()))
         }
-        if let heading = heading {
+        if let heading {
             queryItems.append(URLQueryItem(name: "heading", value: heading))
         }
 

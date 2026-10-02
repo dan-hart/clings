@@ -45,7 +45,7 @@ struct ProjectListCommand: AsyncParsableCommand {
         abstract: "List all projects",
         discussion: """
         Show visible projects, excluding trashed projects and repeating project
-        templates in SQLite reads. --json uses a count/items envelope.
+        templates in SQLite reads. --json puts count/items under data.
 
         EXAMPLES:
           clings project list
@@ -64,7 +64,7 @@ struct ProjectListCommand: AsyncParsableCommand {
             ? JSONOutputFormatter()
             : TextOutputFormatter(useColors: !output.noColor)
 
-        print(formatter.format(projects: projects))
+        print(CLIResponse.render(formatter.format(projects: projects), output: output))
     }
 }
 
@@ -122,7 +122,7 @@ struct ProjectAddCommand: AsyncParsableCommand {
             .split(separator: ",")
             .map { String($0).trimmingCharacters(in: .whitespaces) } ?? []
 
-        _ = try await client.createProject(
+        let id = try await client.createProject(
             name: trimmedTitle,
             notes: notes,
             when: parsedWhen,
@@ -131,18 +131,16 @@ struct ProjectAddCommand: AsyncParsableCommand {
             area: area
         )
 
-        let formatter: OutputFormatter = output.json
-            ? JSONOutputFormatter()
-            : TextOutputFormatter(useColors: !output.noColor)
-
-        print(formatter.format(message: "Created project: \(trimmedTitle)"))
+        try printOutcome(MutationOutcome(id: id, applied: true, undoRecorded: false, unsupportedUndo: ["project creation"], appliedFields: ["create"], message: "Created project: \(trimmedTitle)"), output: output)
     }
 
     private func parseWhenDate(_ str: String) throws -> Date {
         let lower = str.lowercased()
         let isAbsolute = str.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil
         if lower == "today" || lower == "tomorrow" || isAbsolute {
-            if let date = try resolveDate(str) { return date }
+            if let date = try resolveDate(str) {
+                return date
+            }
         }
         throw ThingsError.invalidState("Invalid date format: \(str). Use YYYY-MM-DD, 'today', or 'tomorrow'.")
     }
@@ -169,9 +167,9 @@ struct ProjectAuditCommand: AsyncParsableCommand {
 
     func run() async throws {
         let client = CommandRuntime.makeClient()
-        let report = ProjectAudit().audit(
-            projects: try await client.fetchProjects(),
-            todos: try await fetchOpenTodos(client: client)
+        let report = try await ProjectAudit().audit(
+            projects: client.fetchProjects(),
+            todos: fetchOpenTodos(client: client)
         )
 
         if output.json {
@@ -179,7 +177,7 @@ struct ProjectAuditCommand: AsyncParsableCommand {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             encoder.dateEncodingStrategy = .iso8601
             let data = try encoder.encode(report)
-            print(String(data: data, encoding: .utf8) ?? "{}")
+            print(CLIResponse.success(String(decoding: data, as: UTF8.self)))
             return
         }
 

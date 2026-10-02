@@ -21,7 +21,7 @@ Aliases: `t`.
 
 | Argument | Description |
 | --- | --- |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -35,7 +35,7 @@ Aliases: `i`.
 
 | Argument | Description |
 | --- | --- |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -49,7 +49,7 @@ Aliases: `u`.
 
 | Argument | Description |
 | --- | --- |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -61,7 +61,7 @@ Show anytime todos
 
 | Argument | Description |
 | --- | --- |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -75,7 +75,7 @@ Aliases: `s`.
 
 | Argument | Description |
 | --- | --- |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -89,7 +89,7 @@ Aliases: `l`.
 
 | Argument | Description |
 | --- | --- |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -101,7 +101,7 @@ List all projects
 
 | Argument | Description |
 | --- | --- |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -124,7 +124,7 @@ Aliases: `ls`.
 
 | Argument | Description |
 | --- | --- |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -142,7 +142,7 @@ Create a new project
 | `--when <when>` | When to start (today, tomorrow, YYYY-MM-DD) Optional. |
 | `--deadline <deadline>` | Deadline date (YYYY-MM-DD) Optional. |
 | `--tags <tags>` | Tags (comma-separated) Optional. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -154,7 +154,7 @@ Audit project health and missing next actions
 
 | Argument | Description |
 | --- | --- |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -166,7 +166,7 @@ List all areas
 
 | Argument | Description |
 | --- | --- |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -189,7 +189,7 @@ Aliases: `ls`.
 
 | Argument | Description |
 | --- | --- |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -202,7 +202,7 @@ Create a new tag
 | Argument | Description |
 | --- | --- |
 | `<name>` | Name of the tag to create Required. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -218,7 +218,7 @@ Aliases: `rm`.
 | --- | --- |
 | `<name>` | Name of the tag to delete Required. |
 | `--force, -f` | Skip confirmation prompt Optional. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -234,7 +234,7 @@ Aliases: `mv`.
 | --- | --- |
 | `<old-name>` | Current name of the tag Required. |
 | `<new-name>` | New name for the tag Required. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -247,7 +247,7 @@ Show details of a todo by ID
 | Argument | Description |
 | --- | --- |
 | `<id>` | The ID of the todo to show Required. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -268,7 +268,7 @@ Add a new todo with natural language support
 | `--project <project>` | Add to a project Optional. |
 | `--area <area>` | Add to an area Optional. |
 | `--parse-only` | Show parsed result without creating todo Optional. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -284,7 +284,7 @@ Aliases: `done`.
 | --- | --- |
 | `<id>` | The ID of the todo to complete (optional if using --title) Optional. |
 | `-t, --title <title>` | Complete todo by searching its title Optional. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -297,7 +297,7 @@ Cancel a todo
 | Argument | Description |
 | --- | --- |
 | `<id>` | The ID of the todo to cancel Required. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -312,8 +312,8 @@ Aliases: `rm`.
 | Argument | Description |
 | --- | --- |
 | `<id>` | The ID of the todo to delete Required. |
-| `--force, -f` | Compatibility flag; deletion currently runs without confirmation Optional. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--force, -f` | Authorize cancellation without prompting (never moves to Trash) Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -332,7 +332,7 @@ Update a todo's properties
 | `--when <when>` | Schedule for a date ('today', 'tomorrow', 'evening', 'anytime', 'someday', or YYYY-MM-DD). Requires auth token. Optional. |
 | `--heading <heading>` | Move to a heading within the task's project. Requires auth token. Optional. |
 | `--tags <tags>...` | New tags (replaces existing) Optional. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--parse-only` | Preview final fields and undo capabilities without writing or requiring an auth token Optional. |
@@ -348,7 +348,7 @@ Aliases: `find`, `f`.
 | Argument | Description |
 | --- | --- |
 | `<query>` | The search query Required. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--list <list>` | Scope to a Things list: today, inbox, upcoming, anytime, someday, logbook, trash Optional. |
@@ -375,7 +375,7 @@ Aliases: `ls`.
 
 | Argument | Description |
 | --- | --- |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -390,6 +390,9 @@ Save a named filter view
 | `<name>` | View name Required. |
 | `<expression>` | Filter expression Required. |
 | `--note <note>` | Optional description for this view Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
+| `--no-color` | Suppress color output Optional. |
+| `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
 | `-h, --help` | Show help information. Optional. |
 
@@ -400,7 +403,7 @@ Run a saved filter view
 | Argument | Description |
 | --- | --- |
 | `<name>` | View name Required. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--list <list>` | Scope to a Things list: today, inbox, upcoming, anytime, someday, logbook, trash Optional. |
@@ -419,6 +422,9 @@ Aliases: `rm`.
 | Argument | Description |
 | --- | --- |
 | `<name>` | View name Required. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
+| `--no-color` | Suppress color output Optional. |
+| `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
 | `-h, --help` | Show help information. Optional. |
 
@@ -439,7 +445,7 @@ Aliases: `ls`.
 
 | Argument | Description |
 | --- | --- |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -460,6 +466,9 @@ Save a task template
 | `--project <project>` | Default project Optional. |
 | `--area <area>` | Default area Optional. |
 | `--checklist <checklist>...` | Checklist items Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
+| `--no-color` | Suppress color output Optional. |
+| `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
 | `-h, --help` | Show help information. Optional. |
 
@@ -470,7 +479,7 @@ Create a task from a template
 | Argument | Description |
 | --- | --- |
 | `<name>` | Template name Required. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -485,6 +494,9 @@ Aliases: `rm`.
 | Argument | Description |
 | --- | --- |
 | `<name>` | Template name Required. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
+| `--no-color` | Suppress color output Optional. |
+| `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
 | `-h, --help` | Show help information. Optional. |
 
@@ -495,7 +507,7 @@ Undo the most recent supported mutation
 | Argument | Description |
 | --- | --- |
 | `--show` | Show the most recent undo entry without applying it Optional. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -508,7 +520,7 @@ Show a focused queue of high-attention tasks
 | Argument | Description |
 | --- | --- |
 | `--limit <limit>` | Maximum number of tasks to show Optional. Default: 10. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -530,7 +542,7 @@ Pick a todo and show its details
 | Argument | Description |
 | --- | --- |
 | `<query>` | Optional search query Optional. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -543,7 +555,7 @@ Pick a todo and complete it
 | Argument | Description |
 | --- | --- |
 | `<query>` | Optional search query Optional. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -556,7 +568,7 @@ Pick a todo and cancel it
 | Argument | Description |
 | --- | --- |
 | `<query>` | Optional search query Optional. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -569,7 +581,7 @@ Pick a todo and delete it
 | Argument | Description |
 | --- | --- |
 | `<query>` | Optional search query Optional. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -581,8 +593,10 @@ Check clings setup and local environment
 
 | Argument | Description |
 | --- | --- |
-| `--verbose` | Include paths and extra detail Optional. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--verbose` | Include local paths in human output; JSON remains redacted Optional. |
+| `--probe-automation` | Opt in to a read-only Things automation query Optional. |
+| `--support-bundle <support-bundle>` | Create a new redacted support JSON file without overwriting Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -607,7 +621,7 @@ Mark multiple todos as completed
 | `--dry-run` | Preview a reusable plan without writing Optional. |
 | `-y, --yes` | Authorize the whole plan without prompting Optional. |
 | `--execute-plan <execute-plan>` | Execute or resume a saved exact-ID plan Optional. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--list <list>` | Source list (default: today) Optional. |
@@ -624,7 +638,7 @@ Cancel multiple todos
 | `--dry-run` | Preview a reusable plan without writing Optional. |
 | `-y, --yes` | Authorize the whole plan without prompting Optional. |
 | `--execute-plan <execute-plan>` | Execute or resume a saved exact-ID plan Optional. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--list <list>` | Source list (default: today) Optional. |
@@ -642,7 +656,7 @@ Add tags to multiple todos
 | `--dry-run` | Preview a reusable plan without writing Optional. |
 | `-y, --yes` | Authorize the whole plan without prompting Optional. |
 | `--execute-plan <execute-plan>` | Execute or resume a saved exact-ID plan Optional. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--list <list>` | Source list (default: today) Optional. |
@@ -660,7 +674,7 @@ Move multiple todos to a project
 | `--dry-run` | Preview a reusable plan without writing Optional. |
 | `-y, --yes` | Authorize the whole plan without prompting Optional. |
 | `--execute-plan <execute-plan>` | Execute or resume a saved exact-ID plan Optional. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--list <list>` | Source list (default: today) Optional. |
@@ -674,7 +688,7 @@ Filter todos using a query expression
 | Argument | Description |
 | --- | --- |
 | `<expression>` | Filter expression Required. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--list <list>` | Scope to a Things list: today, inbox, upcoming, anytime, someday, logbook, trash Optional. |
@@ -691,6 +705,9 @@ Explain the disabled Things navigation command
 | Argument | Description |
 | --- | --- |
 | `<target>` | The ID of the todo to open, or a list name (today, inbox, etc.) Required. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
+| `--no-color` | Suppress color output Optional. |
+| `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
 | `-h, --help` | Show help information. Optional. |
 
@@ -700,8 +717,8 @@ Show productivity statistics
 
 | Argument | Description |
 | --- | --- |
-| `--days <days>` | Number of days to analyze (default: 30) Optional. Default: 30. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--days <days>` | Number of days to analyze (1...36600; default: 30) Optional. Default: 30. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -713,8 +730,8 @@ Show completion trends over time
 
 | Argument | Description |
 | --- | --- |
-| `--weeks <weeks>` | Number of weeks to show (default: 4) Optional. Default: 4. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--weeks <weeks>` | Number of weeks to show (1...5200; default: 4) Optional. Default: 4. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -726,8 +743,8 @@ Show GitHub-style contribution calendar
 
 | Argument | Description |
 | --- | --- |
-| `--weeks <weeks>` | Number of weeks to show (default: 12) Optional. Default: 12. |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--weeks <weeks>` | Number of weeks to show (1...5200; default: 12) Optional. Default: 12. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -748,7 +765,7 @@ Start or resume a weekly review
 
 | Argument | Description |
 | --- | --- |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -760,7 +777,7 @@ Show current review session status
 
 | Argument | Description |
 | --- | --- |
-| `--json` | Output as JSON where supported; takes precedence over --format Optional. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
 | `--no-color` | Suppress color output Optional. |
 | `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
@@ -772,6 +789,9 @@ Clear the current review session
 
 | Argument | Description |
 | --- | --- |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
+| `--no-color` | Suppress color output Optional. |
+| `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
 | `-h, --help` | Show help information. Optional. |
 
@@ -801,6 +821,9 @@ Set the Things 3 auth token for URL scheme operations (e.g., --heading)
 | Argument | Description |
 | --- | --- |
 | `<token>` | The auth token from Things 3 (Settings > General > Enable Things URLs) Required. |
+| `--json` | Output a schema 1 JSON response with payload under data; takes precedence over --format Optional. |
+| `--no-color` | Suppress color output Optional. |
+| `--format <format>` | Todo-line template: {id}, {name}, {status}, {due}, {project}, {area}, {tags}; only used by todo renderers Optional. |
 | `--version` | Show the version. Optional. |
 | `-h, --help` | Show help information. Optional. |
 

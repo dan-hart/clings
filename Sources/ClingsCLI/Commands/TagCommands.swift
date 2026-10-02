@@ -53,7 +53,7 @@ struct TagsListCommand: AsyncParsableCommand {
         discussion: """
         Show every tag currently available in Things.
 
-        --json returns a count/items envelope. Use the displayed tag names with
+        --json puts count/items under data. Use the displayed tag names with
         add --tags, update --tags, or filter "tags CONTAINS 'docs'".
 
         EXAMPLES:
@@ -73,7 +73,7 @@ struct TagsListCommand: AsyncParsableCommand {
             ? JSONOutputFormatter()
             : TextOutputFormatter(useColors: !output.noColor)
 
-        print(formatter.format(tags: tags))
+        print(CLIResponse.render(formatter.format(tags: tags), output: output))
     }
 }
 
@@ -116,7 +116,7 @@ struct TagsAddCommand: AsyncParsableCommand {
             : TextOutputFormatter(useColors: !output.noColor)
 
         if output.json {
-            print(formatter.format(tags: [tag]))
+            print(CLIResponse.success(formatter.format(tags: [tag])))
         } else {
             print(formatter.format(message: "Created tag: \(tag.name)"))
         }
@@ -159,14 +159,9 @@ struct TagsDeleteCommand: AsyncParsableCommand {
             throw ThingsError.invalidState("Tag name cannot be empty")
         }
 
-        // Confirmation unless --force
-        if !force {
-            print("Delete tag '\(trimmedName)'? This will remove it from all todos. [y/N] ", terminator: "")
-            guard let response = CommandRuntime.inputReader()?.lowercased(),
-                  response == "y" || response == "yes" else {
-                print("Cancelled")
-                return
-            }
+        guard try confirmMutation("Delete tag '\(trimmedName)'? This removes it from all todos and cannot be undone.", authorized: force) else {
+            try printOutcome(MutationOutcome(applied: false, undoRecorded: false, message: "Canceled request; no change applied"), output: output)
+            return
         }
 
         let client = CommandRuntime.makeClient()
@@ -176,7 +171,7 @@ struct TagsDeleteCommand: AsyncParsableCommand {
             ? JSONOutputFormatter()
             : TextOutputFormatter(useColors: !output.noColor)
 
-        print(formatter.format(message: "Deleted tag: \(trimmedName)"))
+        print(CLIResponse.render(formatter.format(message: "Deleted tag: \(trimmedName)"), output: output))
     }
 }
 
@@ -230,6 +225,6 @@ struct TagsRenameCommand: AsyncParsableCommand {
             ? JSONOutputFormatter()
             : TextOutputFormatter(useColors: !output.noColor)
 
-        print(formatter.format(message: "Renamed tag: \(trimmedOld) -> \(trimmedNew)"))
+        print(CLIResponse.render(formatter.format(message: "Renamed tag: \(trimmedOld) -> \(trimmedNew)"), output: output))
     }
 }

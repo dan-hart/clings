@@ -213,12 +213,14 @@ struct CommandExecutionTests {
                 CommandFixtures.todo(id: "multi-1", name: "Matching alpha"),
                 CommandFixtures.todo(id: "multi-2", name: "Matching beta"),
             ]
-            let multipleMatchesOutput = try await runAsync(
-                CompleteCommand.parse(["--title", "Matching"]),
-                client: client
-            )
-            #expect(multipleMatchesOutput.contains("Multiple todos match"))
-            #expect(multipleMatchesOutput.contains("clings complete multi-1"))
+            try await CommandTestSupport.withRuntime(client: client) {
+                do { try await CompleteCommand.parse(["--title", "Matching"]).run(); Issue.record("Ambiguous title was accepted") }
+                catch let error as CommandFailure {
+                    #expect(error.exitStatus == 1)
+                    #expect(error.message.contains("Multiple todos match"))
+                    #expect(error.message.contains("multi-1"))
+                }
+            }
 
             let cancelOutput = try await runAsync(
                 CancelCommand.parse([baseTodo.id]),
@@ -501,7 +503,7 @@ struct CommandExecutionTests {
                 database: database
             )
             #expect(reviewStartOutput.contains("Weekly Review"))
-            #expect(ReviewSession.load() != nil)
+            #expect(try ReviewSession.load() != nil)
 
             let reviewStatusOutput = try await runAsync(
                 ReviewStatusCommand.parse([]),
@@ -514,7 +516,7 @@ struct CommandExecutionTests {
                 database: database
             )
             #expect(reviewClearOutput.contains("Review session cleared."))
-            #expect(ReviewSession.load() == nil)
+            #expect(try ReviewSession.load() == nil)
 
             let statsOutput = try await runAsync(
                 StatsCommand.parse([]),

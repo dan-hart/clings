@@ -5,10 +5,15 @@
 
 import ArgumentParser
 import ClingsCore
+import Foundation
 
 /// The main clings command.
 @main
 struct Clings: AsyncParsableCommand {
+    static func main() async {
+        await Foundation.exit(CommandBoundary.execute(Array(CommandLine.arguments.dropFirst())))
+    }
+
     static let configuration = CommandConfiguration(
         commandName: "clings",
         abstract: "A powerful CLI for Things 3",

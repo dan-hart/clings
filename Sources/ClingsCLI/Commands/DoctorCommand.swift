@@ -72,7 +72,7 @@ struct DoctorCommand: AsyncParsableCommand {
             if !report.healthy {
                 throw failure
             }
-            print(json)
+            print(CLIResponse.success(json))
             return
         }
         print("clings doctor\n─────────────────────────────────────")

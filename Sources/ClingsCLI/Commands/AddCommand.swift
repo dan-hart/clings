@@ -124,22 +124,22 @@ struct AddCommand: AsyncParsableCommand {
         }
 
         // Command line options override parsed values
-        if let notes = notes {
+        if let notes {
             parsed.notes = notes
         }
         if !tags.isEmpty {
             parsed.tags.append(contentsOf: tags)
         }
-        if let project = project {
+        if let project {
             parsed.project = project
         }
-        if let area = area {
+        if let area {
             parsed.area = area
         }
-        if let when = when {
+        if let when {
             parsed.whenDate = try resolveDate(when)
         }
-        if let deadline = deadline {
+        if let deadline {
             parsed.dueDate = try resolveDate(deadline)
         }
 

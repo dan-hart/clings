@@ -20,7 +20,7 @@ struct TaskPreview: Encodable {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             encoder.dateEncodingStrategy = .iso8601
-            return try String(decoding: encoder.encode(self), as: UTF8.self)
+            return try CLIResponse.success(String(decoding: encoder.encode(self), as: UTF8.self))
         }
         let formatter = ISO8601DateFormatter()
         return """

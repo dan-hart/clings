@@ -5,7 +5,7 @@ struct CommandFailure: LocalizedError {
     let exitStatus: Int32
     let code: String
     let message: String
-    var dataJSON: String? = nil
+    var dataJSON: String?
     var errorDescription: String? {
         message
     }
@@ -20,12 +20,12 @@ struct MutationOutcome: Codable {
     var message: String
 }
 
-func payloadJSON<T: Encodable>(_ value: T) throws -> String {
+func payloadJSON(_ value: some Encodable) throws -> String {
     try String(decoding: StateJSON.encoder().encode(value), as: UTF8.self)
 }
 
 func printOutcome(_ outcome: MutationOutcome, output: OutputOptions) throws {
-    try print(output.json ? payloadJSON(outcome) : outcome.message)
+    try print(output.json ? CLIResponse.success(payloadJSON(outcome)) : outcome.message)
 }
 
 func recordApplied(_ entry: UndoEntry, message: String, unsupported: [String] = []) throws -> MutationOutcome {

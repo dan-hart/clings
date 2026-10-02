@@ -41,7 +41,7 @@ struct ViewsListCommand: ParsableCommand {
         Show every saved view name, the filter expression it runs, and any note you
         stored alongside it.
 
-        --json returns a bare array of view definitions, not an items envelope.
+        --json returns a schema 1 envelope with an array of definitions under data.
 
         EXAMPLES:
           clings views list
@@ -59,7 +59,7 @@ struct ViewsListCommand: ParsableCommand {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             encoder.dateEncodingStrategy = .iso8601
             let data = try encoder.encode(views)
-            print(String(data: data, encoding: .utf8) ?? "[]")
+            print(CLIResponse.success(String(decoding: data, as: UTF8.self)))
             return
         }
 
@@ -103,9 +103,11 @@ struct ViewsSaveCommand: ParsableCommand {
     @Option(name: .long, help: "Optional description for this view")
     var note: String?
 
+    @OptionGroup var output: OutputOptions
+
     func run() throws {
         try SavedViewStore.save(SavedView(name: name, expression: expression, note: note))
-        print("Saved view: \(name)")
+        print(renderMessage("Saved view: \(name)", output: output))
     }
 }
 
@@ -118,7 +120,7 @@ struct ViewsRunCommand: AsyncParsableCommand {
         matching open todos.
 
         Uses the same open-list scope as filter; Logbook is excluded. --json
-        returns {count, items, list}. --format customizes todo lines only.
+        returns {count, items, list} under data. --format customizes todo lines only.
 
         EXAMPLES:
           clings views run docs-today
@@ -140,7 +142,7 @@ struct ViewsRunCommand: AsyncParsableCommand {
 
         let filter = try FilterParser.parse(view.expression)
         let client = CommandRuntime.makeClient()
-        let todos = try queryOptions.apply(await queryOptions.fetch(client: client).filter { filter.matches($0) })
+        let todos = try await queryOptions.apply(queryOptions.fetch(client: client).filter { filter.matches($0) })
         print(renderTodos(todos, list: view.name, output: output))
     }
 }
@@ -164,10 +166,12 @@ struct ViewsDeleteCommand: ParsableCommand {
     @Argument(help: "View name", completion: SavedNameCompletion.viewKind)
     var name: String
 
+    @OptionGroup var output: OutputOptions
+
     func run() throws {
         guard try SavedViewStore.delete(name: name) else {
             throw ValidationError("Saved view not found: \(name)")
         }
-        print("Deleted view: \(name)")
+        print(renderMessage("Deleted view: \(name)", output: output))
     }
 }

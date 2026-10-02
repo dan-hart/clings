@@ -15,7 +15,7 @@ func makeFormatter(output: OutputOptions) -> OutputFormatter {
 func renderTodos(_ todos: [Todo], list: String? = nil, output: OutputOptions) -> String {
     if output.json {
         let formatter = JSONOutputFormatter()
-        return list.map { formatter.format(todos: todos, list: $0) } ?? formatter.format(todos: todos)
+        return CLIResponse.success(list.map { formatter.format(todos: todos, list: $0) } ?? formatter.format(todos: todos))
     }
 
     if let template = output.format {
@@ -32,7 +32,7 @@ func renderTodos(_ todos: [Todo], list: String? = nil, output: OutputOptions) ->
 
 func renderTodo(_ todo: Todo, output: OutputOptions) -> String {
     if output.json {
-        return JSONOutputFormatter().format(todo: todo)
+        return CLIResponse.success(JSONOutputFormatter().format(todo: todo))
     }
     if let template = output.format {
         return TodoLineFormatter(template: template).format(todo: todo)
@@ -41,14 +41,14 @@ func renderTodo(_ todo: Todo, output: OutputOptions) -> String {
 }
 
 func renderMessage(_ message: String, output: OutputOptions) -> String {
-    makeFormatter(output: output).format(message: message)
+    CLIResponse.render(makeFormatter(output: output).format(message: message), output: output)
 }
 
 func fetchOpenTodos(client: any ThingsClientProtocol) async throws -> [Todo] {
     let lists: [ListView] = [.today, .inbox, .upcoming, .anytime, .someday]
     var todos: [Todo] = []
     for list in lists {
-        try todos.append(contentsOf: await client.fetchList(list))
+        try await todos.append(contentsOf: client.fetchList(list))
     }
     return uniqueTodos(todos)
 }
@@ -56,7 +56,7 @@ func fetchOpenTodos(client: any ThingsClientProtocol) async throws -> [Todo] {
 func fetchVisibleTodos(client: any ThingsClientProtocol, includeLogbook: Bool = false) async throws -> [Todo] {
     var todos = try await fetchOpenTodos(client: client)
     if includeLogbook {
-        try todos.append(contentsOf: await client.fetchList(.logbook))
+        try await todos.append(contentsOf: client.fetchList(.logbook))
     }
     return uniqueTodos(todos)
 }

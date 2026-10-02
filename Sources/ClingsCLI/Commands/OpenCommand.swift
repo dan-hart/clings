@@ -32,8 +32,10 @@ struct OpenCommand: AsyncParsableCommand {
     @Argument(help: "The ID of the todo to open, or a list name (today, inbox, etc.)")
     var target: String
 
+    @OptionGroup var output: OutputOptions
+
     func run() async throws {
         _ = target
-        throw ThingsError.invalidState("Open command is disabled: URL schemes are not allowed.")
+        throw CommandFailure(exitStatus: 2, code: "unsupported_capability", message: "Open command is disabled: URL navigation is unavailable. Open Things 3 manually or use show to inspect the item.")
     }
 }

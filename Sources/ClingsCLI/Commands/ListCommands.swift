@@ -9,7 +9,7 @@ import ClingsCore
 // MARK: - Shared Options
 
 struct OutputOptions: ParsableArguments {
-    @Flag(name: .long, help: "Output as JSON where supported; takes precedence over --format")
+    @Flag(name: .long, help: "Output a schema 1 JSON response with payload under data; takes precedence over --format")
     var json = false
 
     @Flag(name: .long, help: "Suppress color output")
@@ -54,7 +54,7 @@ struct TodayCommand: ListCommand {
           clings today --json           Output as JSON
           clings today --no-color       Disable colored output
           clings today --format "{id} {name} {due}"
-          clings today --json | jq -r '.items[] | [.id, .name] | @tsv'
+          clings today --json | jq -r '.data.items[] | [.id, .name] | @tsv'
 
         SEE ALSO:
           inbox, upcoming, anytime, someday
@@ -64,7 +64,9 @@ struct TodayCommand: ListCommand {
 
     @OptionGroup var output: OutputOptions
 
-    var listView: ListView { .today }
+    var listView: ListView {
+        .today
+    }
 }
 
 // MARK: - Inbox Command
@@ -97,7 +99,9 @@ struct InboxCommand: ListCommand {
 
     @OptionGroup var output: OutputOptions
 
-    var listView: ListView { .inbox }
+    var listView: ListView {
+        .inbox
+    }
 }
 
 // MARK: - Upcoming Command
@@ -126,7 +130,9 @@ struct UpcomingCommand: ListCommand {
 
     @OptionGroup var output: OutputOptions
 
-    var listView: ListView { .upcoming }
+    var listView: ListView {
+        .upcoming
+    }
 }
 
 // MARK: - Anytime Command
@@ -153,7 +159,9 @@ struct AnytimeCommand: ListCommand {
 
     @OptionGroup var output: OutputOptions
 
-    var listView: ListView { .anytime }
+    var listView: ListView {
+        .anytime
+    }
 }
 
 // MARK: - Someday Command
@@ -185,7 +193,9 @@ struct SomedayCommand: ListCommand {
 
     @OptionGroup var output: OutputOptions
 
-    var listView: ListView { .someday }
+    var listView: ListView {
+        .someday
+    }
 }
 
 // MARK: - Logbook Command
@@ -205,7 +215,7 @@ struct LogbookCommand: ListCommand {
 
         The list can also include canceled work. Filter the JSON status when
         you need completed items only:
-          clings logbook --json | jq '.items[] | select(.status == "completed")'
+          clings logbook --json | jq '.data.items[] | select(.status == "completed")'
 
         EXAMPLES:
           clings logbook                Show completed todos
@@ -220,7 +230,9 @@ struct LogbookCommand: ListCommand {
 
     @OptionGroup var output: OutputOptions
 
-    var listView: ListView { .logbook }
+    var listView: ListView {
+        .logbook
+    }
 }
 
 // MARK: - Projects Command
@@ -255,7 +267,7 @@ struct ProjectsCommand: AsyncParsableCommand {
             ? JSONOutputFormatter()
             : TextOutputFormatter(useColors: !output.noColor)
 
-        print(formatter.format(projects: projects))
+        print(CLIResponse.render(formatter.format(projects: projects), output: output))
     }
 }
 
@@ -294,7 +306,7 @@ struct AreasCommand: AsyncParsableCommand {
             ? JSONOutputFormatter()
             : TextOutputFormatter(useColors: !output.noColor)
 
-        print(formatter.format(areas: areas))
+        print(CLIResponse.render(formatter.format(areas: areas), output: output))
     }
 }
 

@@ -43,7 +43,7 @@ struct SearchCommand: AsyncParsableCommand {
         let client = CommandRuntime.makeClient()
         var todos = try await client.search(query: query)
         if queryOptions.list != nil {
-            let scopeIDs = try Set(await queryOptions.fetch(client: client).map(\.id))
+            let scopeIDs = try await Set(queryOptions.fetch(client: client).map(\.id))
             todos = todos.filter { scopeIDs.contains($0.id) }
         }
         todos = queryOptions.apply(todos)

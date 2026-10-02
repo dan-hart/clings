@@ -51,7 +51,7 @@ private func executeBatch(operation: BatchOperation, list: String?, tags: String
     } else {
         guard let scope = ListView(rawValue: (list ?? "today").lowercased()) else { throw CommandFailure(exitStatus: 1, code: "invalid_list", message: "Unknown list") }
         let filter = try options.where.map { try FilterParser.parse($0) }
-        let todos = try uniqueTodos(await client.fetchQueryList(scope)).filter { filter?.matches($0) ?? true }
+        let todos = try await uniqueTodos(client.fetchQueryList(scope)).filter { filter?.matches($0) ?? true }
         let tagNames = tags?.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         var projectID: String?
         if let destination {
@@ -65,7 +65,7 @@ private func executeBatch(operation: BatchOperation, list: String?, tags: String
     do { try plan.validate() }
     catch { throw CommandFailure(exitStatus: 1, code: "invalid_plan", message: error.localizedDescription) }
     if options.dryRun {
-        try print(options.output.json ? payloadJSON(plan) : "[DRY RUN] No changes made\n\(renderBatchPlan(plan))")
+        try print(options.output.json ? CLIResponse.success(payloadJSON(plan)) : "[DRY RUN] No changes made\n\(renderBatchPlan(plan))")
         return
     }
     if options.yes {
@@ -73,9 +73,9 @@ private func executeBatch(operation: BatchOperation, list: String?, tags: String
     } else {
         writeStderr(renderBatchPlan(plan) + "\n")
     }
-    guard !plan.items.isEmpty else { try print(options.output.json ? payloadJSON(plan) : "No todos match the criteria"); return }
+    guard !plan.items.isEmpty else { try print(options.output.json ? CLIResponse.success(payloadJSON(plan)) : "No todos match the criteria"); return }
     guard try confirmMutation("Apply \(operation.rawValue) plan to \(plan.items.count) exact IDs?", authorized: options.yes) else {
-        try print(options.output.json ? payloadJSON(plan) : "Aborted; no changes made")
+        try print(options.output.json ? CLIResponse.success(payloadJSON(plan)) : "Aborted; no changes made")
         return
     }
 
@@ -180,5 +180,5 @@ private func executeBatch(operation: BatchOperation, list: String?, tags: String
     if plan.items.contains(where: { $0.state != .succeeded }) {
         throw try CommandFailure(exitStatus: 2, code: "batch_partial", message: "Some batch items failed; results retained for retry", dataJSON: payloadJSON(plan))
     }
-    try print(options.output.json ? payloadJSON(plan) : "Applied \(operation.rawValue): \(plan.items.count) items. Plan: \(path)")
+    try print(options.output.json ? CLIResponse.success(payloadJSON(plan)) : "Applied \(operation.rawValue): \(plan.items.count) items. Plan: \(path)")
 }

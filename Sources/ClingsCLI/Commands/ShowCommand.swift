@@ -20,9 +20,9 @@ struct ShowCommand: AsyncParsableCommand {
         - Checklist items
 
         To find a todo's ID, use --json output on any list command:
-          clings today --json | jq -r '.items[].id'
+          clings today --json | jq -r '.data.items[].id'
 
-        --json returns one todo object, not a list envelope. --format renders a
+        Schema 1 JSON data contains one todo object rather than count/items. --format renders a
         single custom line instead of the detailed view. Showing never modifies
         the todo; use pick show if you do not know its exact ID.
 

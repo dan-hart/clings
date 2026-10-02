@@ -5,6 +5,43 @@ import Foundation
 import Testing
 
 struct MutationSafetyTests {
+    @Test func rootBoundaryRetainsRealClientPartialResultsIncludingProjects() async throws {
+        try await CommandTestSupport.withTemporaryConfigDirectory { _ in
+            for operation in ["create", "update", "restore", "project"] {
+                try UndoStore.clear()
+                let id = operation == "project" ? "created-project" : "task"
+                let fields = operation == "update" || operation == "restore" ? ["title"] : ["create"]
+                let outcome = try JSONSerialization.data(withJSONObject: ["success": false, "id": id, "appliedFields": fields, "error": "later assignment failed"])
+                let todo = Todo(id: "task", name: "Original")
+                let client = ThingsClient(bridge: FirstScriptPartialExecutor(outcome: String(decoding: outcome, as: UTF8.self), todo: todo))
+                if operation == "restore" { try UndoStore.record(UndoEntry(operation: .update, todoID: id, snapshot: TodoSnapshot(todo: todo))) }
+                let arguments: [String]
+                switch operation {
+                case "create": arguments = ["add", "Draft"]
+                case "update": arguments = ["update", "task", "--name", "Changed"]
+                case "project": arguments = ["project", "add", "Draft"]
+                default: arguments = ["undo"]
+                }
+                try await CommandTestSupport.withRuntime(client: client) {
+                    let (status, text) = try await CommandTestSupport.captureStandardOutput { await CommandBoundary.execute(arguments + ["--json"]) }
+                    #expect(status == 2)
+                    let response = try #require(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
+                    #expect(response["schemaVersion"] as? Int == 1)
+                    #expect(response["success"] as? Bool == false)
+                    let data = try #require(response["data"] as? [String: Any])
+                    #expect(data["id"] as? String == id)
+                    #expect(data["applied"] as? Bool == true)
+                    #expect(data["appliedFields"] as? [String] == fields)
+                    if operation == "project" {
+                        #expect(data["undoRecorded"] as? Bool == false)
+                        #expect(try UndoStore.latest() == nil)
+                        #expect(!(data["unsupportedUndo"] as? [String] ?? []).isEmpty)
+                    }
+                }
+            }
+        }
+    }
+
     @Test func firstScriptPartialWritesCarryResultsAndPreserveUndoThroughRealClient() async throws {
         try await CommandTestSupport.withTemporaryConfigDirectory { _ in
             for operation in ["create", "update", "restore"] {
@@ -117,7 +154,7 @@ struct MutationSafetyTests {
             let data = Data(output.utf8)
             let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             #expect(object?["schemaVersion"] as? Int == 1)
-            #expect(object?["operation"] as? String == "complete")
+            #expect((object?["data"] as? [String: Any])?["operation"] as? String == "complete")
         }
         #expect(client.completedIDs.isEmpty)
     }
