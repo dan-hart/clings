@@ -81,8 +81,9 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
             checklistItems: checklistItems
         )
 
-        let id = try await jxaBridge.executeAppleScript(script)
-        guard !id.isEmpty else {
+        let creation = try MutationResult.appleScript(await jxaBridge.executeAppleScript(script))
+        try creation.check()
+        guard let id = creation.id, !id.isEmpty else {
             throw ThingsError.operationFailed("Missing created todo ID")
         }
 
@@ -91,7 +92,7 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
             do {
                 _ = try await jxaBridge.executeAppleScript(tagScript)
             } catch {
-                throw AppliedMutationError(id: id, fields: ["create"], message: error.localizedDescription)
+                throw AppliedMutationError(id: id, fields: creation.appliedFields ?? ["create"], message: error.localizedDescription)
             }
         }
 
@@ -179,7 +180,9 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
     }
 
     public func restoreTodo(_ snapshot: TodoSnapshot) async throws {
-        _ = try await jxaBridge.executeAppleScript(JXAScripts.restoreTodoAppleScript(snapshot))
+        let restoration = try MutationResult.appleScript(await jxaBridge.executeAppleScript(JXAScripts.restoreTodoAppleScript(snapshot)))
+        try restoration.check(fallbackID: snapshot.id)
+        guard restoration.id == snapshot.id else { throw ThingsError.operationFailed("Malformed restore response: mismatched todo ID") }
         do {
             _ = try await jxaBridge.executeAppleScript(JXAScripts.setTodoTagsAppleScript(id: snapshot.id, tags: snapshot.tags))
         } catch {
@@ -192,9 +195,7 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         if name != nil || notes != nil || dueDate != nil {
             let script = JXAScripts.updateTodo(id: id, name: name, notes: notes, dueDate: dueDate, tags: nil)
             let result = try await jxaBridge.executeJSON(script, as: MutationResult.self)
-            if !result.success {
-                throw ThingsError.operationFailed(result.error ?? "Unknown error")
-            }
+            try result.check(fallbackID: id)
         }
 
         if let tags = tags {

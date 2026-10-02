@@ -5,6 +5,43 @@ import Foundation
 import Testing
 
 struct MutationSafetyTests {
+    @Test func firstScriptPartialWritesCarryResultsAndPreserveUndoThroughRealClient() async throws {
+        try await CommandTestSupport.withTemporaryConfigDirectory { _ in
+            for operation in ["create", "update", "restore"] {
+                try UndoStore.clear()
+                let id = operation == "create" ? "created-id" : "task"
+                let fields = operation == "create" ? ["create"] : ["title"]
+                let outcome = try JSONSerialization.data(withJSONObject: [
+                    "success": false, "id": id, "appliedFields": fields, "error": "later assignment rejected",
+                ])
+                let todo = Todo(id: "task", name: "Original", notes: "Original notes")
+                let client = ThingsClient(bridge: FirstScriptPartialExecutor(outcome: String(decoding: outcome, as: UTF8.self), todo: todo))
+                if operation == "restore" {
+                    try UndoStore.record(UndoEntry(operation: .update, todoID: id, snapshot: TodoSnapshot(todo: todo)))
+                }
+                try await CommandTestSupport.withRuntime(client: client) {
+                    do {
+                        switch operation {
+                        case "create": try await AddCommand.parse(["A", "--json"]).run()
+                        case "update": try await UpdateCommand.parse([id, "--name", "Changed", "--notes", "Rejected", "--json"]).run()
+                        default: try await UndoCommand.parse(["--json"]).run()
+                        }
+                        Issue.record("Expected first-script partial failure")
+                    } catch let failure as CommandFailure {
+                        #expect(failure.exitStatus == 2)
+                        let data = try #require(failure.dataJSON)
+                        let object = try #require(JSONSerialization.jsonObject(with: Data(data.utf8)) as? [String: Any])
+                        #expect(object["id"] as? String == id)
+                        #expect(object["applied"] as? Bool == true)
+                        #expect(object["appliedFields"] as? [String] == fields)
+                    }
+                }
+                #expect(try UndoStore.latest()?.todoID == id)
+                #expect(try UndoStore.latest()?.operation == (operation == "create" ? .create : .update))
+            }
+        }
+    }
+
     @Test func updateWithoutChangesDoesNotClaimApplied() async throws {
         try await CommandTestSupport.withTemporaryConfigDirectory { _ in
             let client = RecordingThingsClient()
@@ -118,5 +155,27 @@ struct MutationSafetyTests {
         }
         #expect(client.searchQueries.isEmpty)
         #expect(client.completedIDs.isEmpty)
+    }
+}
+
+private struct FirstScriptPartialExecutor: JXAExecuting {
+    let outcome: String
+    let todo: Todo
+    func execute(_: String) async throws -> String {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return try String(decoding: encoder.encode(todo), as: UTF8.self)
+    }
+
+    func executeJSON<T: Decodable & Sendable>(_: String, as type: T.Type) async throws -> T {
+        try JSONDecoder().decode(type, from: Data(outcome.utf8))
+    }
+
+    func executeAppleScript(_: String) async throws -> String {
+        outcome
+    }
+
+    func isThingsRunning() async -> Bool {
+        true
     }
 }

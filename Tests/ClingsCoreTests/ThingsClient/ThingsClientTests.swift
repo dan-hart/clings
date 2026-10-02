@@ -105,8 +105,8 @@ struct ThingsClientTests {
 
     @Test func createTodoUsesAppleScriptAppliesTagsAndRequiresCreatedID() async throws {
         let bridge = MockJXAExecutor()
-        bridge.appleScriptResponses = [
-            .success("todo-created-id"),
+        bridge.appleScriptResponses = try [
+            .success(mutationResultJSON(success: true, id: "todo-created-id", appliedFields: ["create"])),
             .success("ok"),
         ]
 
@@ -129,7 +129,7 @@ struct ThingsClientTests {
         #expect(bridge.appleScriptScripts[1].contains("release"))
 
         let missingIDBridge = MockJXAExecutor()
-        missingIDBridge.appleScriptResponses = [.success("")]
+        missingIDBridge.appleScriptResponses = try [.success(mutationResultJSON(success: true, appliedFields: ["create"]))]
         let missingIDClient = ThingsClient(bridge: missingIDBridge)
 
         do {
@@ -156,8 +156,8 @@ struct ThingsClientTests {
         }
 
         let tagFailureBridge = MockJXAExecutor()
-        tagFailureBridge.appleScriptResponses = [
-            .success("todo-created-id"),
+        tagFailureBridge.appleScriptResponses = try [
+            .success(mutationResultJSON(success: true, id: "todo-created-id", appliedFields: ["create"])),
             .failure(JXAError.scriptError("tag failure")),
         ]
         let tagFailureClient = ThingsClient(bridge: tagFailureBridge)

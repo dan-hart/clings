@@ -74,9 +74,11 @@ struct QueryDateTests {
 
     @Test func invalidUpdateDatesRejectBeforeMutating() async throws {
         let client = RecordingThingsClient()
-        try await CommandTestSupport.withRuntime(client: client) {
-            let update = try UpdateCommand.parse(["a", "--name", "Changed", "--due", "2027-02-30"])
-            await #expect(throws: (any Error).self) { try await update.run() }
+        try await CommandTestSupport.withTemporaryConfigDirectory { _ in
+            try await CommandTestSupport.withRuntime(client: client) {
+                let update = try UpdateCommand.parse(["a", "--name", "Changed", "--due", "2027-02-30"])
+                await #expect(throws: (any Error).self) { try await update.run() }
+            }
         }
         #expect(client.updatedTodos.isEmpty)
     }
@@ -91,10 +93,12 @@ struct QueryDateTests {
 
     @Test func invalidAddDateDoesNotWrite() async throws {
         let client = RecordingThingsClient()
-        try await CommandTestSupport.withRuntime(client: client) {
-            for args in [["Task", "--when", "2027-02-30"], ["Task tomorrow 13pm"], ["Task by tomorrow 13pm", "--parse-only", "--json"], ["Task tomorrow 25:00"], ["Task dec 15 25:00"], ["Task by 2027-02-30"], ["Task", "--deadline", "today 9:99"]] {
-                let command = try AddCommand.parse(args)
-                await #expect(throws: (any Error).self) { try await command.run() }
+        try await CommandTestSupport.withTemporaryConfigDirectory { _ in
+            try await CommandTestSupport.withRuntime(client: client) {
+                for args in [["Task", "--when", "2027-02-30"], ["Task tomorrow 13pm"], ["Task by tomorrow 13pm", "--parse-only", "--json"], ["Task tomorrow 25:00"], ["Task dec 15 25:00"], ["Task by 2027-02-30"], ["Task", "--deadline", "today 9:99"]] {
+                    let command = try AddCommand.parse(args)
+                    await #expect(throws: (any Error).self) { try await command.run() }
+                }
             }
         }
         #expect(client.createdTodos.isEmpty)

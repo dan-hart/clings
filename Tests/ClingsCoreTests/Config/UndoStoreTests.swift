@@ -4,11 +4,37 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 @testable import ClingsCore
+import Darwin
 import Foundation
 import Testing
 
 @Suite("UndoStore", .serialized)
 struct UndoStoreTests {
+    @Test func releasedMutationLockIsNotRetainedByInheritedDescriptor() throws {
+        try ConfigTestSupport.withTemporaryConfigDirectory { root in
+            var inherited: Int32 = -1
+            defer {
+                if inherited >= 0 {
+                    close(inherited)
+                }
+            }
+            try MutationLock.withLock {
+                let lockPath = root.appendingPathComponent("mutation.lock").resolvingSymlinksInPath().path
+                var lockInfo = stat()
+                #expect(stat(lockPath, &lockInfo) == 0)
+                for descriptor: Int32 in 0 ..< 1024 {
+                    var descriptorInfo = stat()
+                    if fstat(descriptor, &descriptorInfo) == 0, descriptorInfo.st_ino == lockInfo.st_ino, descriptorInfo.st_dev == lockInfo.st_dev {
+                        inherited = dup(descriptor); break
+                    }
+                }
+                #expect(inherited >= 0)
+            }
+            // dup shares the open-file description exactly as fork inheritance does.
+            try MutationLock.withLock {}
+        }
+    }
+
     @Test func legacyHistoryIDsAreStableAndPrecisionRoundTrips() throws {
         try ConfigTestSupport.withTemporaryConfigDirectory { root in
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

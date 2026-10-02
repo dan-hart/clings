@@ -7,6 +7,42 @@ import Foundation
 
 /// JavaScript for Automation (JXA) script templates for Things 3.
 public enum JXAScripts {
+    /// Reports each completed assignment even when a later Apple event fails.
+    /// Foundation performs JSON escaping for arbitrary IDs/error strings.
+    static func trackedAppleScript(id: String?, body: String) -> String {
+        """
+        use framework "Foundation"
+        use scripting additions
+        set mutationID to \(id.map { "\"\($0.appleScriptEscaped)\"" } ?? "missing value")
+        set appliedFields to {}
+        try
+            \(body)
+            return my mutationJSON(true, mutationID, appliedFields, missing value)
+        on error errorMessage number errorNumber
+            return my mutationJSON(false, mutationID, appliedFields, errorMessage & " (" & errorNumber & ")")
+        end try
+
+        on mutationJSON(successFlag, mutationID, appliedFields, errorMessage)
+            set payload to current application's NSMutableDictionary's dictionary()
+            payload's setObject:(current application's NSNumber's numberWithBool:successFlag) forKey:"success"
+            if mutationID is missing value then
+                payload's setObject:(current application's NSNull's null()) forKey:"id"
+            else
+                payload's setObject:(mutationID as text) forKey:"id"
+            end if
+            payload's setObject:(current application's NSArray's arrayWithArray:appliedFields) forKey:"appliedFields"
+            if errorMessage is missing value then
+                payload's setObject:(current application's NSNull's null()) forKey:"error"
+            else
+                payload's setObject:(errorMessage as text) forKey:"error"
+            end if
+            set encodedData to current application's NSJSONSerialization's dataWithJSONObject:payload options:0 |error|:(missing value)
+            set resultText to current application's NSString's alloc()'s initWithData:encodedData encoding:(current application's NSUTF8StringEncoding)
+            return resultText as text
+        end mutationJSON
+        """
+    }
+
     public static func moveTodoToProjectID(id: String, projectID: String) -> String {
         """
         tell application "Things3"
@@ -24,16 +60,20 @@ public enum JXAScripts {
         formatter.dateFormat = "MMMM d, yyyy HH:mm:ss"
         let setup = appleScriptDateSetup(variableName: "restoredDeadline", dateString: snapshot.dueDate.map { formatter.string(from: $0) })
         let status = snapshot.status == .open ? "open" : snapshot.status == .completed ? "completed" : "canceled"
-        return """
+        return trackedAppleScript(id: snapshot.id, body: """
         tell application "Things3"
             set targetTodo to to do id "\(snapshot.id.appleScriptEscaped)"
             set name of targetTodo to "\(snapshot.name.appleScriptEscaped)"
+            set end of appliedFields to "title"
             set notes of targetTodo to "\((snapshot.notes ?? "").appleScriptEscaped)"
+            set end of appliedFields to "notes"
             \(setup)
             set due date of targetTodo to \(snapshot.dueDate == nil ? "missing value" : "restoredDeadline")
+            set end of appliedFields to "deadline"
             set status of targetTodo to \(status)
+            set end of appliedFields to "status"
         end tell
-        """
+        """)
     }
     // MARK: - List Queries
 
@@ -325,21 +365,25 @@ public enum JXAScripts {
 
         // Tags are handled via AppleScript for reliability.
         _ = tags // Tags are applied separately.
+        var assignments: [String] = []
+        if let name { assignments.append("todo.name = '\(name.jxaEscaped)'; appliedFields.push('title');") }
+        if let notes { assignments.append("todo.notes = '\(notes.jxaEscaped)'; appliedFields.push('notes');") }
+        if let dueDateISO { assignments.append("todo.dueDate = new Date('\(dueDateISO)'); appliedFields.push('deadline');") }
 
         return """
         (() => {
-            const app = Application('Things3');
-            const todo = app.toDos.byId('\(id.jxaEscaped)');
-
-            if (!todo.exists()) {
-                return JSON.stringify({ success: false, error: 'Todo not found' });
+            const appliedFields = [];
+            try {
+                const app = Application('Things3');
+                const todo = app.toDos.byId('\(id.jxaEscaped)');
+                if (!todo.exists()) {
+                    return JSON.stringify({ success: false, id: '\(id.jxaEscaped)', appliedFields, error: 'Todo not found' });
+                }
+                \(assignments.joined(separator: "\n"))
+                return JSON.stringify({ success: true, id: '\(id.jxaEscaped)', appliedFields });
+            } catch (error) {
+                return JSON.stringify({ success: false, id: '\(id.jxaEscaped)', appliedFields, error: String(error) });
             }
-
-            \(name != nil ? "todo.name = '\(name!.jxaEscaped)';" : "")
-            \(notes != nil ? "todo.notes = '\(notes!.jxaEscaped)';" : "")
-            \(dueDateISO != nil ? "todo.dueDate = new Date('\(dueDateISO!)');" : "")
-
-            return JSON.stringify({ success: true, id: '\(id.jxaEscaped)' });
         })()
         """
     }
@@ -417,37 +461,48 @@ public enum JXAScripts {
         if let notes = notes, !notes.isEmpty {
             propsCode += ", notes: \"\(notes.appleScriptEscaped)\""
         }
+        let projectCode = project.map { projectName in
+            """
+            if exists project "\(projectName.appleScriptEscaped)" then
+                set project of newTodo to project "\(projectName.appleScriptEscaped)"
+                set end of appliedFields to "project"
+            end if
+            """
+        } ?? ""
+        let areaCode = area.map { areaName in
+            """
+            if exists area "\(areaName.appleScriptEscaped)" then
+                set area of newTodo to area "\(areaName.appleScriptEscaped)"
+                set end of appliedFields to "area"
+            end if
+            """
+        } ?? ""
 
-        return """
+        return trackedAppleScript(id: nil, body: """
         tell application "Things3"
             set newTodo to make new to do with properties {\(propsCode)}
+            set mutationID to id of newTodo
+            set end of appliedFields to "create"
 
-            \(project != nil ? """
-            if exists project "\(project!.appleScriptEscaped)" then
-                set project of newTodo to project "\(project!.appleScriptEscaped)"
-            end if
-            """ : "")
-
-            \(area != nil ? """
-            if exists area "\(area!.appleScriptEscaped)" then
-                set area of newTodo to area "\(area!.appleScriptEscaped)"
-            end if
-            """ : "")
+            \(projectCode)
+            \(areaCode)
 
             \(whenDateSetup)
             \(when != nil ? "schedule newTodo for scheduledDate" : "")
+            \(when != nil ? "set end of appliedFields to \"schedule\"" : "")
 
             \(deadlineDateSetup)
             \(deadline != nil ? "set due date of newTodo to deadlineDate" : "")
+            \(deadline != nil ? "set end of appliedFields to \"deadline\"" : "")
 
             set checklistItems to {\(checklistArray)}
             repeat with itemName in checklistItems
                 make new to do with properties {name:itemName} at newTodo
+                if appliedFields does not contain "checklist" then set end of appliedFields to "checklist"
             end repeat
 
-            return id of newTodo
         end tell
-        """
+        """)
     }
 
     /// Create a new project with the given properties.

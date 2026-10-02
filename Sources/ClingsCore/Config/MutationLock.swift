@@ -11,7 +11,7 @@ public enum MutationLock {
         let descriptor = open(companion, O_CREAT | O_RDWR | O_CLOEXEC, S_IRUSR | S_IWUSR)
         guard descriptor >= 0 else { throw ThingsError.operationFailed("Cannot open batch plan lock") }
         guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else { close(descriptor); throw ThingsError.operationFailed("Another process is executing this plan") }
-        defer { close(descriptor) }
+        defer { release(descriptor) }
         return try await body()
     }
 
@@ -26,12 +26,18 @@ public enum MutationLock {
         return descriptor
     }
 
+    private static func release(_ descriptor: Int32) {
+        // Duplicated/inherited descriptors must not extend this scope's ownership.
+        _ = flock(descriptor, LOCK_UN)
+        close(descriptor)
+    }
+
     public static func withLock<T>(_ body: () async throws -> T) async throws -> T {
         if held {
             return try await body()
         }
         let descriptor = try acquire()
-        defer { close(descriptor) }
+        defer { release(descriptor) }
         return try await $held.withValue(true) { try await body() }
     }
 
@@ -40,7 +46,7 @@ public enum MutationLock {
             return try body()
         }
         let descriptor = try acquire()
-        defer { close(descriptor) }
+        defer { release(descriptor) }
         return try $held.withValue(true) { try body() }
     }
 }

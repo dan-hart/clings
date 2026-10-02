@@ -126,6 +126,21 @@ struct MutationResult: Decodable, Sendable {
     let success: Bool
     let error: String?
     let id: String?
+    let appliedFields: [String]?
+
+    static func appleScript(_ output: String) throws -> MutationResult {
+        let result = try JSONDecoder().decode(MutationResult.self, from: Data(output.utf8))
+        guard result.appliedFields != nil else { throw ThingsError.operationFailed("Malformed tracked automation response: missing applied fields") }
+        return result
+    }
+
+    func check(fallbackID: String? = nil) throws {
+        guard !success else { return }
+        if let id = id ?? fallbackID, let fields = appliedFields, !fields.isEmpty {
+            throw AppliedMutationError(id: id, fields: fields, message: error ?? "Automation failed after a partial write")
+        }
+        throw ThingsError.operationFailed(error ?? "Unknown automation error")
+    }
 }
 
 /// Result from a creation operation.
@@ -241,8 +256,9 @@ public actor ThingsClient: ThingsClientProtocol {
             checklistItems: checklistItems
         )
 
-        let id = try await bridge.executeAppleScript(script)
-        guard !id.isEmpty else {
+        let creation = try MutationResult.appleScript(await bridge.executeAppleScript(script))
+        try creation.check()
+        guard let id = creation.id, !id.isEmpty else {
             throw ThingsError.operationFailed("Missing created todo ID")
         }
 
@@ -251,7 +267,7 @@ public actor ThingsClient: ThingsClientProtocol {
             do {
                 _ = try await bridge.executeAppleScript(tagScript)
             } catch {
-                throw AppliedMutationError(id: id, fields: ["create"], message: error.localizedDescription)
+                throw AppliedMutationError(id: id, fields: creation.appliedFields ?? ["create"], message: error.localizedDescription)
             }
         }
 
@@ -339,7 +355,9 @@ public actor ThingsClient: ThingsClientProtocol {
     }
 
     public func restoreTodo(_ snapshot: TodoSnapshot) async throws {
-        _ = try await bridge.executeAppleScript(JXAScripts.restoreTodoAppleScript(snapshot))
+        let restoration = try MutationResult.appleScript(await bridge.executeAppleScript(JXAScripts.restoreTodoAppleScript(snapshot)))
+        try restoration.check(fallbackID: snapshot.id)
+        guard restoration.id == snapshot.id else { throw ThingsError.operationFailed("Malformed restore response: mismatched todo ID") }
         do {
             _ = try await bridge.executeAppleScript(JXAScripts.setTodoTagsAppleScript(id: snapshot.id, tags: snapshot.tags))
         } catch {
@@ -352,9 +370,7 @@ public actor ThingsClient: ThingsClientProtocol {
         if name != nil || notes != nil || dueDate != nil {
             let script = JXAScripts.updateTodo(id: id, name: name, notes: notes, dueDate: dueDate, tags: nil)
             let result = try await bridge.executeJSON(script, as: MutationResult.self)
-            if !result.success {
-                throw ThingsError.operationFailed(result.error ?? "Unknown error")
-            }
+            try result.check(fallbackID: id)
         }
 
         if let tags = tags {
