@@ -95,6 +95,10 @@ Project and tag management are not recorded for undo. A partially created
 project reports its ID and completed assignments with exit 2. Inspect that ID
 before retrying so a later property failure does not create a duplicate project.
 
+A timeout is not a rollback. Inspect Things before retrying an uncertain
+automation outcome; terminating the CLI's script cannot retract an operation
+already received by the application.
+
 ## Freeze a batch selection
 
 Save a dry-run plan to review the exact IDs and proposed changes. Executing the
