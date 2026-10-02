@@ -40,7 +40,7 @@ struct AddCommand: AsyncParsableCommand {
     @Argument(help: "The todo title (supports natural language)")
     var title: String
 
-    @Option(name: .long, help: "Start from a saved task template")
+    @Option(name: .long, help: "Start from a saved task template", completion: SavedNameCompletion.templateKind)
     var template: String?
 
     @Option(name: .long, help: "Add notes to the todo")

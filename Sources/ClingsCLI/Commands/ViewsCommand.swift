@@ -94,7 +94,7 @@ struct ViewsSaveCommand: ParsableCommand {
         """
     )
 
-    @Argument(help: "View name")
+    @Argument(help: "View name", completion: SavedNameCompletion.viewKind)
     var name: String
 
     @Argument(help: "Filter expression")
@@ -127,7 +127,7 @@ struct ViewsRunCommand: AsyncParsableCommand {
         """
     )
 
-    @Argument(help: "View name")
+    @Argument(help: "View name", completion: SavedNameCompletion.viewKind)
     var name: String
 
     @OptionGroup var output: OutputOptions
@@ -161,7 +161,7 @@ struct ViewsDeleteCommand: ParsableCommand {
         aliases: ["rm"]
     )
 
-    @Argument(help: "View name")
+    @Argument(help: "View name", completion: SavedNameCompletion.viewKind)
     var name: String
 
     func run() throws {

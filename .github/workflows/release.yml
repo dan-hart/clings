@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  checks: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -74,6 +75,7 @@ jobs:
           test -s "release-assets/clings-$RELEASE_TAG-macos-arm64.tar.gz"
           test -s "release-assets/clings-$RELEASE_TAG-macos-x86_64.tar.gz"
           (cd release-assets && sha256sum *.tar.gz > SHA256SUMS)
+          bash scripts/verify-release-assets.sh release-assets "$RELEASE_TAG" "$(git rev-parse HEAD)"
           bash scripts/release-notes.sh "$RELEASE_TAG" > "$RUNNER_TEMP/release-notes.md"
       - name: Publish
         run: |

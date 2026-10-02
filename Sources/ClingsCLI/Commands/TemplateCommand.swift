@@ -93,7 +93,7 @@ struct TemplateSaveCommand: ParsableCommand {
         """
     )
 
-    @Argument(help: "Template name")
+    @Argument(help: "Template name", completion: SavedNameCompletion.templateKind)
     var name: String
 
     @Argument(help: "Template title or natural-language task")
@@ -160,7 +160,7 @@ struct TemplateRunCommand: AsyncParsableCommand {
         """
     )
 
-    @Argument(help: "Template name")
+    @Argument(help: "Template name", completion: SavedNameCompletion.templateKind)
     var name: String
 
     @OptionGroup var output: OutputOptions
@@ -210,7 +210,7 @@ struct TemplateDeleteCommand: ParsableCommand {
         aliases: ["rm"]
     )
 
-    @Argument(help: "Template name")
+    @Argument(help: "Template name", completion: SavedNameCompletion.templateKind)
     var name: String
 
     func run() throws {
