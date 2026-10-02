@@ -38,7 +38,11 @@ struct CompletionsCommand: ParsableCommand {
         }
     }
 
-    var script: String { Clings.completionScript(for: shell.completionShell) }
+    var script: String {
+        Clings.completionScript(for: shell.completionShell)
+    }
 
-    func run() throws { print(script) }
+    func run() throws {
+        print(script)
+    }
 }

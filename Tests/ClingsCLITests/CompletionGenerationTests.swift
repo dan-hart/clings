@@ -1,6 +1,6 @@
 import ArgumentParser
-import Testing
 @testable import ClingsCLI
+import Testing
 
 @Suite("Generated shell completions")
 struct CompletionGenerationTests {
