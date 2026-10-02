@@ -29,7 +29,7 @@ COMMANDS_RAW="$(
 missing_in_readme=()
 while IFS= read -r cmd; do
   [[ -z "$cmd" ]] && continue
-  if ! rg -q "\\| \`$cmd\` \\|" README.md; then
+  if ! grep -qE "\\| \`$cmd\` \\|" README.md; then
     missing_in_readme+=("$cmd")
   fi
 done <<EOF
@@ -44,7 +44,7 @@ ZSH_COMPLETIONS="$(swift run clings completions zsh)"
 missing_in_completions=()
 while IFS= read -r cmd; do
   [[ -z "$cmd" ]] && continue
-  if ! printf '%s\n' "$ZSH_COMPLETIONS" | rg -q "'$cmd:"; then
+  if ! grep -qE "'$cmd:" <<< "$ZSH_COMPLETIONS"; then
     missing_in_completions+=("$cmd")
   fi
 done <<EOF
@@ -63,11 +63,11 @@ PUBLIC_DOC_FILES=(
 )
 
 PERSONAL_PATTERN='(Call mom|Buy milk|ProjectName|Q1 Planning|Sprint 12|Family|expense report|Migration Project|Operations Project)'
-if rg -n "$PERSONAL_PATTERN" "${PUBLIC_DOC_FILES[@]}" -S >/dev/null; then
+if grep -REn "$PERSONAL_PATTERN" "${PUBLIC_DOC_FILES[@]}" >/dev/null; then
   fail "found personal, work-specific, or placeholder examples in help/docs (update examples to neutral text)"
 fi
 
-if rg -n '/Users/' "${PUBLIC_DOC_FILES[@]}" -S >/dev/null; then
+if grep -REn '/Users/' "${PUBLIC_DOC_FILES[@]}" >/dev/null; then
   fail "found absolute local filesystem paths in public docs/help"
 fi
 
