@@ -140,21 +140,9 @@ struct ProjectAddCommand: AsyncParsableCommand {
 
     private func parseWhenDate(_ str: String) throws -> Date {
         let lower = str.lowercased()
-        let calendar = Calendar.current
-        let now = Date()
-
-        if lower == "today" {
-            return calendar.startOfDay(for: now)
-        }
-        if lower == "tomorrow" {
-            if let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) {
-                return tomorrow
-            }
-        }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withFullDate]
-        if let date = formatter.date(from: str) {
-            return date
+        let isAbsolute = str.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil
+        if lower == "today" || lower == "tomorrow" || isAbsolute {
+            if let date = try resolveDate(str) { return date }
         }
         throw ThingsError.invalidState("Invalid date format: \(str). Use YYYY-MM-DD, 'today', or 'tomorrow'.")
     }
