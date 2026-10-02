@@ -35,7 +35,7 @@ expect_failure() {
     echo "Expected failure: $expected" >&2
     exit 1
   fi
-  if ! rg -q "$expected" "$TEST_ROOT/output.log"; then
+  if ! grep -qE "$expected" "$TEST_ROOT/output.log"; then
     echo "Wrong failure, expected $expected" >&2
     tail -15 "$TEST_ROOT/output.log" >&2
     exit 1
