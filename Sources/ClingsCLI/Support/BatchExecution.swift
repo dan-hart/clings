@@ -1,6 +1,29 @@
 import ClingsCore
 import Foundation
 
+func renderBatchPlan(_ plan: BatchPlan) -> String {
+    var lines = ["Frozen \(plan.operation.rawValue) plan: \(plan.items.count) exact IDs"]
+    for item in plan.items {
+        lines.append("  [\(item.id)] \(item.snapshot.name.debugDescription)")
+        switch plan.operation {
+        case .complete, .cancel:
+            lines.append("    status: \(item.snapshot.status.rawValue) -> \(item.final.status.rawValue)")
+        case .tag:
+            lines.append("    tags: [\(item.snapshot.tags.sorted().joined(separator: ", "))] -> [\(item.final.tags.sorted().joined(separator: ", "))]")
+        case .move:
+            lines.append("    project ID: \(item.snapshot.projectID ?? "none") -> \(item.final.projectID ?? "none")")
+        }
+        lines.append("    result: \(item.state.rawValue); applied: \(item.applied); undo recorded: \(item.undoRecorded)")
+        if let error = item.error {
+            lines.append("    error: \(error.debugDescription)")
+        }
+    }
+    if !plan.unsupportedUndo.isEmpty {
+        lines.append("Warning: undo cannot restore \(plan.unsupportedUndo.joined(separator: ", ")).")
+    }
+    return lines.joined(separator: "\n")
+}
+
 func runBatch(operation: BatchOperation, list: String?, tags: String? = nil, destination: String? = nil, options: BulkOptions) async throws {
     if options.dryRun {
         try await executeBatch(operation: operation, list: list, tags: tags, destination: destination, options: options)
@@ -42,10 +65,14 @@ private func executeBatch(operation: BatchOperation, list: String?, tags: String
     do { try plan.validate() }
     catch { throw CommandFailure(exitStatus: 1, code: "invalid_plan", message: error.localizedDescription) }
     if options.dryRun {
-        try print(options.output.json ? payloadJSON(plan) : "[DRY RUN] \(operation.rawValue): \(plan.items.count) exact IDs; no changes made\n\(plan.items.map(\.id).joined(separator: "\n"))")
+        try print(options.output.json ? payloadJSON(plan) : "[DRY RUN] No changes made\n\(renderBatchPlan(plan))")
         return
     }
-    warnUnsupported(plan.unsupportedUndo)
+    if options.yes {
+        warnUnsupported(plan.unsupportedUndo)
+    } else {
+        writeStderr(renderBatchPlan(plan) + "\n")
+    }
     guard !plan.items.isEmpty else { try print(options.output.json ? payloadJSON(plan) : "No todos match the criteria"); return }
     guard try confirmMutation("Apply \(operation.rawValue) plan to \(plan.items.count) exact IDs?", authorized: options.yes) else {
         try print(options.output.json ? payloadJSON(plan) : "Aborted; no changes made")
@@ -68,21 +95,34 @@ private func executeBatch(operation: BatchOperation, list: String?, tags: String
         try UndoStore.replace(entry)
     }
 
-    // Validate all candidates before any write; do not rely on Todo's ID-only equality.
-    for index in plan.items.indices where plan.items[index].state != .succeeded {
+    func reconcileUndo(at index: Int) throws {
         do {
+            try recordMember(plan.items[index])
+            plan.items[index].undoRecorded = operation != .move
+            plan.items[index].error = nil
+        } catch {
+            plan.items[index].undoRecorded = false
+            plan.items[index].error = "Applied but undo journal reconciliation failed: \(error.localizedDescription)"
+            try save()
+            throw try CommandFailure(exitStatus: 2, code: "undo_storage_failed", message: "Applied but undo journal reconciliation failed", dataJSON: payloadJSON(plan))
+        }
+    }
+
+    // Validate all candidates before any write; do not rely on Todo's ID-only equality.
+    for index in plan.items.indices where plan.items[index].state != .succeeded || (operation != .move && !plan.items[index].undoRecorded) {
+        do {
+            // A known successful write needs only its missing journal record repaired.
+            // Do not turn it back into a pending API operation, even after later edits.
+            if plan.items[index].state == .succeeded {
+                try reconcileUndo(at: index)
+                continue
+            }
             let current = try await client.fetchTodo(id: plan.items[index].id)
             let item = plan.items[index]
             if [.inProgress, .uncertain, .failed].contains(item.state), plan.finalMatches(current, item: item) {
                 plan.items[index].state = .succeeded
                 plan.items[index].applied = true
-                do { try recordMember(item) }
-                catch {
-                    plan.items[index].error = "Applied but undo journal reconciliation failed"
-                    try save()
-                    throw try CommandFailure(exitStatus: 2, code: "undo_storage_failed", message: "Applied but undo journal reconciliation failed", dataJSON: payloadJSON(plan))
-                }
-                plan.items[index].undoRecorded = operation != .move
+                try reconcileUndo(at: index)
             } else if !item.snapshot.matches(current) {
                 plan.items[index].state = .conflict
                 plan.items[index].error = "Current fields differ from expected snapshot"

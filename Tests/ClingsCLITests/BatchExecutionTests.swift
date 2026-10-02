@@ -4,6 +4,76 @@ import Foundation
 import Testing
 
 struct BatchExecutionTests {
+    @Test func journalFailureResumeRecordsUndoWithoutRepeatingSucceededWrite() async throws {
+        try await CommandTestSupport.withTemporaryConfigDirectory { root in
+            let client = RecordingThingsClient()
+            let path = try plan(client: client, root: root, ids: ["a"])
+            try await CommandTestSupport.withRuntime(client: client) {
+                let command = try BulkCompleteCommand.parse(["--execute-plan", path, "--yes"])
+                try await UndoStore.$beforeSave.withValue({ throw ThingsError.operationFailed("disk full") }) {
+                    await #expect(throws: (any Error).self) { try await command.run() }
+                    let saved = try BatchPlan.load(path: path)
+                    #expect(saved.items[0].state == .succeeded)
+                    #expect(saved.items[0].undoRecorded == false)
+                    await #expect(throws: (any Error).self) { try await command.run() }
+                }
+                _ = try await CommandTestSupport.captureStandardOutput { try await command.run() }
+                #expect(client.completedIDs == ["a"])
+                #expect(try BatchPlan.load(path: path).items[0].undoRecorded == true)
+                #expect(try UndoStore.latest()?.members?.map { $0.snapshot.id } == ["a"])
+                _ = try await CommandTestSupport.captureStandardOutput { try await UndoCommand.parse([]).run() }
+                #expect(client.todosByID["a"]?.status == .open)
+            }
+        }
+    }
+
+    @Test(arguments: [BatchOperation.complete, .cancel, .tag, .move])
+    func confirmationShowsExactFrozenChangesBeforePrompt(operation: BatchOperation) async throws {
+        try await CommandTestSupport.withTemporaryConfigDirectory { _ in
+            let client = RecordingThingsClient()
+            client.projects = [Project(id: "destination-id", name: "Archive")]
+            client.todosForList[.today] = [Todo(id: "exact-id", name: "Exact title", tags: [Tag(id: "old-tag", name: "old")], project: Project(id: "original-id", name: "Original"))]
+            try await CommandTestSupport.withRuntime(client: client, inputs: ["no"]) {
+                let (_, stderr) = try await CommandTestSupport.captureStandardError {
+                    switch operation {
+                    case .complete: try await BulkCompleteCommand.parse([]).run()
+                    case .cancel: try await BulkCancelCommand.parse([]).run()
+                    case .tag: try await BulkTagCommand.parse(["new"]).run()
+                    case .move: try await BulkMoveCommand.parse(["--to", "Archive"]).run()
+                    }
+                }
+                let prompt = try #require(stderr.range(of: "[y/N]"))
+                let beforePrompt = String(stderr[..<prompt.lowerBound])
+                #expect(beforePrompt.contains("exact-id"))
+                #expect(beforePrompt.contains("Exact title"))
+                switch operation {
+                case .complete: #expect(beforePrompt.contains("open -> completed"))
+                case .cancel: #expect(beforePrompt.contains("open -> canceled"))
+                case .tag: #expect(beforePrompt.contains("[old] -> [new, old]"))
+                case .move:
+                    #expect(beforePrompt.contains("original-id -> destination-id"))
+                    #expect(beforePrompt.contains("undo cannot restore project move"))
+                }
+            }
+            #expect(client.completedIDs.isEmpty)
+            #expect(client.updatedTodos.isEmpty)
+            #expect(client.movedTodos.isEmpty)
+        }
+    }
+
+    @Test func textDryRunShowsFinalTagsAndExactDestination() async throws {
+        let client = RecordingThingsClient()
+        client.projects = [Project(id: "destination-id", name: "Archive")]
+        client.todosForList[.today] = [Todo(id: "exact-id", name: "Exact title", tags: [Tag(id: "old-tag", name: "old")])]
+        try await CommandTestSupport.withRuntime(client: client) {
+            let (_, tags) = try await CommandTestSupport.captureStandardOutput { try await BulkTagCommand.parse(["new", "--dry-run"]).run() }
+            #expect(tags.contains("[old] -> [new, old]"))
+            let (_, move) = try await CommandTestSupport.captureStandardOutput { try await BulkMoveCommand.parse(["--to", "Archive", "--dry-run"]).run() }
+            #expect(move.contains("none -> destination-id"))
+            #expect(move.contains("undo cannot restore project move"))
+        }
+    }
+
     @Test func acceptsEnvelopedPlanAndTagUndoPreservesUnrelatedLaterFields() async throws {
         try await CommandTestSupport.withTemporaryConfigDirectory { root in
             let client = RecordingThingsClient()

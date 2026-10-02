@@ -46,19 +46,19 @@ enum CommandTestSupport {
         }
     }
 
-    private static func beginCapture() throws -> (URL, Int32, FileHandle) {
+    private static func beginCapture(descriptor: Int32 = STDOUT_FILENO) throws -> (URL, Int32, FileHandle) {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("clings-stdout-\(UUID().uuidString)")
         guard FileManager.default.createFile(atPath: url.path, contents: nil) else { throw ThingsError.operationFailed("Cannot create stdout capture") }
         let handle = try FileHandle(forWritingTo: url)
-        let original = dup(STDOUT_FILENO)
-        fflush(stdout)
-        dup2(handle.fileDescriptor, STDOUT_FILENO)
+        let original = dup(descriptor)
+        fflush(nil)
+        dup2(handle.fileDescriptor, descriptor)
         return (url, original, handle)
     }
 
-    private static func finishCapture(_ capture: (URL, Int32, FileHandle)) throws -> String {
-        fflush(stdout)
-        dup2(capture.1, STDOUT_FILENO)
+    private static func finishCapture(_ capture: (URL, Int32, FileHandle), descriptor: Int32 = STDOUT_FILENO) throws -> String {
+        fflush(nil)
+        dup2(capture.1, descriptor)
         close(capture.1)
         try capture.2.close()
         return try String(decoding: Data(contentsOf: capture.0), as: UTF8.self)
@@ -84,6 +84,17 @@ enum CommandTestSupport {
         do { result = try await body() }
         catch { _ = try? finishCapture(capture); throw error }
         return try (result, finishCapture(capture))
+    }
+
+    static func captureStandardError<T>(_ body: () async throws -> T) async throws -> (T, String) {
+        acquire(stdoutSemaphore)
+        defer { release(stdoutSemaphore) }
+        let capture = try beginCapture(descriptor: STDERR_FILENO)
+        defer { try? FileManager.default.removeItem(at: capture.0) }
+        let result: T
+        do { result = try await body() }
+        catch { _ = try? finishCapture(capture, descriptor: STDERR_FILENO); throw error }
+        return try (result, finishCapture(capture, descriptor: STDERR_FILENO))
     }
 
     static func withRuntime<T>(
