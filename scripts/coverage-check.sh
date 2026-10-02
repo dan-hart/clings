@@ -2,7 +2,8 @@
 # Run swift test --enable-code-coverage before this read-only coverage gate.
 set -euo pipefail
 SOURCE_DIRECTORY="$(pwd)/Sources/"
-COVERAGE_PATH="$(swift test --show-codecov-path)"
+[[ "$#" -le 1 ]] || { echo "Usage: coverage-check.sh [SWIFTPM_COVERAGE_JSON]" >&2; exit 1; }
+COVERAGE_PATH="${1:-$(swift test --show-codecov-path)}"
 ruby -rjson -e '
   files = JSON.parse(File.read(ARGV[0])).fetch("data").flat_map { |data| data.fetch("files") }
   source = files.select { |file| file.fetch("filename").start_with?(ARGV[1]) }

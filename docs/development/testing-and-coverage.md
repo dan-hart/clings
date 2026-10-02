@@ -26,6 +26,10 @@ swift test --enable-code-coverage
 bash scripts/coverage-check.sh
 ```
 
+For an independent scratch build, pass its exported JSON path to the gate:
+`bash scripts/coverage-check.sh "$(swift test --scratch-path /private/tmp/clings-coverage --show-codecov-path)"`.
+Generate that scratch build's instrumented report first; the gate does not run tests.
+
 The project measures coverage against files in `Sources/`, not bundled dependencies. This command reports the source-only total:
 
 ```bash
