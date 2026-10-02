@@ -11,6 +11,27 @@ import Testing
 /// Regression coverage for https://github.com/dan-hart/clings/issues/5
 @Suite("ThingsDatabase")
 struct ThingsDatabaseTests {
+    @Test func discoveryUsesCurrentAndLegacyLocationsWithoutCreatingMissingStorage() throws {
+        let manager = FileManager.default
+        let root = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try manager.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: root) }
+        let missing = root.appendingPathComponent("missing")
+        #expect(throws: ThingsError.self) { try ThingsDatabase(groupContainerURL: missing) }
+        #expect(!manager.fileExists(atPath: missing.path))
+        #expect(throws: ThingsError.self) { try ThingsDatabase(groupContainerURL: root) }
+        let legacy = root.appendingPathComponent("Things Database.thingsdatabase/main.sqlite")
+        try manager.createDirectory(at: legacy.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let legacyQueue = try DatabaseQueue(path: legacy.path)
+        try legacyQueue.write { db in try db.execute(sql: "CREATE TABLE TMTag (uuid TEXT, title TEXT); INSERT INTO TMTag VALUES ('legacy', 'Legacy')") }
+        #expect(try ThingsDatabase(groupContainerURL: root).fetchTags().map(\.id) == ["legacy"])
+        let current = root.appendingPathComponent("ThingsData-Example/Things Database.thingsdatabase/main.sqlite")
+        try manager.createDirectory(at: current.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let currentQueue = try DatabaseQueue(path: current.path)
+        try currentQueue.write { db in try db.execute(sql: "CREATE TABLE TMTag (uuid TEXT, title TEXT); INSERT INTO TMTag VALUES ('current', 'Current')") }
+        #expect(try ThingsDatabase(groupContainerURL: root).fetchTags().map(\.id) == ["current"])
+    }
+
     @Test func searchReturnsAllMatchesForQueryProcessing() throws {
         let fixture = try makeFixtureDatabase()
         try fixture.db.write { db in

@@ -12,10 +12,15 @@ public final class ThingsDatabase: Sendable {
     private let dbPath: String
 
     /// Initialize with the Things 3 database path.
-    public init() throws {
+    public convenience init() throws {
         // Find the Things database - it may be in a ThingsData-XXXX subdirectory
         let groupContainerBase = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Group Containers/JLMPQHK86H.com.culturedcode.ThingsMac")
+        try self.init(groupContainerURL: groupContainerBase)
+    }
+
+    /// Isolated discovery seam for testing without touching a user's Things data.
+    init(groupContainerURL groupContainerBase: URL) throws {
 
         // Try to find the database in any ThingsData-* subdirectory
         var dbPathFound: String?
