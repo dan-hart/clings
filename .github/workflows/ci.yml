@@ -16,6 +16,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          # Release safety tests verify reviewed commits in the repository history.
           fetch-depth: 0
 
       - name: Show Swift Version
