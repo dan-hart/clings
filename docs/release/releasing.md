@@ -35,7 +35,8 @@ Homebrew, `curl`, Ruby, and `rg`. Source integrity alone is not a completed rele
 
 The GitHub workflow builds/tests on Apple Silicon and Intel macOS runners.
 Each archive contains the binary, license, bash/zsh/fish completions, and
-`build-info.json` with version/architecture/commit. Archive timestamps and owners
+`build-info.json` with version/architecture/commit and the actual Swift compiler
+and SDK versions. Archive timestamps and owners
 are normalized; gzip timestamps are disabled. Both archives and `SHA256SUMS`
 must exist before publication. The committed `Package.resolved` pins dependency
 revisions; CI, release builds, and Homebrew require that graph without automatic

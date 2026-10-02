@@ -20,8 +20,10 @@ for SHELL_NAME in bash zsh fish; do
   "$RELEASE_BINARY" completions "$SHELL_NAME" > "$PACKAGE_DIRECTORY/completions/clings.$SHELL_NAME"
 done
 COMMIT_SHA="$(git rev-parse HEAD)"
-ruby -rjson -e 'puts JSON.pretty_generate({version: ARGV[0], architecture: ARGV[1], commit: ARGV[2]})' \
-  "$RELEASE_VERSION" "$RELEASE_ARCH" "$COMMIT_SHA" > "$PACKAGE_DIRECTORY/build-info.json"
+RELEASE_SWIFT_VERSION="$(swift --version)"
+RELEASE_SDK_VERSION="$(xcrun --show-sdk-version)"
+ruby -rjson -e 'puts JSON.pretty_generate({version: ARGV[0], architecture: ARGV[1], commit: ARGV[2], swiftVersion: ARGV[3], sdkVersion: ARGV[4]})' \
+  "$RELEASE_VERSION" "$RELEASE_ARCH" "$COMMIT_SHA" "$RELEASE_SWIFT_VERSION" "$RELEASE_SDK_VERSION" > "$PACKAGE_DIRECTORY/build-info.json"
 # Normalize timestamps/ownership and disable gzip timestamps for reproducible archives.
 COMMIT_TIME="$(git log -1 --format=%ct)"
 NORMALIZED_TIME="$(date -r "$COMMIT_TIME" '+%Y%m%d%H%M.%S')"
