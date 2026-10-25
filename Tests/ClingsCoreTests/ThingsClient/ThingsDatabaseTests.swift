@@ -11,6 +11,126 @@ import Testing
 /// Regression coverage for https://github.com/dan-hart/clings/issues/5
 @Suite("ThingsDatabase")
 struct ThingsDatabaseTests {
+    @Test("Issue #15: todo timestamps use Unix seconds across read paths", arguments: [0.0, 1_792_731_600.0, 1_792_731_600.25])
+    func todoTimestampsUseUnixEpoch(createdAt: Double) throws {
+        let fixture = try makeFixtureDatabase()
+        let modifiedAt = createdAt + 147_120.5
+        try fixture.db.write { db in
+            try insertTask(
+                db, id: "timestamp-todo", title: "Timestamp regression", start: 1,
+                startDate: nil, index: 0, status: 3,
+                creationDate: createdAt, modificationDate: modifiedAt
+            )
+        }
+
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let todos = try [
+            database.fetchTodo(id: "timestamp-todo"),
+            #require(database.fetchList(.logbook).first),
+            #require(database.fetchQueryList(.logbook).first),
+            #require(database.search(query: "Timestamp regression").first),
+        ]
+        for todo in todos {
+            #expect(todo.creationDate.timeIntervalSince1970 == createdAt)
+            #expect(todo.modificationDate.timeIntervalSince1970 == modifiedAt)
+        }
+    }
+
+    @Test("Issue #15: logbook JSON reports 2026 timestamps instead of 2057")
+    func logbookJSONUsesUnixTimestamps() throws {
+        let fixture = try makeFixtureDatabase()
+        try fixture.db.write { db in
+            try insertTask(
+                db, id: "json-todo", title: "JSON timestamp regression", start: 1,
+                startDate: nil, index: 0, status: 3,
+                creationDate: 1_792_731_600, modificationDate: 1_792_878_720
+            )
+        }
+
+        let todos = try ThingsDatabase(dbPath: fixture.path).fetchList(.logbook)
+        let output = JSONOutputFormatter(prettyPrint: false).format(todos: todos)
+        let json = try #require(JSONSerialization.jsonObject(with: Data(output.utf8)) as? [String: Any])
+        let items = try #require(json["items"] as? [[String: Any]])
+        let item = try #require(items.first)
+        #expect(item["creationDate"] as? String == "2026-10-23T05:00:00Z")
+        #expect(item["modificationDate"] as? String == "2026-10-24T21:52:00Z")
+    }
+
+    @Test("Nested projects retain their stored Unix creation timestamp", arguments: [false, true])
+    func nestedProjectCreationTimestampMatchesProjectList(underHeading: Bool) throws {
+        let fixture = try makeFixtureDatabase()
+        let createdAt = 1_792_731_600.25
+        try fixture.db.write { db in
+            try insertTask(
+                db, id: "timestamp-project", title: "Timestamp project", start: 0,
+                startDate: nil, index: 0, type: 1, creationDate: createdAt
+            )
+            try insertTask(
+                db, id: "timestamp-heading", title: "Heading", start: 0,
+                startDate: nil, index: 1, type: 2, project: "timestamp-project"
+            )
+            try insertTask(
+                db, id: "nested-todo", title: "Nested timestamp regression", start: 1,
+                startDate: nil, index: 2,
+                project: underHeading ? nil : "timestamp-project",
+                heading: underHeading ? "timestamp-heading" : nil
+            )
+        }
+
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let project = try #require(database.fetchProjects().first)
+        let todos = try [
+            database.fetchTodo(id: "nested-todo"),
+            #require(database.fetchList(.anytime).first),
+            #require(database.fetchQueryList(.anytime).first),
+            #require(database.search(query: "Nested timestamp regression").first),
+        ]
+        for todo in todos {
+            #expect(todo.project?.creationDate == project.creationDate)
+            #expect(todo.project?.creationDate?.timeIntervalSince1970 == createdAt)
+        }
+    }
+
+    @Test("Missing project creation timestamps remain absent")
+    func missingProjectCreationTimestampIsNil() throws {
+        let fixture = try makeFixtureDatabase()
+        try fixture.db.write { db in
+            try insertTask(db, id: "undated-project", title: "Undated", start: 0, startDate: nil, index: 0, type: 1)
+            try db.execute(sql: "UPDATE TMTask SET creationDate = NULL WHERE uuid = 'undated-project'")
+            try insertTask(db, id: "nested-todo", title: "Nested", start: 1, startDate: nil, index: 1, project: "undated-project")
+        }
+
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let project = try #require(database.fetchProjects().first)
+        #expect(project.creationDate == nil)
+        let nestedProject = try #require(database.fetchTodo(id: "nested-todo").project)
+        #expect(nestedProject.creationDate == nil)
+    }
+
+    @Test("Missing todo timestamps keep the existing fallback behavior")
+    func missingTodoTimestampsUseFallbacks() throws {
+        let fixture = try makeFixtureDatabase()
+        let createdAt = 1_792_731_600.25
+        try fixture.db.write { db in
+            try insertTask(db, id: "missing-modified", title: "Missing modified", start: 0, startDate: nil, index: 0, creationDate: createdAt)
+            try insertTask(db, id: "missing-both", title: "Missing both", start: 0, startDate: nil, index: 1)
+            try db.execute(sql: "UPDATE TMTask SET userModificationDate = NULL")
+            try db.execute(sql: "UPDATE TMTask SET creationDate = NULL WHERE uuid = 'missing-both'")
+        }
+
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let missingModified = try database.fetchTodo(id: "missing-modified")
+        #expect(missingModified.creationDate.timeIntervalSince1970 == createdAt)
+        #expect(missingModified.modificationDate == missingModified.creationDate)
+
+        let before = Date()
+        let missingBoth = try database.fetchTodo(id: "missing-both")
+        let after = Date()
+        #expect(missingBoth.creationDate >= before)
+        #expect(missingBoth.creationDate <= after)
+        #expect(missingBoth.modificationDate == missingBoth.creationDate)
+    }
+
     @Test func discoveryUsesCurrentAndLegacyLocationsWithoutCreatingMissingStorage() throws {
         let manager = FileManager.default
         let root = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -42,6 +162,7 @@ struct ThingsDatabaseTests {
         let database = ThingsDatabase(dbPath: fixture.path)
         #expect(try database.search(query: "Findable").count == 121)
     }
+
     @Test func scheduledStartSurvivesSQLiteProjection() throws {
         let fixture = try makeFixtureDatabase()
         let code = thingsDateCode(Date())
@@ -221,7 +342,7 @@ struct ThingsDatabaseTests {
         let fixture = try makeFixtureDatabase()
         let deadlineComponents = DateComponents(year: 2030, month: 6, day: 15)
         let deadline = (2030 << 16) | (6 << 12) | (15 << 7)
-        let createdAt = 4567.0
+        let createdAt = 1_792_731_600.25
 
         try fixture.db.write { db in
             try insertArea(db, id: "area-work", title: "Work", index: 0)
@@ -252,7 +373,7 @@ struct ThingsDatabaseTests {
         #expect(projects[0].area?.name == "Work")
         #expect(projects[0].tags.map(\.name) == ["docs"])
         #expect(projects[0].dueDate == gregorianDate(from: deadlineComponents))
-        #expect(projects[0].creationDate == Date(timeIntervalSinceReferenceDate: TimeInterval(createdAt)))
+        #expect(projects[0].creationDate?.timeIntervalSince1970 == createdAt)
     }
 
     @Test("fetchProjects excludes repeating-project templates")
@@ -357,8 +478,8 @@ struct ThingsDatabaseTests {
         #expect(todo.checklistItems.map(\.name) == ["Draft outline", "Publish examples"])
         #expect(todo.checklistItems.map(\.completed) == [true, false])
         #expect(todo.dueDate == gregorianDate(from: deadlineComponents))
-        #expect(todo.creationDate == Date(timeIntervalSinceReferenceDate: 100))
-        #expect(todo.modificationDate == Date(timeIntervalSinceReferenceDate: 200))
+        #expect(todo.creationDate == Date(timeIntervalSince1970: 100))
+        #expect(todo.modificationDate == Date(timeIntervalSince1970: 200))
         #expect(searchResults.map(\.id) == ["todo-1"])
     }
 
@@ -512,8 +633,8 @@ struct ThingsDatabaseTests {
                 stopDate REAL,
                 deadline INTEGER,
                 deadlineSuppressionDate INTEGER,
-                creationDate REAL NOT NULL,
-                userModificationDate REAL NOT NULL,
+                creationDate REAL,
+                userModificationDate REAL,
                 project TEXT,
                 heading TEXT,
                 area TEXT,

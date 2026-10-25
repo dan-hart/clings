@@ -21,7 +21,6 @@ public final class ThingsDatabase: Sendable {
 
     /// Isolated discovery seam for testing without touching a user's Things data.
     init(groupContainerURL groupContainerBase: URL) throws {
-
         // Try to find the database in any ThingsData-* subdirectory
         var dbPathFound: String?
 
@@ -217,7 +216,7 @@ public final class ThingsDatabase: Sendable {
                 let tags = try self.fetchTagsForTask(uuid: uuid, db: db)
 
                 let deadline = self.decodeDeadline(row["deadline"] as Int?)
-                let creationDate = Date(timeIntervalSinceReferenceDate: TimeInterval(row["creationDate"] as Int))
+                let creationDate = (row["creationDate"] as Double?).map { Date(timeIntervalSince1970: $0) }
 
                 return Project(
                     id: uuid,
@@ -338,11 +337,12 @@ public final class ThingsDatabase: Sendable {
         let checklistItems = try fetchChecklistItems(uuid: uuid, db: db)
 
         let deadline = decodeDeadline(row["deadline"] as Int?)
+        // Timestamp columns use Unix seconds; deadline/startDate use packed calendar dates.
         let creationDate: Date = (row["creationDate"] as Double?).flatMap {
-            Date(timeIntervalSinceReferenceDate: $0)
+            Date(timeIntervalSince1970: $0)
         } ?? Date()
         let modificationDate: Date = (row["userModificationDate"] as Double?).flatMap {
-            Date(timeIntervalSinceReferenceDate: $0)
+            Date(timeIntervalSince1970: $0)
         } ?? creationDate
 
         return Todo(
@@ -362,7 +362,7 @@ public final class ThingsDatabase: Sendable {
     }
 
     private func fetchProjectBasic(uuid: String, db: Database) throws -> Project? {
-        let sql = "SELECT title, status FROM TMTask WHERE uuid = ? AND type = 1"
+        let sql = "SELECT title, status, creationDate FROM TMTask WHERE uuid = ? AND type = 1"
         guard let row = try Row.fetchOne(db, sql: sql, arguments: [uuid]) else {
             return nil
         }
@@ -375,7 +375,7 @@ public final class ThingsDatabase: Sendable {
             area: nil,
             tags: [],
             dueDate: nil,
-            creationDate: Date()
+            creationDate: (row["creationDate"] as Double?).map { Date(timeIntervalSince1970: $0) }
         )
     }
 

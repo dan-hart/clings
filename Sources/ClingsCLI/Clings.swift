@@ -52,7 +52,7 @@ struct Clings: AsyncParsableCommand {
         Failed commands return nonzero exits and structured JSON errors.
         Interactive pick rejects --json; help/version/completions remain text.
         """,
-        version: "0.4.0",
+        version: "0.4.1",
         subcommands: [
             // List views
             TodayCommand.self,
