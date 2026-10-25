@@ -216,7 +216,7 @@ public final class ThingsDatabase: Sendable {
                 let tags = try self.fetchTagsForTask(uuid: uuid, db: db)
 
                 let deadline = self.decodeDeadline(row["deadline"] as Int?)
-                let creationDate = Date(timeIntervalSince1970: row["creationDate"] as Double)
+                let creationDate = (row["creationDate"] as Double?).map { Date(timeIntervalSince1970: $0) }
 
                 return Project(
                     id: uuid,
@@ -362,7 +362,7 @@ public final class ThingsDatabase: Sendable {
     }
 
     private func fetchProjectBasic(uuid: String, db: Database) throws -> Project? {
-        let sql = "SELECT title, status FROM TMTask WHERE uuid = ? AND type = 1"
+        let sql = "SELECT title, status, creationDate FROM TMTask WHERE uuid = ? AND type = 1"
         guard let row = try Row.fetchOne(db, sql: sql, arguments: [uuid]) else {
             return nil
         }
@@ -375,7 +375,7 @@ public final class ThingsDatabase: Sendable {
             area: nil,
             tags: [],
             dueDate: nil,
-            creationDate: Date()
+            creationDate: (row["creationDate"] as Double?).map { Date(timeIntervalSince1970: $0) }
         )
     }
 

@@ -56,6 +56,81 @@ struct ThingsDatabaseTests {
         #expect(item["modificationDate"] as? String == "2026-10-24T21:52:00Z")
     }
 
+    @Test("Nested projects retain their stored Unix creation timestamp", arguments: [false, true])
+    func nestedProjectCreationTimestampMatchesProjectList(underHeading: Bool) throws {
+        let fixture = try makeFixtureDatabase()
+        let createdAt = 1_792_731_600.25
+        try fixture.db.write { db in
+            try insertTask(
+                db, id: "timestamp-project", title: "Timestamp project", start: 0,
+                startDate: nil, index: 0, type: 1, creationDate: createdAt
+            )
+            try insertTask(
+                db, id: "timestamp-heading", title: "Heading", start: 0,
+                startDate: nil, index: 1, type: 2, project: "timestamp-project"
+            )
+            try insertTask(
+                db, id: "nested-todo", title: "Nested timestamp regression", start: 1,
+                startDate: nil, index: 2,
+                project: underHeading ? nil : "timestamp-project",
+                heading: underHeading ? "timestamp-heading" : nil
+            )
+        }
+
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let project = try #require(database.fetchProjects().first)
+        let todos = try [
+            database.fetchTodo(id: "nested-todo"),
+            #require(database.fetchList(.anytime).first),
+            #require(database.fetchQueryList(.anytime).first),
+            #require(database.search(query: "Nested timestamp regression").first),
+        ]
+        for todo in todos {
+            #expect(todo.project?.creationDate == project.creationDate)
+            #expect(todo.project?.creationDate?.timeIntervalSince1970 == createdAt)
+        }
+    }
+
+    @Test("Missing project creation timestamps remain absent")
+    func missingProjectCreationTimestampIsNil() throws {
+        let fixture = try makeFixtureDatabase()
+        try fixture.db.write { db in
+            try insertTask(db, id: "undated-project", title: "Undated", start: 0, startDate: nil, index: 0, type: 1)
+            try db.execute(sql: "UPDATE TMTask SET creationDate = NULL WHERE uuid = 'undated-project'")
+            try insertTask(db, id: "nested-todo", title: "Nested", start: 1, startDate: nil, index: 1, project: "undated-project")
+        }
+
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let project = try #require(database.fetchProjects().first)
+        #expect(project.creationDate == nil)
+        let nestedProject = try #require(database.fetchTodo(id: "nested-todo").project)
+        #expect(nestedProject.creationDate == nil)
+    }
+
+    @Test("Missing todo timestamps keep the existing fallback behavior")
+    func missingTodoTimestampsUseFallbacks() throws {
+        let fixture = try makeFixtureDatabase()
+        let createdAt = 1_792_731_600.25
+        try fixture.db.write { db in
+            try insertTask(db, id: "missing-modified", title: "Missing modified", start: 0, startDate: nil, index: 0, creationDate: createdAt)
+            try insertTask(db, id: "missing-both", title: "Missing both", start: 0, startDate: nil, index: 1)
+            try db.execute(sql: "UPDATE TMTask SET userModificationDate = NULL")
+            try db.execute(sql: "UPDATE TMTask SET creationDate = NULL WHERE uuid = 'missing-both'")
+        }
+
+        let database = ThingsDatabase(dbPath: fixture.path)
+        let missingModified = try database.fetchTodo(id: "missing-modified")
+        #expect(missingModified.creationDate.timeIntervalSince1970 == createdAt)
+        #expect(missingModified.modificationDate == missingModified.creationDate)
+
+        let before = Date()
+        let missingBoth = try database.fetchTodo(id: "missing-both")
+        let after = Date()
+        #expect(missingBoth.creationDate >= before)
+        #expect(missingBoth.creationDate <= after)
+        #expect(missingBoth.modificationDate == missingBoth.creationDate)
+    }
+
     @Test func discoveryUsesCurrentAndLegacyLocationsWithoutCreatingMissingStorage() throws {
         let manager = FileManager.default
         let root = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -558,8 +633,8 @@ struct ThingsDatabaseTests {
                 stopDate REAL,
                 deadline INTEGER,
                 deadlineSuppressionDate INTEGER,
-                creationDate REAL NOT NULL,
-                userModificationDate REAL NOT NULL,
+                creationDate REAL,
+                userModificationDate REAL,
                 project TEXT,
                 heading TEXT,
                 area TEXT,

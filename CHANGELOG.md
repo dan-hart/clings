@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Creation and modification timestamps**: Decode Things database timestamps as Unix seconds so task and project creation dates and task modification dates show the correct year instead of appearing 31 years in the future. Preserve fractional seconds in project creation dates. Fixes #15.
+- **Creation and modification timestamps**: Decode Things database timestamps as Unix seconds so task and project creation dates and task modification dates show the correct year instead of appearing 31 years in the future. Preserve fractional seconds in project creation dates, including projects nested under todos. Leave missing project creation dates absent instead of crashing. Fixes #15.
 
 ## [0.4.0] - 2026-10-01
 
